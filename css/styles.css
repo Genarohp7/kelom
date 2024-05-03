@@ -8462,7 +8462,7 @@ fieldset:disabled .btn {
 
 .text-white-50 {
   --bs-text-opacity: 1;
-  color: rgba(255, 255, 255, 0.5) !important;
+  color: rgba(88, 78, 71) !important;
 }
 
 .text-reset {
@@ -11429,6 +11429,7 @@ header.masthead .h1 {
 #portfolio .container-xl .portfolio-box .portfolio-box-caption .project-name,
 #portfolio .container-xxl .portfolio-box .portfolio-box-caption .project-name {
   font-size: 1.2rem;
+  -webkit-text-stroke: 1px #000;
 }
 #portfolio .container-fluid .portfolio-box:hover .portfolio-box-caption,
 #portfolio .container-sm .portfolio-box:hover .portfolio-box-caption,
