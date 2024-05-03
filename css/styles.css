@@ -3929,7 +3929,7 @@ fieldset:disabled .btn {
   right: 200px;
 }
 
-@media (max-width: 480px) {
+@media screen and (min-width: 0px) and (max-width: 480px) {
   .navbar-brand img {
     position: relative;
     width: 40vw;
@@ -3939,15 +3939,15 @@ fieldset:disabled .btn {
   }
 }
 
-/* @media (max-width: 960px) {
+@media screen and (min-width: 481px) and (max-width: 960px) {
   .navbar-brand img {
     position: relative;
     width: 40vw;
-    height: 30vh;
-    bottom: 90px;
-    right: 10px;
+    height: 25vh;
+    bottom: 80px;
+    right: 90px;
   }
-} */
+}
 
 .navbar-brand:hover,
 .navbar-brand:focus {
