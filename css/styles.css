@@ -3929,6 +3929,26 @@ fieldset:disabled .btn {
   right: 200px;
 }
 
+@media (max-width: 480px) {
+  .navbar-brand img {
+    position: relative;
+    width: 40vw;
+    height: 30vh;
+    bottom: 90px;
+    right: 10px;
+  }
+}
+
+/* @media (max-width: 960px) {
+  .navbar-brand img {
+    position: relative;
+    width: 40vw;
+    height: 30vh;
+    bottom: 90px;
+    right: 10px;
+  }
+} */
+
 .navbar-brand:hover,
 .navbar-brand:focus {
   color: var(--bs-navbar-brand-hover-color);
