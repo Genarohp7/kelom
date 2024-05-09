@@ -2966,7 +2966,7 @@ textarea.form-control.is-invalid {
 .btn:disabled,
 .btn.disabled,
 fieldset:disabled .btn {
-  color: var(--bs-btn-disabled-color);
+  color: #000;
   pointer-events: none;
   background-color: var(--bs-btn-disabled-bg);
   border-color: var(--bs-btn-disabled-border-color);
@@ -2974,7 +2974,7 @@ fieldset:disabled .btn {
 }
 
 .btn-primary {
-  --bs-btn-color: #fff;
+  --bs-btn-color: #000;
   --bs-btn-bg: #b3e4dc;
   --bs-btn-border-color: #b3e4dc;
   --bs-btn-hover-color: #fff;
@@ -11281,11 +11281,12 @@ hr.divider-light {
     font-weight: 600;
     font-size: 20px;
     -webkit-text-stroke: 0.1px #000;
-    color: rgba(179, 228, 220);
+    color: var(--bs-gray-600);
+    -webkit-text-stroke: 0.3px #fff;
     padding: 0 1rem;
   }
   #mainNav .navbar-nav .nav-item .nav-link:hover {
-    color: #fff;
+    color: #000;
   }
   #mainNav .navbar-nav .nav-item:last-child .nav-link {
     padding-right: 0;
