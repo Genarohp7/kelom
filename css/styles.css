@@ -11274,20 +11274,14 @@ hr.divider-light {
   #mainNav .navbar-brand {
     color: rgba(88, 78, 71, 0.7);
   }
-  #mainNav .navbar-brand:hover {
-    color: #fff;
-  }
+
   #mainNav .navbar-nav .nav-item .nav-link {
-    font-weight: 600;
+    font-weight: 800;
     font-size: 20px;
-    -webkit-text-stroke: 0.1px #000;
-    color: var(--bs-gray-600);
-    -webkit-text-stroke: 0.3px #fff;
+    color: #f6e1c5;
     padding: 0 1rem;
   }
-  #mainNav .navbar-nav .nav-item .nav-link:hover {
-    color: #000;
-  }
+
   #mainNav .navbar-nav .nav-item:last-child .nav-link {
     padding-right: 0;
   }
@@ -11298,9 +11292,7 @@ hr.divider-light {
   #mainNav.navbar-shrink .navbar-brand {
     color: #212529;
   }
-  #mainNav.navbar-shrink .navbar-brand:hover {
-    color: #b3e4dc;
-  }
+
   #mainNav.navbar-shrink .navbar-nav .nav-item .nav-link {
     color: #212529;
   }
