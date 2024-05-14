@@ -3924,18 +3924,18 @@ fieldset:disabled .btn {
 
 .navbar-brand img {
   position: relative;
-  width: 40vw;
+  width: 20vw;
   height: 40vh;
-  bottom: 100px;
-  right: 200px;
+  bottom: 90px;
+  right: 90px;
 }
 
 @media screen and (min-width: 0px) and (max-width: 480px) {
   .navbar-brand img {
     position: relative;
     width: 40vw;
-    height: 30vh;
-    bottom: 90px;
+    height: 20vh;
+    bottom: 70px;
     right: 10px;
   }
 }
