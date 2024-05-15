@@ -14,6 +14,12 @@
   margin-bottom: 5rem;
 }
 
+.page-section .container .row .text-center .whatsapp {
+  font-family: "Franklin Gothic Medium", "Arial Narrow", Arial, sans-serif;
+  font-size: 2rem;
+  color: black;
+}
+
 @media (min-width: 992px) {
   .product-item .product-item-title {
     position: relative;
