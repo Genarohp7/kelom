@@ -3935,7 +3935,7 @@ fieldset:disabled .btn {
     position: relative;
     width: 40vw;
     height: 20vh;
-    bottom: 70px;
+    bottom: 50px;
     right: 10px;
   }
 }
@@ -7929,6 +7929,8 @@ fieldset:disabled .btn {
 }
 
 .my-2 {
+  position: relative;
+  top: 25px;
   margin-top: 0.5rem !important;
   margin-bottom: 0.5rem !important;
 }
