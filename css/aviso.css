@@ -1,0 +1,40 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  background: url("/assets/img/portfolio/logoKelom.svg") no-repeat center center
+    fixed;
+  background-size: cover;
+  background-blend-mode: lighten;
+}
+
+.content {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 20px;
+  max-width: 800px;
+  margin: 50px auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+  text-align: center;
+  color: #333;
+}
+
+p,
+ul,
+ol {
+  color: #666;
+  line-height: 1.6;
+  margin: 10px 0;
+}
+
+ul,
+ol {
+  padding-left: 20px;
+}
+
+li {
+  margin-bottom: 10px;
+}
