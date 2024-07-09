@@ -75,6 +75,20 @@
 }
 
 /* Estilos para el modal */
+.modal-dialog {
+  max-width: 600px; /* Ajusta el ancho máximo del modal */
+  margin: 1.75rem auto; /* Centra el modal verticalmente */
+}
+
+.modal-content {
+  padding: 20px; /* Añade un poco de padding para una mejor apariencia */
+}
+
+.modal-body {
+  max-height: 70vh; /* Ajusta el máximo de la altura al 70% de la vista */
+  overflow-y: auto;
+}
+
 .modal-text {
   max-height: 200px; /* Ajusta este valor según sea necesario */
   overflow-y: auto;
@@ -92,5 +106,13 @@
   .blog-item:nth-child(even) {
     margin-top: 0;
     margin-bottom: 20px;
+  }
+
+  .modal-dialog {
+    max-width: 90%; /* Ajusta el ancho máximo del modal para dispositivos pequeños */
+  }
+
+  .modal-body {
+    max-height: 60vh; /* Ajusta el máximo de la altura al 60% de la vista en dispositivos pequeños */
   }
 }
