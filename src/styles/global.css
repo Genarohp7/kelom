@@ -1,3 +1,6 @@
+@import url("../../Blocks/AboutPage.css");
+
+
 :root {
   --color-bg: #fff7f3;
   --color-primary: #e89aa9;
@@ -191,3 +194,4 @@ a {
   text-align: center;
   background: #fff;
 }
+

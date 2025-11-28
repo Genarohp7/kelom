@@ -1,0 +1,352 @@
+/* ===========================
+   SECCIÓN NOSOTROS (ABOUT)
+   =========================== */
+
+.about {
+  padding: 3.5rem 0 4.5rem;
+}
+
+/* HERO: TEXTO + IMAGEN */
+
+.about__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 2.75rem;
+  align-items: center;
+  padding-top: 2rem;
+}
+
+.about__badge {
+  display: inline-block;
+  padding: 0.25rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(232, 154, 169, 0.12);
+  color: var(--color-primary-dark);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.8rem;
+}
+
+.about__title {
+  font-size: 2.1rem;
+  line-height: 1.25;
+  margin: 0 0 1.1rem;
+  color: var(--color-text-main);
+}
+
+.about__subtitle {
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: var(--color-text-soft);
+  margin: 0 0 0.8rem;
+}
+
+.about__paragraph {
+  font-size: 0.96rem;
+  line-height: 1.6;
+  color: var(--color-text-main);
+  margin: 0;
+}
+
+.about__hero-media {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.about__hero-image-wrapper {
+  border-radius: 1.5rem;
+  overflow: hidden;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.09);
+  background: #fff;
+}
+
+.about__hero-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  max-height: 320px;
+}
+
+.about__hero-note {
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--color-text-soft);
+  background: rgba(255, 247, 243, 0.9);
+  border-radius: 0.9rem;
+  padding: 0.8rem 1rem;
+}
+
+/* STRIP DE NÚMEROS */
+
+.about__strip {
+  margin-top: 3rem;
+}
+
+.about__strip-inner {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  padding: 1.2rem 1.5rem;
+  border-radius: 1.5rem;
+  background: linear-gradient(
+    90deg,
+    rgba(232, 154, 169, 0.16),
+    rgba(255, 247, 243, 0.7)
+  );
+}
+
+.about__strip-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.about__strip-number {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.about__strip-label {
+  font-size: 0.82rem;
+  color: var(--color-text-soft);
+}
+
+/* TARJETAS: MISIÓN / VISIÓN / CÓMO TRABAJAMOS */
+
+.about__sections {
+  margin-top: 3rem;
+}
+
+.about__sections-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.8rem;
+}
+
+.about__card {
+  background: #ffffff;
+  border-radius: 1.5rem;
+  padding: 1.5rem 1.4rem 1.6rem;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(232, 154, 169, 0.15);
+}
+
+.about__card-title {
+  margin: 0 0 0.7rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.about__card-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--color-text-soft);
+}
+
+/* BANDA CON IMAGEN ANCHA */
+
+.about__image-band {
+  margin-top: 3.4rem;
+}
+
+.about__image-band-inner {
+  position: relative;
+  border-radius: 1.75rem;
+  overflow: hidden;
+  box-shadow: 0 22px 45px rgba(0, 0, 0, 0.09);
+}
+
+.about__image-band-photo {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+  max-height: 340px;
+}
+
+.about__image-band-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    rgba(0, 0, 0, 0.45),
+    rgba(0, 0, 0, 0.05)
+  );
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 1.4rem 1.6rem;
+}
+
+.about__image-band-text {
+  max-width: 360px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+/* VALORES */
+
+.about__values {
+  margin-top: 3.2rem;
+}
+
+.about__section-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.4rem;
+  text-align: left;
+  color: var(--color-text-main);
+}
+
+.about__section-subtitle {
+  margin: 0 0 1.4rem;
+  font-size: 0.9rem;
+  color: var(--color-text-soft);
+  max-width: 520px;
+}
+
+.about__values-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.about__value-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: #ffffff;
+  border: 1px solid rgba(232, 154, 169, 0.3);
+  color: var(--color-text-main);
+}
+
+/* NEWSLETTER / CONTACTO REUTILIZABLE */
+
+.about__newsletter {
+  margin-top: 3.5rem;
+}
+
+.newsletter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem 1.6rem;
+  border-radius: 1.5rem;
+  background: #ffffff;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(232, 154, 169, 0.18);
+}
+
+.newsletter__text {
+  max-width: 420px;
+}
+
+.newsletter__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  color: var(--color-text-main);
+}
+
+.newsletter__sub {
+  font-size: 0.85rem;
+  color: var(--color-text-soft);
+}
+
+.newsletter__form {
+  display: flex;
+  gap: 0.7rem;
+  width: 100%;
+  max-width: 360px;
+}
+
+.newsletter__input {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid #ddd;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.newsletter__input:focus {
+  border-color: var(--color-primary);
+}
+
+.newsletter__button {
+  border-radius: 999px;
+  border: none;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--color-primary);
+  color: #ffffff;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.newsletter__button:hover {
+  background: var(--color-primary-dark);
+  transform: translateY(-1px);
+}
+
+/* ===========================
+   RESPONSIVE
+   =========================== */
+
+@media (max-width: 900px) {
+  .about__hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .about__hero-media {
+    order: -1;
+  }
+
+  .about__sections-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .about__strip-inner {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .about__strip-inner {
+    grid-template-columns: minmax(0, 1fr);
+    text-align: left;
+  }
+
+  .about__image-band-text {
+    max-width: 100%;
+    font-size: 0.9rem;
+  }
+
+  .newsletter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .newsletter__form {
+    flex-direction: column;
+    max-width: 100%;
+  }
+
+  .newsletter__button {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+}
