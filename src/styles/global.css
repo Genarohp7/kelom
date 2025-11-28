@@ -54,7 +54,7 @@ a {
   padding: 0 1.5rem;
 }
 
-/* Header */
+/* ========== HEADER ========== */
 
 .header {
   position: sticky;
@@ -65,59 +65,76 @@ a {
   z-index: 50;
 }
 
+/* Contenedor principal del header */
 .header__inner {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
   align-items: center;
-  gap: 1.5rem;
+  justify-content: space-between;
   padding: 0.75rem 0;
+  gap: 2rem;
 }
 
-/* Logo más grande */
+/* Grupo central: Nosotros – LOGO – Blog */
+.header__nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5rem;
+  flex: 1;
+}
+
+/* Logo en medio */
 .header__logo img {
-  height: 130px;      /* <- aquí lo agrandamos */
+  height: 130px;
   width: auto;
   display: block;
 }
 
-/* Menú centrado */
-
-.header__nav {
-  display: flex;
-  justify-content: center;
-  gap: 1.75rem;
-  font-size: 0.95rem;
-  font-weight: 500;
-}
-
+/* Botones de navegación (Nosotros / Blog) */
 .header__nav-link {
   position: relative;
-  padding-bottom: 0.25rem;
-}
-
-.header__nav-link::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 0;
-  height: 2px;
-  background: var(--color-primary);
   border-radius: 999px;
-  transition: width 0.2s ease;
+  padding: 0.45rem 1.4rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-text-main);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.15s ease;
 }
 
-.header__nav-link:hover::after {
-  width: 100%;
+.header__nav-link:hover {
+  background: #ffffff;
+  border-color: var(--color-primary);
+  box-shadow: 0 4px 10px rgba(232, 154, 169, 0.2);
+  transform: translateY(-1px);
+  color: var(--color-primary-dark); /* texto visible en rosa oscuro */
 }
 
-/* Botones + redes */
+/* Estado activo (ruta actual) */
+.header__nav-link--active,
+.header__nav-link--active:hover {
+  background: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+  box-shadow: 0 6px 14px rgba(232, 154, 169, 0.35);
+}
+
+/* Acciones + redes (lado derecho) */
 
 .header__right {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 1rem;
+  flex-shrink: 0;
 }
 
 .header__actions {
@@ -142,16 +159,29 @@ a {
   border-color: var(--color-primary);
 }
 
+.header__btn--primary:hover {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+}
+
 .header__btn--outline {
   border-color: var(--color-primary);
   color: var(--color-primary-dark);
   background: #fff;
 }
 
+.header__btn--outline:hover {
+  background: #ffeef5;
+}
+
 .header__btn--secondary {
   border-color: #ddd;
   color: #555;
   background: #fff;
+}
+
+.header__btn--secondary:hover {
+  background: #f7f7f7;
 }
 
 /* Redes sociales */
@@ -187,7 +217,7 @@ a {
   transform: translateY(-1px);
 }
 
-/* Footer */
+/* ========== FOOTER ========== */
 
 .footer {
   padding: 1.2rem 0 1.5rem;
@@ -196,4 +226,3 @@ a {
   text-align: center;
   background: #fff;
 }
-

@@ -1,3 +1,4 @@
+// src/components/Header.jsx
 import Kelom from "../assets/logo/logoKelom.svg";
 import { NavLink } from "react-router-dom";
 
@@ -5,29 +6,34 @@ function Header() {
   return (
     <header className="header">
       <div className="container header__inner">
-        {/* Logo */}
-        <div className="header__logo">
-          <NavLink to="/" aria-label="Kelom">
-            <img
-              src={Kelom}
-              alt="Logo Kelom"
-              title="Kelom"
-              className="header__logo-image"
-            />
-          </NavLink>
-        </div>
-
-        {/* Menú centrado */}
+        {/* Menú central: Nosotros – Logo – Blog */}
         <nav className="header__nav" aria-label="Navegación principal">
-          <NavLink className="header__nav-link" to="/nosotros">
+          <NavLink
+            to="/nosotros"
+            className={({ isActive }) =>
+              "header__nav-link" +
+              (isActive ? " header__nav-link--active" : "")
+            }
+          >
             Nosotros
           </NavLink>
-          <NavLink className="header__nav-link" to="/blog">
+
+          <NavLink to="/" className="header__logo" aria-label="Kelom">
+            <img src={Kelom} alt="Logo Kelom" title="Kelom" />
+          </NavLink>
+
+          <NavLink
+            to="/blog"
+            className={({ isActive }) =>
+              "header__nav-link" +
+              (isActive ? " header__nav-link--active" : "")
+            }
+          >
             Blog
           </NavLink>
         </nav>
 
-        {/* Acciones + redes */}
+        {/* Acciones + redes sociales */}
         <div className="header__right">
           <div className="header__actions">
             <button className="header__btn header__btn--outline">
