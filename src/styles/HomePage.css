@@ -296,19 +296,40 @@
   color: var(--color-text-soft);
 }
 
-/* RESPONSIVE */
+/* =========================
+   RESPONSIVE
+   ========================= */
 
+/* Tablet / pantallas medianas */
 @media (max-width: 900px) {
+  .hero {
+    padding: 3.2rem 0 2.5rem;
+  }
+
+  .hero__inner {
+    max-width: 100%;
+  }
+
+  .search-panel {
+    margin-top: 2rem;
+    padding: 1.5rem 1.4rem 1.6rem;
+  }
+
   .search-panel__form {
     grid-template-columns: 1fr;
   }
 
-  .venues__grid {
-    grid-template-columns: 1fr;
+  .tips {
+    padding: 3rem 0 2.2rem;
   }
 
-  .featured__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .venues__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .venues__grid {
+    grid-template-columns: 1fr;
   }
 
   .venue-card {
@@ -317,5 +338,67 @@
 
   .venue-card__image-wrap {
     flex-basis: auto;
+  }
+
+  .featured__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Móviles */
+@media (max-width: 600px) {
+  .hero {
+    padding: 2.6rem 0 2.1rem;
+  }
+
+  .hero__inner {
+    text-align: center;
+  }
+
+  .hero__subtitle {
+    margin: 0 auto;
+    font-size: 0.95rem;
+  }
+
+  .search-panel {
+    border-radius: 18px;
+    padding: 1.4rem 1.2rem 1.5rem;
+  }
+
+  .search-panel__label {
+    font-size: 0.75rem;
+  }
+
+  .search-panel__button {
+    width: 100%;
+    justify-self: center;
+  }
+
+  .tips__list {
+    gap: 1.1rem;
+  }
+
+  .venues {
+    padding-bottom: 3rem;
+  }
+
+  .venues__header {
+    align-items: center;
+    text-align: center;
+  }
+
+  .venues__subtitle {
+    max-width: 26rem;
+  }
+
+  .venue-card__image {
+    height: 150px;
+  }
+}
+
+/* Extra pequeño: featured a 1 columna */
+@media (max-width: 420px) {
+  .featured__grid {
+    grid-template-columns: 1fr;
   }
 }

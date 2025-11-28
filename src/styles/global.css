@@ -1,7 +1,5 @@
 @import url("../../Blocks/AboutPage.css");
-
 @import url("../../Blocks/BlogPage.css");
-
 
 :root {
   --color-bg: #fff7f3;
@@ -115,7 +113,7 @@ a {
   border-color: var(--color-primary);
   box-shadow: 0 4px 10px rgba(232, 154, 169, 0.2);
   transform: translateY(-1px);
-  color: var(--color-primary-dark); /* texto visible en rosa oscuro */
+  color: var(--color-primary-dark);
 }
 
 /* Estado activo (ruta actual) */
@@ -225,4 +223,87 @@ a {
   color: var(--color-text-soft);
   text-align: center;
   background: #fff;
+}
+
+/* ========== RESPONSIVE ========== */
+
+/* Tablets y pantallas medianas */
+@media (max-width: 900px) {
+  .container {
+    padding: 0 1.25rem;
+  }
+
+  .header__inner {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  /* Nav al centro, acciones debajo */
+  .header__nav {
+    order: 1;
+    flex: 1 1 100%;
+    justify-content: center;
+    gap: 1.75rem;
+  }
+
+  .header__right {
+    order: 2;
+    align-items: center;
+  }
+}
+
+/* Móviles */
+@media (max-width: 600px) {
+  .container {
+    padding: 0 1rem;
+  }
+
+  .header__inner {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  /* Logo un poco más chico para que quepa todo cómodo */
+  .header__logo img {
+    height: 100px;
+  }
+
+  .header__nav {
+    flex: 0 0 auto;
+    justify-content: center;
+    gap: 1.1rem;
+  }
+
+  .header__nav-link {
+    padding: 0.35rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .header__right {
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .header__actions {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .header__btn {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.75rem;
+  }
+
+  .header__social {
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .header__social-link {
+    width: 2.1rem;
+    height: 2.1rem;
+    font-size: 0.95rem;
+  }
 }

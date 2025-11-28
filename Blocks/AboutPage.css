@@ -305,13 +305,23 @@
    RESPONSIVE
    =========================== */
 
+/* Tablet / pantallas medianas */
 @media (max-width: 900px) {
-  .about__hero {
-    grid-template-columns: minmax(0, 1fr);
+  .about {
+    padding: 3rem 0 4rem;
   }
 
+  .about__hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
+    padding-top: 1.5rem;
+  }
+
+  /* Imagen arriba, texto abajo */
   .about__hero-media {
     order: -1;
+    max-width: 520px;
+    margin: 0 auto;
   }
 
   .about__sections-grid {
@@ -323,7 +333,25 @@
   }
 }
 
+/* Móvil / pantallas pequeñas */
 @media (max-width: 720px) {
+  .about {
+    padding: 2.7rem 0 3.5rem;
+  }
+
+  .about__hero {
+    padding-top: 1rem;
+  }
+
+  .about__title {
+    font-size: 1.8rem;
+  }
+
+  .about__subtitle,
+  .about__paragraph {
+    font-size: 0.94rem;
+  }
+
   .about__strip-inner {
     grid-template-columns: minmax(0, 1fr);
     text-align: left;
@@ -332,6 +360,15 @@
   .about__image-band-text {
     max-width: 100%;
     font-size: 0.9rem;
+  }
+
+  .about__section-title,
+  .about__section-subtitle {
+    text-align: left;
+  }
+
+  .about__values-list {
+    gap: 0.6rem;
   }
 
   .newsletter {
@@ -348,5 +385,20 @@
     width: 100%;
     text-align: center;
     justify-content: center;
+  }
+}
+
+/* Extra pequeño (por si el viewport es muy angosto) */
+@media (max-width: 420px) {
+  .about__title {
+    font-size: 1.6rem;
+  }
+
+  .about__hero-note {
+    font-size: 0.82rem;
+  }
+
+  .newsletter {
+    padding: 1.3rem 1.2rem;
   }
 }

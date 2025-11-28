@@ -290,19 +290,35 @@
   margin-top: 1rem;
 }
 
-/* RESPONSIVE */
+/* ========== RESPONSIVE ========== */
 
+/* Tablet / pantallas medianas */
 @media (max-width: 992px) {
-  .blog__hero {
-    grid-template-columns: minmax(0, 1fr);
+  .blog {
+    padding: 3rem 0 4rem;
   }
 
+  .blog__hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.2rem;
+  }
+
+  /* Imagen arriba, texto abajo */
   .blog__hero-image-wrapper {
     order: -1;
   }
 
+  .blog__hero-content {
+    align-items: flex-start;
+  }
+
+  .blog__subtitle {
+    max-width: 100%;
+  }
+
   .blog__featured-grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
   }
 
   .blog__grid {
@@ -310,9 +326,27 @@
   }
 }
 
+/* Móviles */
 @media (max-width: 600px) {
   .blog {
     padding: 2.5rem 0 3.5rem;
+  }
+
+  .blog__hero {
+    margin-bottom: 2.5rem;
+  }
+
+  .blog__hero-content {
+    align-items: center;
+    text-align: center;
+  }
+
+  .blog__subtitle {
+    font-size: 0.95rem;
+  }
+
+  .blog__categories {
+    justify-content: center;
   }
 
   .blog__title {
@@ -323,11 +357,28 @@
     font-size: 1.3rem;
   }
 
+  .blog__list-header {
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
   .blog__grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .blog-card__image {
     height: 190px;
+  }
+}
+
+/* Extra pequeño: por si se necesita más aire */
+@media (max-width: 420px) {
+  .blog__categories {
+    gap: 0.45rem;
+  }
+
+  .blog-card__body {
+    padding: 0.9rem 1rem 1rem;
   }
 }
