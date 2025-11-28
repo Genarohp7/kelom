@@ -1,10 +1,9 @@
 import { Routes, Route } from "react-router-dom";
-import Header from "./Components/Header";
-import Footer from "./Components/Footer";
-
-import HomePage from "./pages/HomePage";
-import BlogPage from "./pages/BlogPage";
-import AboutPage from "./pages/AboutPage";
+import Header from "./Components/Header.jsx";
+import Footer from "./Components/Footer.jsx";
+import HomePage from "./pages/HomePage.jsx";
+import BlogPage from "./pages/BlogPage.jsx";
+import NosotrosPage from "./pages/AboutPage.jsx";
 
 function App() {
   return (
@@ -12,9 +11,15 @@ function App() {
       <Header />
       <main className="page__content">
         <Routes>
+          {/* Home por defecto */}
           <Route path="/" element={<HomePage />} />
-          <Route path="/nosotros" element={<AboutPage />} />
+
+          {/* Otras páginas */}
+          <Route path="/nosotros" element={<NosotrosPage />} />
           <Route path="/blog" element={<BlogPage />} />
+
+          {/* Cualquier ruta rara manda al Home */}
+          <Route path="*" element={<HomePage />} />
         </Routes>
       </main>
       <Footer />
