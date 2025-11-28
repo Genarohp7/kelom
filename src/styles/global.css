@@ -1,5 +1,7 @@
 @import url("../../Blocks/AboutPage.css");
 
+@import url("../../Blocks/BlogPage.css");
+
 
 :root {
   --color-bg: #fff7f3;
