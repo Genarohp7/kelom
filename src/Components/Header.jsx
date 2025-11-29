@@ -42,9 +42,13 @@ function Header() {
             <button className="header__btn header__btn--primary">
               Regístrate
             </button>
-            <button className="header__btn header__btn--secondary">
+
+            <NavLink
+              to="/empresas"
+              className="header__btn header__btn--secondary"
+            >
               Área de empresas
-            </button>
+            </NavLink>
           </div>
 
           <div className="header__social">

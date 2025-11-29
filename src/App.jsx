@@ -1,14 +1,21 @@
-import { Routes, Route } from "react-router-dom";
+// src/App.jsx
+import { Routes, Route, useLocation } from "react-router-dom";
 import Header from "./Components/Header.jsx";
 import Footer from "./Components/Footer.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import BlogPage from "./pages/BlogPage.jsx";
 import NosotrosPage from "./pages/AboutPage.jsx";
+import BusinessAreaPage from "./pages/Business/Pages/BusinessAreaPage.jsx";
 
 function App() {
+  const location = useLocation();
+  const isBusinessArea = location.pathname.startsWith("/empresas");
+
   return (
     <div className="page">
-      <Header />
+      {/* Header global solo en el sitio "normal" */}
+      {!isBusinessArea && <Header />}
+
       <main className="page__content">
         <Routes>
           {/* Home por defecto */}
@@ -18,11 +25,16 @@ function App() {
           <Route path="/nosotros" element={<NosotrosPage />} />
           <Route path="/blog" element={<BlogPage />} />
 
+          {/* Área de empresas (usa header/footer propios) */}
+          <Route path="/empresas" element={<BusinessAreaPage />} />
+
           {/* Cualquier ruta rara manda al Home */}
           <Route path="*" element={<HomePage />} />
         </Routes>
       </main>
-      <Footer />
+
+      {/* Footer global solo en el sitio "normal" */}
+      {!isBusinessArea && <Footer />}
     </div>
   );
 }

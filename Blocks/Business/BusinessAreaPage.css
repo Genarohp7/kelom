@@ -1,0 +1,486 @@
+/* ===========================
+   ÁREA DE EMPRESAS
+   =========================== */
+
+.business {
+  background: #ffffff;
+  color: var(--color-text, #0f172a);
+}
+
+/* HEADER ESPECIAL EMPRESAS */
+
+.business__header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background-color: #ffffff;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.business__header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0;
+}
+
+.business__logo {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-primary-dark, #b83260);
+  text-decoration: none;
+}
+
+.business__nav {
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+}
+
+.business__nav-link {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-text-muted, #475569);
+  text-decoration: none;
+  padding-bottom: 0.15rem;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.business__nav-link:hover {
+  color: var(--color-primary-dark, #b83260);
+}
+
+.business__nav-link_active {
+  color: var(--color-primary-dark, #b83260);
+  border-color: var(--color-primary-dark, #b83260);
+}
+
+.business__nav-link_button {
+  border-radius: 999px;
+  padding: 0.45rem 1.2rem;
+  background: var(--color-primary, #e89aa9);
+  color: #ffffff;
+  border: none;
+}
+
+.business__nav-link_button:hover {
+  background: var(--color-primary-dark, #b83260);
+  color: #ffffff;
+}
+
+/* CUERPO */
+
+.business__body {
+  padding-bottom: 3rem;
+}
+
+/* HERO / ACCESO DE EMPRESAS */
+
+.business__hero {
+  padding: 3.5rem 0 4.5rem;
+}
+
+.business__hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 3rem;
+  align-items: flex-start;
+}
+
+.business__pill {
+  display: inline-block;
+  padding: 0.25rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(232, 154, 169, 0.12);
+  color: var(--color-primary-dark, #b83260);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.9rem;
+}
+
+.business__title {
+  font-size: 2.1rem;
+  line-height: 1.25;
+  margin: 0 0 0.9rem;
+}
+
+.business__subtitle {
+  margin: 0 0 1.8rem;
+  font-size: 0.98rem;
+  color: var(--color-text-muted, #64748b);
+  max-width: 32rem;
+}
+
+.business__benefits-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.business-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem 0.9rem;
+  align-items: flex-start;
+  padding: 1.2rem 1.1rem;
+  border-radius: 1rem;
+  background: #ffffff;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.business-card__icon {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(232, 154, 169, 0.14);
+  font-size: 1.1rem;
+}
+
+.business-card__title {
+  font-size: 0.98rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.business-card__text {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+/* LATERAL HERO – IMAGEN + FAVICON + DESTACADO */
+
+.business__hero-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+  justify-content: flex-start;
+}
+
+.business__hero-figure {
+  margin: 0;
+}
+
+.business__hero-photo-wrap {
+  position: relative;
+  border-radius: 1.4rem;
+  overflow: hidden;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.15);
+}
+
+.business__hero-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+/* favicon sobre la foto (usa /favicon.svg) */
+.business__hero-favicon {
+  position: absolute;
+  bottom: 0.9rem;
+  right: 0.9rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 999px;
+  background: #ffffff;
+  padding: 0.35rem;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.2);
+}
+
+.business__hero-caption {
+  margin-top: 0.7rem;
+}
+
+.business__hero-caption-title {
+  margin: 0 0 0.2rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.business__hero-caption-text {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+/* TARJETA DESTACADO LATERAL */
+
+.business-highlight {
+  padding: 1.6rem 1.5rem;
+  border-radius: 1.3rem;
+  background: linear-gradient(
+    135deg,
+    rgba(232, 154, 169, 0.12),
+    rgba(148, 163, 184, 0.12)
+  );
+  border: 1px solid rgba(232, 154, 169, 0.5);
+}
+
+.business-highlight__eyebrow {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: var(--color-primary-dark, #b83260);
+  margin: 0 0 0.6rem;
+}
+
+.business-highlight__text {
+  margin: 0 0 0.9rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #475569);
+}
+
+.business-highlight__list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  color: var(--color-text-muted, #475569);
+}
+
+.business-highlight__list li + li {
+  margin-top: 0.25rem;
+}
+
+/* BENEFICIOS / ESTADÍSTICAS */
+
+.business__stats {
+  padding: 3.2rem 0 4rem;
+  background: #f9fafb;
+}
+
+.business__section-title {
+  font-size: 1.6rem;
+  margin: 0 0 0.6rem;
+}
+
+.business__section-subtitle {
+  margin: 0 0 2.2rem;
+  max-width: 36rem;
+  font-size: 0.98rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.business__stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.6rem;
+  margin-bottom: 2.4rem;
+}
+
+.stat-card {
+  padding: 1.4rem 1.2rem;
+  border-radius: 1rem;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.stat-card__icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(232, 154, 169, 0.16);
+  font-size: 1.15rem;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card__number {
+  margin: 0 0 0.15rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary-dark, #b83260);
+}
+
+.stat-card__label {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.stat-card__text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #64748b);
+}
+
+.business__responsibility {
+  max-width: 42rem;
+}
+
+.business__responsibility-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.business__responsibility-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--color-text-muted, #64748b);
+  line-height: 1.6;
+}
+
+/* CTA REGISTRO */
+
+.business__cta {
+  padding: 3.8rem 0 4.2rem;
+}
+
+.business__cta-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 2rem 2.1rem;
+  border-radius: 1.6rem;
+  background: linear-gradient(
+    135deg,
+    rgba(232, 154, 169, 0.16),
+    rgba(248, 250, 252, 1)
+  );
+  border: 1px solid rgba(232, 154, 169, 0.4);
+}
+
+.business__cta-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.5rem;
+}
+
+.business__cta-subtitle {
+  margin: 0;
+  font-size: 0.96rem;
+  color: var(--color-text-muted, #475569);
+  max-width: 32rem;
+}
+
+.business__cta-button {
+  border: none;
+  border-radius: 999px;
+  padding: 0.9rem 1.8rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: var(--color-primary-dark, #b83260);
+  color: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  box-shadow: 0 12px 30px rgba(184, 50, 96, 0.25);
+}
+
+.business__cta-button:hover {
+  background: var(--color-primary, #e89aa9);
+  transform: translateY(-1px);
+  box-shadow: 0 16px 40px rgba(184, 50, 96, 0.32);
+}
+
+/* FOOTER EMPRESAS */
+
+.business__footer {
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+  padding: 1.5rem 0;
+  background: #ffffff;
+}
+
+.business__footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
+}
+
+.business__footer-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted, #6b7280);
+}
+
+.business__social {
+  display: flex;
+  gap: 1.2rem;
+}
+
+.business__social-link {
+  font-size: 0.88rem;
+  text-decoration: none;
+  color: var(--color-text-muted, #64748b);
+  transition: color 0.2s ease;
+}
+
+.business__social-link:hover {
+  color: var(--color-primary-dark, #b83260);
+}
+
+/* ===========================
+   RESPONSIVE
+   =========================== */
+
+@media (max-width: 960px) {
+  .business__hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .business__hero-side {
+    max-width: 24rem;
+  }
+
+  .business__stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .business__cta-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .business__header-inner {
+    flex-direction: row;
+    gap: 1rem;
+  }
+
+  .business__nav {
+    gap: 0.8rem;
+  }
+
+  .business__nav-link {
+    font-size: 0.8rem;
+  }
+
+  .business__benefits-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .business__stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .business__cta-inner {
+    padding: 1.6rem 1.3rem;
+  }
+
+  .business__cta-title {
+    font-size: 1.3rem;
+  }
+
+  .business__footer-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
