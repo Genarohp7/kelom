@@ -1,5 +1,5 @@
 // src/components/Header.jsx
-import Kelom from "../assets/logo/logoKelom.svg";
+import Kelom from "../assets/logo/logoKelom.png";
 import { NavLink } from "react-router-dom";
 
 function Header() {

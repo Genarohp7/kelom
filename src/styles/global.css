@@ -83,7 +83,7 @@ a {
 
 /* Logo en medio */
 .header__logo img {
-  height: 130px;
+  height: 70px;
   width: auto;
   display: block;
 }
@@ -100,12 +100,8 @@ a {
   cursor: pointer;
   background: transparent;
   color: var(--color-text-main);
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.15s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease,
+    border-color 0.2s ease, transform 0.15s ease;
 }
 
 .header__nav-link:hover {
@@ -201,11 +197,8 @@ a {
   font-size: 1.05rem;
   background: #ffffff;
   color: #555;
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    color 0.2s ease,
-    transform 0.15s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease, transform 0.15s ease;
 }
 
 .header__social-link:hover {
