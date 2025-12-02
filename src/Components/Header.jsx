@@ -1,39 +1,37 @@
-// src/components/Header.jsx
+// src/Header/Header.jsx
 import Kelom from "../assets/logo/logoKelom.png";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 
 function Header() {
-  return (
-    <header className="header">
-      <div className="container header__inner">
-        {/* Menú central: Nosotros – Logo – Blog */}
-        <nav className="header__nav" aria-label="Navegación principal">
-          <NavLink
-            to="/nosotros"
-            className={({ isActive }) =>
-              "header__nav-link" +
-              (isActive ? " header__nav-link--active" : "")
-            }
-          >
-            Nosotros
-          </NavLink>
+  const location = useLocation();
 
-          <NavLink to="/" className="header__logo" aria-label="Kelom">
+  // Normalizamos el path a minúsculas
+  const path = location.pathname.toLowerCase();
+
+  // Cualquier ruta que contenga "empresa" (empresa, empresas, area-empresas, etc.)
+  const isBusinessArea = path.includes("empresa");
+
+  return (
+    <header className={`header ${isBusinessArea ? "header--business" : ""}`}>
+      <div className="container header__inner">
+        {/* Logo */}
+        <div className="header__logo">
+          <NavLink to="/" aria-label="Kelom">
             <img src={Kelom} alt="Logo Kelom" title="Kelom" />
           </NavLink>
+        </div>
 
-          <NavLink
-            to="/blog"
-            className={({ isActive }) =>
-              "header__nav-link" +
-              (isActive ? " header__nav-link--active" : "")
-            }
-          >
+        {/* Menú centrado */}
+        <nav className="header__nav" aria-label="Navegación principal">
+          <NavLink className="header__nav-link" to="/nosotros">
+            Nosotros
+          </NavLink>
+          <NavLink className="header__nav-link" to="/blog">
             Blog
           </NavLink>
         </nav>
 
-        {/* Acciones + redes sociales */}
+        {/* Acciones + redes */}
         <div className="header__right">
           <div className="header__actions">
             <button className="header__btn header__btn--outline">
@@ -42,7 +40,6 @@ function Header() {
             <button className="header__btn header__btn--primary">
               Regístrate
             </button>
-
             <NavLink
               to="/empresas"
               className="header__btn header__btn--secondary"
@@ -50,7 +47,6 @@ function Header() {
               Área de empresas
             </NavLink>
           </div>
-
           <div className="header__social">
             <a
               className="header__social-link"
