@@ -3,34 +3,54 @@ import "../../../../Blocks/Business/BusinessAreaPage.css";
 import Kelom from "../../../assets/logo/logoKelom.png";
 import { NavLink } from "react-router-dom";
 
-
 function BusinessAreaPage() {
   return (
     <div className="business">
       {/* HEADER ESPECIAL PARA EMPRESAS */}
       <header className="business__header">
         <div className="business__header-inner container">
-          {/* Aquí puedes reutilizar tu logo real (luego si quieres cambias por <img> */}
-         <NavLink to="/" className="header__logo" aria-label="Kelom">
+          {/* Logo Kelom (vuelve al home principal) */}
+          <NavLink to="/" className="header__logo" aria-label="Kelom">
             <img src={Kelom} alt="Logo Kelom" title="Kelom" />
           </NavLink>
 
           <nav className="business__nav">
-            <a
-              href="#acceso"
-              className="business__nav-link business__nav-link_active"
+            {/* Acceso de empresas -> /empresas */}
+            <NavLink
+              to="/empresas"
+              end
+              className={({ isActive }) =>
+                "business__nav-link" +
+                (isActive ? " business__nav-link_active" : "")
+              }
             >
               Acceso de empresas
-            </a>
-            <a href="#beneficios" className="business__nav-link">
+            </NavLink>
+
+            {/* Beneficios -> /empresas/beneficios */}
+            <NavLink
+              to="/empresas/beneficios"
+              className={({ isActive }) =>
+                "business__nav-link" +
+                (isActive ? " business__nav-link_active" : "")
+              }
+            >
               Beneficios
-            </a>
-            <a
-              href="#acceder"
+            </NavLink>
+
+            {/* Acceder -> scroll al CTA dentro de esta misma página */}
+            <button
+              type="button"
               className="business__nav-link business__nav-link_button"
+              onClick={() => {
+                const ctaSection = document.getElementById("acceder");
+                if (ctaSection) {
+                  ctaSection.scrollIntoView({ behavior: "smooth" });
+                }
+              }}
             >
               Acceder
-            </a>
+            </button>
           </nav>
         </div>
       </header>
@@ -56,10 +76,7 @@ function BusinessAreaPage() {
 
               <div className="business__benefits-grid">
                 <article className="business-card">
-                  <span
-                    className="business-card__icon"
-                    aria-hidden="true"
-                  >
+                  <span className="business-card__icon" aria-hidden="true">
                     🌐
                   </span>
                   <h3 className="business-card__title">Visibilidad en la web</h3>
@@ -71,10 +88,7 @@ function BusinessAreaPage() {
                 </article>
 
                 <article className="business-card">
-                  <span
-                    className="business-card__icon"
-                    aria-hidden="true"
-                  >
+                  <span className="business-card__icon" aria-hidden="true">
                     💌
                   </span>
                   <h3 className="business-card__title">Contacto con novi@s</h3>
@@ -86,10 +100,7 @@ function BusinessAreaPage() {
                 </article>
 
                 <article className="business-card">
-                  <span
-                    className="business-card__icon"
-                    aria-hidden="true"
-                  >
+                  <span className="business-card__icon" aria-hidden="true">
                     📈
                   </span>
                   <h3 className="business-card__title">Generas más</h3>
@@ -102,10 +113,7 @@ function BusinessAreaPage() {
                 </article>
 
                 <article className="business-card">
-                  <span
-                    className="business-card__icon"
-                    aria-hidden="true"
-                  >
+                  <span className="business-card__icon" aria-hidden="true">
                     🤝
                   </span>
                   <h3 className="business-card__title">

@@ -6,6 +6,7 @@ import HomePage from "./pages/HomePage.jsx";
 import BlogPage from "./pages/BlogPage.jsx";
 import NosotrosPage from "./pages/AboutPage.jsx";
 import BusinessAreaPage from "./pages/Business/Pages/BusinessAreaPage.jsx";
+import BusinessBenefitsPage from "./pages/Business/Pages/BusinessBenefitsPage.jsx";
 
 function App() {
   const location = useLocation();
@@ -27,6 +28,8 @@ function App() {
 
           {/* Área de empresas (usa header/footer propios) */}
           <Route path="/empresas" element={<BusinessAreaPage />} />
+
+          <Route path="/empresas/beneficios" element={<BusinessBenefitsPage />} />
 
           {/* Cualquier ruta rara manda al Home */}
           <Route path="*" element={<HomePage />} />
