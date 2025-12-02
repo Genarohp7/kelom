@@ -73,7 +73,6 @@ a {
   gap: 2rem;
 }
 
-
 /* Grupo central: navegación */
 .header__nav {
   display: flex;
@@ -240,12 +239,22 @@ a {
   .header__inner {
     flex-wrap: wrap;
     gap: 1.2rem;
+    padding: 0.7rem 0 0.9rem;
+  }
+
+  .header__logo img {
+    height: 60px; /* un poco más compacto en tablet */
   }
 
   .header__nav {
     order: 3;
     width: 100%;
     justify-content: center;
+    gap: 1.8rem; /* menos espacio entre links para evitar desbordes */
+  }
+
+  .header__nav-link {
+    padding: 0.4rem 1.2rem;
   }
 
   .header__right {
@@ -255,15 +264,30 @@ a {
   .header__logo {
     order: 1;
   }
+
+  .header__actions {
+    flex-wrap: wrap; /* por si los tres botones no caben en una sola línea */
+  }
 }
 
 /* Móvil */
 @media (max-width: 600px) {
   .header__inner {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;      /* centramos todo el contenido */
+    text-align: center;
     padding: 0.9rem 0 1.1rem;
     gap: 0.8rem;
+  }
+
+  .header__logo {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .header__logo img {
+    height: 56px;
   }
 
   .header__nav {
@@ -273,14 +297,23 @@ a {
 
   .header__right {
     width: 100%;
-    align-items: flex-start;
+    align-items: center;      /* centramos botones + redes */
   }
 
   .header__actions {
     flex-wrap: wrap;
+    justify-content: center;
   }
 
   .header__social {
-    align-self: flex-start;
+    align-self: center;
+    justify-content: center;
+  }
+
+  /* En móvil el header de empresas sigue siendo un poco más alto,
+     pero sin volverse enorme */
+  .header--business .header__inner {
+    padding-top: 1.2rem;
+    padding-bottom: 1.3rem;
   }
 }

@@ -31,7 +31,6 @@
   margin: 0 auto 1.4rem;     /* centrado dentro del contenedor */
 }
 
-
 .business-benefits__hero-main {
   display: flex;
   flex-direction: column;
@@ -361,6 +360,16 @@
   .business-benefits__testimonials-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  /* CTA apilada en tablet para evitar desbordes */
+  .business-benefits__cta-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .business-benefits__cta-form {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 720px) {
@@ -370,6 +379,14 @@
 
   .business-benefits__title {
     font-size: 1.7rem;
+  }
+
+  /* Pill más pequeña en móvil para que no domine toda la pantalla */
+  .business-benefits__pill {
+    font-size: 1.2rem;
+    padding: 0.45rem 1.8rem;
+    letter-spacing: 0.12em;
+    margin-bottom: 1.1rem;
   }
 
   .business-benefits__stats-grid {
@@ -390,6 +407,12 @@
     max-width: 100%;
     flex-direction: column;
     align-items: stretch;
+  }
+
+  /* 👉 Aquí corregimos el input gigante en móvil */
+  .business-benefits__cta-input {
+    flex: 0 0 auto;   /* ya no usa 180px de alto */
+    width: 100%;      /* ocupa el ancho del contenedor */
   }
 
   .business-benefits__cta-button {

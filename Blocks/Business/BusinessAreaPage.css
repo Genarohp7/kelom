@@ -455,17 +455,39 @@
 
 @media (max-width: 640px) {
   .business__header-inner {
-    /* un poco más aire también en móvil */
+    /* header en columna, centrado y con logo primero */
     padding: 1.1rem 0 1.3rem;
     gap: 1rem;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .business__header-inner .header__logo {
+    order: 1;
   }
 
   .business__nav {
+    order: 2;
     gap: 0.8rem;
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   .business__nav-link {
     font-size: 0.8rem;
+  }
+
+  .business__hero {
+    padding: 2.5rem 0 3rem;
+  }
+
+  .business__pill {
+    font-size: 1.2rem;
+  }
+
+  .business__title {
+    font-size: 1.6rem;
   }
 
   .business__benefits-grid {
@@ -478,10 +500,16 @@
 
   .business__cta-inner {
     padding: 1.6rem 1.3rem;
+    align-items: stretch;
   }
 
   .business__cta-title {
     font-size: 1.3rem;
+  }
+
+  .business__cta-button {
+    width: 100%;
+    text-align: center;
   }
 
   .business__footer-inner {
