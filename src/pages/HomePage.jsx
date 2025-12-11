@@ -1,5 +1,6 @@
 // src/pages/HomePage.jsx
 import "../styles/HomePage.css";
+import { Link } from "react-router-dom";
 
 function HomePage() {
   const venues = [
@@ -245,12 +246,12 @@ function HomePage() {
                     {venue.location}
                   </div>
 
-                  <button
-                    type="button"
+                  <Link
+                    to={`/proveedores/${venue.id}`}
                     className="venue-card__link"
                   >
                     Ver más detalles
-                  </button>
+                  </Link>
                 </div>
               </article>
             ))}
