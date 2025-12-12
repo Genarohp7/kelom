@@ -1,4 +1,4 @@
-// src/pages/BusinessAreaPage.jsx
+// src/pages/Business/Pages/BusinessAreaPage.jsx
 import "../../../../Blocks/Business/BusinessAreaPage.css";
 import Kelom from "../../../assets/logo/logoKelom.png";
 import { NavLink } from "react-router-dom";
@@ -38,7 +38,7 @@ function BusinessAreaPage() {
               Beneficios
             </NavLink>
 
-            {/* Acceder -> ahora navega al login de proveedores */}
+            {/* Acceder -> ahora va a la página de login */}
             <NavLink
               to="/empresas/acceso"
               className="business__nav-link business__nav-link_button"
@@ -73,9 +73,7 @@ function BusinessAreaPage() {
                   <span className="business-card__icon" aria-hidden="true">
                     🌐
                   </span>
-                  <h3 className="business-card__title">
-                    Visibilidad en la web
-                  </h3>
+                  <h3 className="business-card__title">Visibilidad en la web</h3>
                   <p className="business-card__text">
                     Tu negocio aparece en una plataforma especializada en
                     eventos, justo cuando las parejas están planeando su boda.
@@ -215,9 +213,7 @@ function BusinessAreaPage() {
                   🚫
                 </div>
                 <p className="stat-card__number">0</p>
-                <p className="stat-card__label">
-                  visibilidad sin presencia web
-                </p>
+                <p className="stat-card__label">visibilidad sin presencia web</p>
                 <p className="stat-card__text">
                   No estar dado de alta en la web significa que muchas parejas
                   jamás sabrán que existes, aunque estés a unas cuadras del
