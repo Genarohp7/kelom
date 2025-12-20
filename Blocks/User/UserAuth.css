@@ -1,0 +1,95 @@
+/* Blocks/User/UserAuth.css */
+
+/* Wrappers principales para las páginas de novios/as */
+
+.user-auth,
+.user-register,
+.user-profile {
+  min-height: calc(100vh - 140px); /* deja espacio para header/footer */
+  background: radial-gradient(
+    circle at top,
+    #ffeef5 0,
+    #ffffff 40%,
+    #ffffff 100%
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.5rem 3rem;
+  color: var(--color-text-main);
+}
+
+.user-auth__container,
+.user-register__container,
+.user-profile__container {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+/* Layouts internos */
+
+.user-auth__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 2rem;
+  align-items: center;
+}
+
+.user-register__grid,
+.user-profile__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.1fr);
+  gap: 2rem;
+}
+
+/* Progreso de perfil (barra de % que usamos en registro y perfil) */
+
+.profile-progress {
+  margin: 0.8rem 0 1.2rem;
+}
+
+.profile-progress__label {
+  font-size: 0.8rem;
+  color: var(--color-text-soft);
+  margin-bottom: 0.35rem;
+}
+
+.profile-progress__bar {
+  width: 100%;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #ffe2eb;
+  overflow: hidden;
+}
+
+.profile-progress__fill {
+  height: 100%;
+  width: 0;
+  background: var(--color-primary);
+  transition: width 0.25s ease;
+}
+
+/* Responsive */
+
+@media (max-width: 960px) {
+  .user-auth__grid,
+  .user-register__grid,
+  .user-profile__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .user-auth,
+  .user-register,
+  .user-profile {
+    padding-top: 2rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .user-auth,
+  .user-register,
+  .user-profile {
+    padding: 2rem 1.2rem 2.4rem;
+  }
+}

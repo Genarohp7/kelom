@@ -1,13 +1,14 @@
 @import url("../../Blocks/AboutPage.css");
 @import url("../../Blocks/BlogPage.css");
 @import url("../../Blocks/Business/BusinessBenefitsPage.css");
+@import url("../../Blocks/User/UserAuth.css");
 
 :root {
   --color-bg: #fff7f3;
   --color-primary: #e89aa9;
   --color-primary-dark: #c87486;
   --color-text-main: #3e3e3e;
-  --color-text-soft: #777;
+  --color-text-soft: #220707;
 }
 
 *,

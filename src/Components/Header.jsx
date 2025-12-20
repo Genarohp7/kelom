@@ -34,12 +34,20 @@ function Header() {
         {/* Acciones + redes */}
         <div className="header__right">
           <div className="header__actions">
-            <button className="header__btn header__btn--outline">
+            <NavLink
+              to="/acceso"
+              className="header__btn header__btn--outline"
+            >
               Acceder
-            </button>
-            <button className="header__btn header__btn--primary">
+            </NavLink>
+
+            <NavLink
+              to="/registro"
+              className="header__btn header__btn--primary"
+            >
               Regístrate
-            </button>
+            </NavLink>
+
             <NavLink
               to="/empresas"
               className="header__btn header__btn--secondary"
