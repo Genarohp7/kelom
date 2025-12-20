@@ -12,8 +12,11 @@ import BusinessBenefitsPage from "./pages/Business/Pages/BusinessBenefitsPage.js
 import BusinessLoginPage from "./pages/Business/Pages/BusinessLoginPage.jsx";
 import BusinessRegisterPage from "./pages/Business/Pages/BusinessRegisterPage.jsx";
 
-// 🔹 Detalle de proveedor (AJUSTA la ruta del import si tu archivo está en otra carpeta)
+// 🔹 Detalle de proveedor
 import VenueDetailPage from "./pages/VenueDetailPage.jsx";
+
+// 🔹 NUEVO: controlar scroll al cambiar de ruta
+import ScrollToTop from "./Components/ScrollToTop.jsx";
 
 function App() {
   const location = useLocation();
@@ -21,6 +24,9 @@ function App() {
 
   return (
     <div className="page">
+      {/* Forzar scroll al inicio en cada cambio de ruta */}
+      <ScrollToTop />
+
       {/* Header global solo en el sitio "normal" */}
       {!isBusinessArea && <Header />}
 
@@ -44,7 +50,7 @@ function App() {
           <Route path="/empresas/acceso" element={<BusinessLoginPage />} />
           <Route path="/empresas/registro" element={<BusinessRegisterPage />} />
 
-          {/* 🔹 Detalle de proveedor */}
+          {/* Detalle de proveedor */}
           <Route path="/proveedores/:id" element={<VenueDetailPage />} />
 
           {/* Cualquier ruta rara manda al Home */}
