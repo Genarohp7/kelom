@@ -13,7 +13,7 @@ function BusinessBenefitsPage() {
             <img src={Kelom} alt="Logo Kelom" title="Kelom" />
           </NavLink>
 
-          <nav className="business__nav">
+        <nav className="business__nav">
             {/* Acceso de empresas -> /empresas */}
             <NavLink
               to="/empresas"
@@ -37,19 +37,13 @@ function BusinessBenefitsPage() {
               Beneficios
             </NavLink>
 
-            {/* Acceder -> baja al CTA dentro de esta página */}
-            <button
-              type="button"
+            {/* Acceder -> ahora navega al login de proveedores */}
+            <NavLink
+              to="/empresas/acceso"
               className="business__nav-link business__nav-link_button"
-              onClick={() => {
-                const ctaSection = document.getElementById("acceder");
-                if (ctaSection) {
-                  ctaSection.scrollIntoView({ behavior: "smooth" });
-                }
-              }}
             >
               Acceder
-            </button>
+            </NavLink>
           </nav>
         </div>
       </header>
