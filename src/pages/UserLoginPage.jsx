@@ -1,75 +1,73 @@
 // src/pages/UserLoginPage.jsx
-import "../../src/styles/global.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { findUserByEmail, setCurrentUserEmail } from "../utils/userStorage.js";
+import { getCurrentUser, loginUser } from "../utils/userStorage.js";
 
 function UserLoginPage() {
   const navigate = useNavigate();
-  const [formValues, setFormValues] = useState({ email: "", password: "" });
-  const [errors, setErrors] = useState({});
-  const [globalError, setGlobalError] = useState("");
 
-  function handleChange(event) {
-    const { name, value } = event.target;
-    setFormValues((prev) => ({ ...prev, [name]: value }));
-    setErrors((prev) => ({ ...prev, [name]: "" }));
-    setGlobalError("");
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [error, setError] = useState("");
+
+  // Si ya hay sesión, mandamos directo al perfil
+  useEffect(() => {
+    const u = getCurrentUser();
+    if (u) {
+      navigate("/perfil");
+    }
+  }, [navigate]);
+
+  function handleChange(e) {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    setError("");
   }
 
-  function validate() {
-    const newErrors = {};
+  function handleSubmit(e) {
+    e.preventDefault();
 
-    if (!formValues.email.trim()) {
-      newErrors.email = "Ingresa tu correo electrónico.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formValues.email.trim())) {
-      newErrors.email = "Escribe un correo válido.";
-    }
+    const email = form.email.trim();
+    const password = form.password;
 
-    if (!formValues.password) {
-      newErrors.password = "Ingresa tu contraseña.";
-    } else if (formValues.password.length < 5) {
-      newErrors.password = "La contraseña debe tener al menos 5 caracteres.";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }
-
-  function handleSubmit(event) {
-    event.preventDefault();
-    if (!validate()) return;
-
-    const user = findUserByEmail(formValues.email);
-    if (!user || user.password !== formValues.password) {
-      setGlobalError("Correo o contraseña incorrectos.");
+    if (!email || !password) {
+      setError("Escribe tu correo y contraseña.");
       return;
     }
 
-    setCurrentUserEmail(user.email);
-    navigate("/mi-perfil");
-  }
+    const user = loginUser(email, password);
 
-  function handleForgotPassword() {
-    alert(
-      "Por ahora no tenemos recuperación automática de contraseña.\n" +
-        "Como todo es local, puedes crear otra cuenta con un correo distinto."
-    );
+    if (!user) {
+      setError("Correo o contraseña incorrectos.");
+      return;
+    }
+
+    // loginUser ya guarda el correo actual en localStorage
+    navigate("/perfil");
   }
 
   return (
     <div className="user-auth">
-      <div className="user-auth__container">
-        <div className="user-auth__grid">
+      <header className="business-auth__header">
+        <div className="business-auth__header-inner">
+          <span className="business-auth__logo-text">Kelom</span>
+          <span className="business-auth__logo-pill">Acceso parejas</span>
+        </div>
+      </header>
+
+      <main className="business-auth__content">
+        <div className="business-auth__container">
           <section className="auth-card">
-            <h1 className="auth-card__title">Accede a tu cuenta</h1>
+            <h1 className="auth-card__title">Inicia sesión</h1>
             <p className="auth-card__subtitle">
-              Revisa la información de tu boda y sigue llenando tu perfil cuando
-              quieras.
+              Entra para ver y completar la información de tu boda.
             </p>
 
             <form className="form" onSubmit={handleSubmit} noValidate>
-              <div className="form__field form__field--full">
+              <div className="form__field">
                 <label className="form__label" htmlFor="email">
                   Correo electrónico
                 </label>
@@ -79,13 +77,12 @@ function UserLoginPage() {
                   type="email"
                   className="form__input"
                   placeholder="tucorreo@ejemplo.com"
-                  value={formValues.email}
+                  value={form.email}
                   onChange={handleChange}
                 />
-                <div className="form__error">{errors.email}</div>
               </div>
 
-              <div className="form__field form__field--full">
+              <div className="form__field">
                 <label className="form__label" htmlFor="password">
                   Contraseña
                 </label>
@@ -95,15 +92,14 @@ function UserLoginPage() {
                   type="password"
                   className="form__input"
                   placeholder="Tu contraseña"
-                  value={formValues.password}
+                  value={form.password}
                   onChange={handleChange}
                 />
-                <div className="form__error">{errors.password}</div>
               </div>
 
-              {globalError && (
+              {error && (
                 <div className="form__error" style={{ marginTop: "0.4rem" }}>
-                  {globalError}
+                  {error}
                 </div>
               )}
 
@@ -111,44 +107,34 @@ function UserLoginPage() {
                 <button type="submit" className="btn btn--primary">
                   Acceder
                 </button>
-              </div>
-
-              <div className="auth-card__links">
                 <button
                   type="button"
-                  className="auth-card__link"
-                  onClick={handleForgotPassword}
+                  className="btn btn--ghost"
+                  // Aquí luego podemos montar flujo de "olvidé mi contraseña"
+                  onClick={() =>
+                    alert("En la versión actual aún no recuperamos contraseñas.")
+                  }
                 >
                   Olvidé mi contraseña
                 </button>
+              </div>
 
+              <div className="auth-card__links">
+                <span className="auth-card__link--muted">
+                  ¿Aún no tienes cuenta?
+                </span>
                 <Link to="/registro" className="auth-card__link">
-                  Crear una cuenta nueva
+                  Crear cuenta
                 </Link>
               </div>
             </form>
           </section>
-
-          <aside className="preview-card">
-            <h2 className="preview-card__title">Tu espacio en Kelom</h2>
-            <p className="preview-card__subtitle">
-              Una cuenta para organizar tu boda con más calma:
-            </p>
-            <ul className="preview-card__text">
-              <li>• Datos básicos de la boda.</li>
-              <li>• Invitad@s, fecha, presupuesto aproximado.</li>
-              <li>• Tus principales dudas para poder ayudarte mejor.</li>
-            </ul>
-            <p
-              className="preview-card__text"
-              style={{ marginTop: "0.8rem", fontSize: "0.9rem" }}
-            >
-              Todo se guarda en tu navegador usando localStorage. Más adelante,
-              cuando conectemos la base de datos, esto se irá a un panel real.
-            </p>
-          </aside>
         </div>
-      </div>
+      </main>
+
+      <footer className="business-auth__footer">
+        Kelom · Organiza tu boda con calma, paso a paso.
+      </footer>
     </div>
   );
 }

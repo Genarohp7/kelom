@@ -1,24 +1,18 @@
 // src/pages/UserProfilePage.jsx
-import "../../src/styles/global.css";
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { getCurrentUser, logoutCurrentUser } from "../utils/userStorage.js";
 
 function UserProfilePage() {
   const navigate = useNavigate();
+  const user = getCurrentUser(); // leemos directamente del storage
 
-  // ✅ Inicializamos el usuario desde localStorage SIN usar setState en un effect
-  const [user] = useState(() => getCurrentUser());
+  // Si no hay usuario, redirigimos al login
+  if (!user) {
+    return <Navigate to="/acceso" replace />;
+  }
 
-  // ✅ El efecto solo redirige si no hay usuario, no modifica estado
-  useEffect(() => {
-    if (!user) {
-      navigate("/acceso");
-    }
-  }, [user, navigate]);
-
-  const completion = useMemo(() => {
-    if (!user) return 0;
+  // Cálculo del porcentaje de completitud del perfil (sin hooks)
+  const completion = (() => {
     const keys = [
       "email",
       "fullName",
@@ -35,19 +29,17 @@ function UserProfilePage() {
       "biggestDoubt",
       "contactPreference",
     ];
+
     const filled = keys.filter((k) => !!user[k]?.toString().trim()).length;
     const total = keys.length;
     if (total === 0) return 0;
     return Math.round((filled / total) * 100);
-  }, [user]);
+  })();
 
   function handleLogout() {
     logoutCurrentUser();
     navigate("/");
   }
-
-  // Mientras redirige o no hay user, no renderizamos nada
-  if (!user) return null;
 
   return (
     <div className="user-profile">
@@ -117,7 +109,7 @@ function UserProfilePage() {
             </dl>
 
             <div className="form__actions" style={{ marginTop: "1.6rem" }}>
-              <Link to="/registro" className="btn btn--primary">
+              <Link to="/registro/completar" className="btn btn--primary">
                 Completar / editar mi perfil
               </Link>
               <button
@@ -142,8 +134,8 @@ function UserProfilePage() {
               className="preview-card__text"
               style={{ marginTop: "0.8rem", fontSize: "0.9rem" }}
             >
-              Tener tu perfil completo nos ayuda a mostrarte información realmente
-              útil, no solo publicidad genérica.
+              Tener tu perfil completo nos ayuda a mostrarte información
+              realmente útil, no solo publicidad genérica.
             </p>
           </aside>
         </div>
