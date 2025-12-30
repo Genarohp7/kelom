@@ -32,6 +32,9 @@ function BusinessRegisterPage() {
     photos: [],
   });
 
+  // Nuevo: control del popup de agradecimiento
+  const [showThanks, setShowThanks] = useState(false);
+
   // ========== VALIDACIONES ==========
   const isValidPhone = (phone) => {
     const digitsOnly = phone.replace(/\D/g, "");
@@ -72,16 +75,15 @@ function BusinessRegisterPage() {
   // ========== SUBMIT PASO 1 ==========
   const handleBasicSubmit = (e) => {
     e.preventDefault();
-    const { companyName, ownerName, phone, email, password, confirmPassword } =
-      basicData;
+
+    // Solo validamos los campos visibles en pantalla
+    const { companyName, ownerName, phone, email } = basicData;
 
     if (
       !companyName.trim() ||
       !ownerName.trim() ||
       !phone.trim() ||
-      !email.trim() ||
-      !password.trim() ||
-      !confirmPassword.trim()
+      !email.trim()
     ) {
       alert("Por favor, completa todos los campos.");
       return;
@@ -99,18 +101,12 @@ function BusinessRegisterPage() {
       return;
     }
 
-    if (password.length < 5) {
-      alert("La contraseña debe tener al menos 5 caracteres.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      alert("Las contraseñas no coinciden.");
-      return;
-    }
+    // No se valida password ni confirmPassword porque los campos están ocultos
 
     console.log("Datos básicos válidos (demo):", basicData);
     setStep(2);
+    // Mostramos popup de agradecimiento
+    setShowThanks(true);
   };
 
   // ========== SUBMIT PASO 2 ==========
@@ -268,7 +264,8 @@ function BusinessRegisterPage() {
                   <span className="form__error" />
                 </div>
 
-                {/* <div className="form__field">
+                {/* 
+                <div className="form__field">
                   <label className="form__label" htmlFor="password">
                     Crear contraseña
                   </label>
@@ -303,18 +300,15 @@ function BusinessRegisterPage() {
                     required
                   />
                   <span className="form__error" />
-                </div> */}
+                </div>
+                */}
 
                 <div className="register-card__actions">
                   <button type="submit" className="btn btn--primary">
-                    Continuar para completar ficha
+                    Registrar mi Negocio
                   </button>
                 </div>
               </form>
-
-              <p className="register-card__note">
-                Más adelante podrás editar tus datos desde tu panel.
-              </p>
             </section>
           </div>
         </main>
@@ -607,6 +601,76 @@ function BusinessRegisterPage() {
             </div>
           </div>
         </main>
+      )}
+
+      {/* POPUP DE AGRADECIMIENTO */}
+      {showThanks && (
+        <div
+          className="business-register__thanks-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1.5rem",
+          }}
+        >
+          <div
+            className="register-card"
+            style={{
+              maxWidth: "520px",
+              width: "100%",
+              background: "#ffffff",
+              borderRadius: "16px",
+              boxShadow: "0 20px 45px rgba(15, 23, 42, 0.35)",
+            }}
+          >
+            <div style={{ padding: "1.8rem 2rem" }}>
+              <p className="register-card__eyebrow">
+                Gracias por confiar en Kelom
+              </p>
+              <h2 className="register-card__title">
+                {basicData.companyName
+                  ? `¡${basicData.companyName} ya está en nuestro radar!`
+                  : "¡Tu negocio ya está en nuestro radar!"}
+              </h2>
+              <p className="register-card__subtitle">
+                Hemos recibido la información de tu empresa y la revisaremos con
+                calma para entender mejor lo que ofreces y cómo podemos
+                presentarte de la mejor manera dentro del catálogo de Kelom.
+              </p>
+              <p className="register-card__subtitle">
+                En los próximos días nos pondremos en contacto contigo al correo{" "}
+                <strong>{basicData.email}</strong>
+                {basicData.phone ? ` o al teléfono ${basicData.phone}` : ""}{" "}
+                para continuar el proceso y acompañarte en los siguientes pasos.
+              </p>
+              <p className="register-card__subtitle">
+                Nuestro objetivo es que estar en Kelom se sienta como sumar a un
+                aliado, no solo llenar un formulario.
+              </p>
+
+              <div
+                className="register-card__actions"
+                style={{ marginTop: "1.6rem" }}
+              >
+                {/* <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => setShowThanks(false)}
+                >
+                  Entendido, continuar
+                </button> */}
+                <NavLink to="/empresas" className="btn btn--ghost">
+                  Volver al área de empresas
+                </NavLink>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <footer className="business-register__footer">

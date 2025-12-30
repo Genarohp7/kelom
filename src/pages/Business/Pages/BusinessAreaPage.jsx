@@ -38,9 +38,9 @@ function BusinessAreaPage() {
               Beneficios
             </NavLink>
 
-            {/* Acceder -> ahora navega al login de proveedores */}
+            {/* Acceder -> ahora también va al registro de empresas */}
             <NavLink
-              to="/empresas/acceso"
+              to="/empresas/registro"
               className="business__nav-link business__nav-link_button"
             >
               Acceder
@@ -256,6 +256,7 @@ function BusinessAreaPage() {
               </p>
             </div>
 
+            {/* Este ya apuntaba a /empresas/registro, lo dejamos igual */}
             <NavLink to="/empresas/registro" className="business__cta-button">
               Registrar mi negocio
             </NavLink>

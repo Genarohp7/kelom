@@ -38,8 +38,8 @@ function BusinessBenefitsPage() {
             </NavLink>
 
             {/* Acceder -> ahora navega al login de proveedores */}
-            <NavLink
-              to="/empresas/acceso"
+           <NavLink
+              to="/empresas/registro"
               className="business__nav-link business__nav-link_button"
             >
               Acceder
@@ -271,12 +271,12 @@ function BusinessBenefitsPage() {
                   className="business-benefits__cta-input"
                   placeholder="Correo de tu negocio"
                 />
-                <button
-                  type="button"
-                  className="business-benefits__cta-button"
-                >
-                  Quiero estar cuando abran
-                </button>
+            <NavLink
+              to="/empresas/registro"
+              className="business__nav-link business__nav-link_button"
+            >
+              Registra tu Negocio
+            </NavLink>
               </form>
             </div>
           </section>
