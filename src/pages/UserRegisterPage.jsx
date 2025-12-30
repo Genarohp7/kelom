@@ -1,10 +1,9 @@
 // src/pages/UserRegisterPage.jsx
-import { useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { getCurrentUser, registerUserInitial } from "../utils/userStorage.js";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { registerUserInitial } from "../utils/userStorage.js";
 
 function UserRegisterPage() {
-  const navigate = useNavigate();
   const [form, setForm] = useState({
     email: "",
     fullName: "",
@@ -15,14 +14,7 @@ function UserRegisterPage() {
 
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
-
-  // Si ya está logueado, lo mandamos al perfil
-  useEffect(() => {
-    const u = getCurrentUser();
-    if (u) {
-      navigate("/perfil");
-    }
-  }, [navigate]);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   function handleChange(e) {
     const { name, value } = e.target;
@@ -52,18 +44,7 @@ function UserRegisterPage() {
       newErrors.phone = "El teléfono debe tener exactamente 10 dígitos.";
     }
 
-    if (!form.password) {
-      newErrors.password = "La contraseña es obligatoria.";
-    } else if (form.password.length < 5) {
-      newErrors.password = "Mínimo 5 caracteres.";
-    }
-
-    if (!form.confirmPassword) {
-      newErrors.confirmPassword = "Confirma tu contraseña.";
-    } else if (form.confirmPassword !== form.password) {
-      newErrors.confirmPassword = "Las contraseñas no coinciden.";
-    }
-
+    // No validamos contraseña porque los campos están desactivados.
     return newErrors;
   }
 
@@ -79,38 +60,69 @@ function UserRegisterPage() {
     try {
       const phoneDigits = form.phone.replace(/\D/g, "");
 
+      // Pre-registro local por si luego quieres usarlo
       registerUserInitial({
         email: form.email,
         fullName: form.fullName,
         phone: phoneDigits,
-        password: form.password,
+        password: "", // de momento no usamos contraseña real
       });
 
-      // Usuario creado y logueado → vamos al paso 2
-      navigate("/registro/completar");
+      // Mostrar mensaje de agradecimiento
+      setIsSubmitted(true);
     } catch (err) {
       setSubmitError(err.message || "No se pudo crear la cuenta.");
     }
   }
 
+  // 🔹 Vista de agradecimiento después de enviar
+  if (isSubmitted) {
+    return (
+      <div className="user-auth">
+        <main className="business-register__content">
+          <div className="business-register__container">
+            <section className="register-card">
+              <h1 className="register-card__title">
+                Gracias, {form.fullName || "pareja"} 🤍
+              </h1>
+              <p className="register-card__subtitle">
+                Hemos recibido tus datos Muchas gracias por confiar en nosotros,
+                nos pondremos en contacto a la brevedad para poder conocernos
+                mejor.
+              </p>
+              <p className="register-card__subtitle">
+                Te enviaremos un correo a <strong>{form.email}</strong> con un
+                mensaje de bienvenida y algunas ideas para empezar a organizar
+                tu boda
+              </p>
+              <p className="register-card__subtitle">
+                Si tu fecha está cerca o tienes una duda muy puntual, puedes
+                escribirnos directamente y buscaremos la mejor forma de
+                apoyarte.
+              </p>
+
+              <div className="register-card__actions">
+                <Link to="/" className="btn btn--primary">
+                  Volver al inicio
+                </Link>
+              </div>
+            </section>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // 🔹 Vista normal del formulario
   return (
     <div className="user-auth">
-      <header className="business-auth__header">
-        <div className="business-auth__header-inner">
-          <span className="business-auth__logo-text">Kelom</span>
-          <span className="business-auth__logo-pill">Registro parejas</span>
-          <span className="business-auth__logo-text">Paso 1 de 2</span>
-        </div>
-      </header>
-
       <main className="business-register__content">
         <div className="business-register__container">
           <section className="register-card">
             <p className="register-card__eyebrow">Alta inicial</p>
-            <h1 className="register-card__title">Crea tu cuenta</h1>
+            <h1 className="register-card__title">Registrate con nosotros </h1>
             <p className="register-card__subtitle">
-              Este primer paso crea tu acceso. Después podrás completar con
-              calma los detalles de tu boda.
+              Rcibiras informacion Util para que tu gran dia sea como lo dueñas
             </p>
 
             <form className="form" onSubmit={handleSubmit} noValidate>
@@ -162,6 +174,7 @@ function UserRegisterPage() {
                 <div className="form__error">{errors.phone}</div>
               </div>
 
+              {/* Contraseña y confirmación se quedan listas pero desactivadas por ahora
               <div className="form__field">
                 <label className="form__label" htmlFor="password">
                   Contraseña *
@@ -192,6 +205,7 @@ function UserRegisterPage() {
                 />
                 <div className="form__error">{errors.confirmPassword}</div>
               </div>
+              */}
 
               {submitError && (
                 <div className="form__error" style={{ marginTop: "0.4rem" }}>
@@ -201,25 +215,23 @@ function UserRegisterPage() {
 
               <div className="register-card__actions">
                 <button type="submit" className="btn btn--primary">
-                  Crear cuenta y continuar al paso 2
+                  Crear mi Registro
                 </button>
 
+                {/* 
                 <p className="register-card__note">
                   ¿Ya tienes cuenta?{" "}
                   <Link to="/acceso" className="auth-card__link">
                     Inicia sesión aquí
                   </Link>
                   .
-                </p>
+                </p> 
+                */}
               </div>
             </form>
           </section>
         </div>
       </main>
-
-      <footer className="business-register__footer">
-        Kelom · Ayudándote a organizar tu boda sin perder la cabeza.
-      </footer>
     </div>
   );
 }

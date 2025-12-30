@@ -51,8 +51,7 @@ function BusinessRegisterPage() {
     return true;
   };
 
-  const isValidEmail = (email) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   // ========== HANDLERS CAMPOS ==========
   const handleBasicChange = (e) => {
@@ -179,9 +178,7 @@ function BusinessRegisterPage() {
             Kelom · Registro de empresa
           </span>
 
-          <span className="business-register__logo-pill">
-            PASO {step} DE 2
-          </span>
+          <span className="business-register__logo-pill">PASO {step} DE 2</span>
         </div>
       </header>
 
@@ -191,12 +188,11 @@ function BusinessRegisterPage() {
           <div className="business-register__container">
             <section className="register-card">
               <p className="register-card__eyebrow">Alta inicial</p>
-              <h1 className="register-card__title">
-                Crea tu cuenta de proveedor
-              </h1>
+              <h1 className="register-card__title">Registra tu empresa</h1>
               <p className="register-card__subtitle">
-                Este primer paso crea el acceso a tu panel. En el siguiente
-                paso completaremos la ficha visible para las parejas.
+                Con este primer paso nos pondremos en contacto contigo para
+                poder dar de alta tu negocio y formar parte del catalogo de
+                kelom
               </p>
 
               <form
@@ -205,10 +201,7 @@ function BusinessRegisterPage() {
                 noValidate
               >
                 <div className="form__field form__field--full">
-                  <label
-                    className="form__label"
-                    htmlFor="companyName"
-                  >
+                  <label className="form__label" htmlFor="companyName">
                     Nombre de la empresa
                   </label>
                   <input
@@ -225,10 +218,7 @@ function BusinessRegisterPage() {
                 </div>
 
                 <div className="form__field form__field--full">
-                  <label
-                    className="form__label"
-                    htmlFor="ownerName"
-                  >
+                  <label className="form__label" htmlFor="ownerName">
                     Nombre de la persona responsable
                   </label>
                   <input
@@ -278,7 +268,7 @@ function BusinessRegisterPage() {
                   <span className="form__error" />
                 </div>
 
-                <div className="form__field">
+                {/* <div className="form__field">
                   <label className="form__label" htmlFor="password">
                     Crear contraseña
                   </label>
@@ -313,7 +303,7 @@ function BusinessRegisterPage() {
                     required
                   />
                   <span className="form__error" />
-                </div>
+                </div> */}
 
                 <div className="register-card__actions">
                   <button type="submit" className="btn btn--primary">
@@ -371,10 +361,7 @@ function BusinessRegisterPage() {
                   </div>
 
                   <div className="form__field form__field--full">
-                    <label
-                      className="form__label"
-                      htmlFor="venueLocation"
-                    >
+                    <label className="form__label" htmlFor="venueLocation">
                       Ubicación
                     </label>
                     <input
@@ -442,10 +429,7 @@ function BusinessRegisterPage() {
                   </div>
 
                   <div className="form__field form__field--full">
-                    <label
-                      className="form__label"
-                      htmlFor="description"
-                    >
+                    <label className="form__label" htmlFor="description">
                       Descripción del lugar
                     </label>
                     <textarea
@@ -596,7 +580,9 @@ function BusinessRegisterPage() {
               {/* Vista previa simple */}
               <aside className="profile-preview">
                 <section className="preview-card">
-                  <span className="preview-card__pill">Así se verá tu ficha</span>
+                  <span className="preview-card__pill">
+                    Así se verá tu ficha
+                  </span>
                   <h2 className="preview-card__title">
                     {profileData.venueName || "Nombre del lugar"}
                   </h2>
@@ -609,7 +595,10 @@ function BusinessRegisterPage() {
                       alt="Ejemplo de venue"
                     />
                   </div>
-                  <p className="preview-card__text" style={{ marginTop: "0.8rem" }}>
+                  <p
+                    className="preview-card__text"
+                    style={{ marginTop: "0.8rem" }}
+                  >
                     Aquí aparecerá un resumen de tu lugar con fotos destacadas,
                     listo para que las parejas lo vean dentro de Kelom.
                   </p>
