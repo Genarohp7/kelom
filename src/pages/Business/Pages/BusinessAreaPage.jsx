@@ -1,6 +1,6 @@
 // src/pages/BusinessAreaPage.jsx
 import "../../../../Blocks/Business/BusinessAreaPage.css";
-import Kelom from "../../../assets/logo/logoKelom.png";
+import Kelom from "../../../assets/web/logo/logoKelom.png";
 import { NavLink } from "react-router-dom";
 
 function BusinessAreaPage() {

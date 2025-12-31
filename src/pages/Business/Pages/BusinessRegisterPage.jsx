@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
-import Kelom from "../../../assets/logo/logoKelom.png";
+import Kelom from "../../../assets/web/logo/logoKelom.png";
 
 function BusinessRegisterPage() {
   const [step, setStep] = useState(1);

@@ -2,7 +2,7 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
-import Kelom from "../../../assets/logo/logoKelom.png";
+import Kelom from "../../../assets/web/logo/logoKelom.png";
 
 function BusinessLoginPage() {
   const navigate = useNavigate();

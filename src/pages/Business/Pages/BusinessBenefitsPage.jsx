@@ -1,5 +1,5 @@
 // src/pages/BusinessBenefitsPage.jsx
-import Kelom from "../../../assets/logo/logoKelom.png";
+import Kelom from "../../../assets/web/logo/logoKelom.png";
 import { NavLink } from "react-router-dom";
 
 function BusinessBenefitsPage() {
