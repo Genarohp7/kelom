@@ -1,13 +1,13 @@
 // src/pages/HomePage.jsx
-import "../styles/HomePage.css";
+import "../../src/styles/HomePage.css";
 import { Link } from "react-router-dom";
 // 👉 Aquí colocarás la ruta de tu imagen local
-// Cuando tengas tu archivo, por ejemplo en:
-// src/assets/web/pages/home/home-tips.jpg
-// esta importación ya quedará funcionando:
 import tipsImage from "../assets/web/pages/home/home-tips.jpg.png";
 
+const SHOW_DEMO_SECTIONS = false; // cambiar a true cuando quieras mostrar hero/venues/featured
+
 function HomePage() {
+  // ==== Datos de demo para futuros proveedores ====
   const venues = [
     {
       id: 1,
@@ -127,55 +127,27 @@ function HomePage() {
 
   return (
     <div className="home">
-      {/* HERO + BUSCADOR */}
-      <section className="hero">
-        <div className="container hero__inner">
-          <div className="hero__eyebrow">Planea tu boda con calma</div>
-          <h1 className="hero__title">
-            Encuentra el{" "}
-            <span className="hero__title-highlight">lugar perfecto</span> para
-            decir “sí”.
-          </h1>
-          <p className="hero__subtitle">
-            Jardines, salones, haciendas, banquetes y más. Kelom te ayuda a
-            descubrir opciones pensadas para ti, sin perderte entre miles de
-            resultados.
-          </p>
-
-          <div className="search-panel">
-            <form className="search-panel__form" onSubmit={handleFakeSubmit}>
-              <div className="search-panel__field">
-                <label className="search-panel__label" htmlFor="search-what">
-                  ¿Qué buscas?
-                </label>
-                <input
-                  id="search-what"
-                  type="text"
-                  className="search-panel__input"
-                  placeholder="Jardín, salón, banquete, foto..."
-                />
-              </div>
-
-              <div className="search-panel__field">
-                <label className="search-panel__label" htmlFor="search-where">
-                  ¿Qué localidad?
-                </label>
-                <input
-                  id="search-where"
-                  type="text"
-                  className="search-panel__input"
-                  placeholder="CDMX, Estado de México, Puebla..."
-                />
-              </div>
-
-              <button className="search-panel__button" type="submit">
-                Buscar lugares
-              </button>
-            </form>
-
-            <p className="search-panel__hint">
-              Esta búsqueda es una vista previa. Más adelante conectaremos estos
-              datos con nuestra base de venues.
+      {/* MENSAJE TEMPORAL SOBRE PROVEEDORES */}
+      <section className="home-message">
+        <div className="container">
+          <div className="home-message__card">
+            <h2 className="home-message__title">
+              Estamos preparando algo especial para tu boda
+            </h2>
+            <p className="home-message__text">
+              En Kelom estamos trabajando cuidadosamente para reunir a
+              proveedores con experiencia, calidad y compromiso, que realmente
+              estén a la altura de lo que tu evento merece.
+            </p>
+            <p className="home-message__text">
+              Muy pronto encontrarás aquí opciones seleccionadas para ayudarte a
+              hacer realidad tu boda con confianza y tranquilidad.
+            </p>
+            <p className="home-message__text">
+              Mientras tanto, te invitamos a seguir explorando nuestra página
+              para conocernos mejor y a mantenerte al tanto en nuestras redes
+              sociales, donde compartimos información valiosa, recomendaciones y
+              contenido pensado para acompañarte en cada paso de este proceso.
             </p>
           </div>
         </div>
@@ -192,7 +164,7 @@ function HomePage() {
             </p>
           </header>
 
-          {/* 👉 Nuevo contenedor para texto + imagen */}
+          {/* texto + imagen */}
           <div className="tips__content">
             <div className="tips__list">
               <article className="tips-card">
@@ -214,7 +186,6 @@ function HomePage() {
               </article>
             </div>
 
-            {/* 👉 Aquí se muestra la imagen. Solo cambia el archivo de tipsImage arriba cuando la tengas */}
             <div className="tips__image-wrap">
               <img
                 src={tipsImage}
@@ -226,83 +197,154 @@ function HomePage() {
         </div>
       </section>
 
-      {/* LUGARES / VENUES */}
-      <section className="venues">
-        <div className="container">
-          <header className="venues__header">
-            <div>
-              <h2 className="venues__title">
-                Lugares para realizar tu sueño
-              </h2>
-              <p className="venues__subtitle">
-                Explora algunos venues destacados en la ciudad y alrededores.
+      {/* BLOQUES DE PROVEEDORES OCULTOS POR AHORA */}
+      {SHOW_DEMO_SECTIONS && (
+        <>
+          {/* HERO + BUSCADOR */}
+          <section className="hero">
+            <div className="container hero__inner">
+              <div className="hero__eyebrow">Planea tu boda con calma</div>
+              <h1 className="hero__title">
+                Encuentra el{" "}
+                <span className="hero__title-highlight">lugar perfecto</span>{" "}
+                para decir “sí”.
+              </h1>
+              <p className="hero__subtitle">
+                Jardines, salones, haciendas, banquetes y más. Kelom te ayuda a
+                descubrir opciones pensadas para ti, sin perderte entre miles de
+                resultados.
               </p>
+
+              <div className="search-panel">
+                <form
+                  className="search-panel__form"
+                  onSubmit={handleFakeSubmit}
+                >
+                  <div className="search-panel__field">
+                    <label
+                      className="search-panel__label"
+                      htmlFor="search-what"
+                    >
+                      ¿Qué buscas?
+                    </label>
+                    <input
+                      id="search-what"
+                      type="text"
+                      className="search-panel__input"
+                      placeholder="Jardín, salón, banquete, foto..."
+                    />
+                  </div>
+
+                  <div className="search-panel__field">
+                    <label
+                      className="search-panel__label"
+                      htmlFor="search-where"
+                    >
+                      ¿Qué localidad?
+                    </label>
+                    <input
+                      id="search-where"
+                      type="text"
+                      className="search-panel__input"
+                      placeholder="CDMX, Estado de México, Puebla..."
+                    />
+                  </div>
+
+                  <button className="search-panel__button" type="submit">
+                    Buscar lugares
+                  </button>
+                </form>
+
+                <p className="search-panel__hint">
+                  Esta búsqueda es una vista previa. Más adelante conectaremos
+                  estos datos con nuestra base de venues.
+                </p>
+              </div>
             </div>
-          </header>
+          </section>
 
-          <div className="venues__grid">
-            {venues.map((venue) => (
-              <article key={venue.id} className="venue-card">
-                <div className="venue-card__image-wrap">
-                  <img
-                    className="venue-card__image"
-                    src={venue.image}
-                    alt={venue.name}
-                  />
+          {/* LUGARES / VENUES */}
+          <section className="venues">
+            <div className="container">
+              <header className="venues__header">
+                <div>
+                  <h2 className="venues__title">
+                    Lugares para realizar tu sueño
+                  </h2>
+                  <p className="venues__subtitle">
+                    Explora algunos venues destacados en la ciudad y
+                    alrededores.
+                  </p>
                 </div>
+              </header>
 
-                <div className="venue-card__body">
-                  <h3 className="venue-card__name">{venue.name}</h3>
+              <div className="venues__grid">
+                {venues.map((venue) => (
+                  <article key={venue.id} className="venue-card">
+                    <div className="venue-card__image-wrap">
+                      <img
+                        className="venue-card__image"
+                        src={venue.image}
+                        alt={venue.name}
+                      />
+                    </div>
 
-                  <div className="venue-card__rating">
-                    <span className="venue-card__rating-stars">★★★★★</span>
-                    {venue.rating.toFixed(1)} · {venue.reviews} reseñas
-                  </div>
+                    <div className="venue-card__body">
+                      <h3 className="venue-card__name">{venue.name}</h3>
 
-                  <div className="venue-card__location">
-                    {venue.location}
-                  </div>
+                      <div className="venue-card__rating">
+                        <span className="venue-card__rating-stars">
+                          ★★★★★
+                        </span>
+                        {venue.rating.toFixed(1)} · {venue.reviews} reseñas
+                      </div>
 
-                  <Link
-                    to={`/proveedores/${venue.id}`}
-                    className="venue-card__link"
-                  >
-                    Ver más detalles
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+                      <div className="venue-card__location">
+                        {venue.location}
+                      </div>
 
-      {/* EMPRESAS DESTACADAS */}
-      <section className="featured">
-        <div className="container">
-          <header className="featured__header">
-            <h2 className="featured__title">Empresas destacadas</h2>
-            <p className="featured__subtitle">
-              Proveedores clave para completar tu boda ideal.
-            </p>
-          </header>
+                      <Link
+                        to={`/proveedores/${venue.id}`}
+                        className="venue-card__link"
+                      >
+                        Ver más detalles
+                      </Link>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
 
-          <div className="featured__grid">
-            {featuredCompanies.map((company) => (
-              <article key={company.id} className="featured-card">
-                <img
-                  src={company.image}
-                  alt={company.name}
-                  className="featured-card__image"
-                />
-                <div className="featured-card__name">{company.name}</div>
-                <div className="featured-card__category">
-                  {company.category}
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+          {/* EMPRESAS DESTACADAS */}
+          <section className="featured">
+            <div className="container">
+              <header className="featured__header">
+                <h2 className="featured__title">Empresas destacadas</h2>
+                <p className="featured__subtitle">
+                  Proveedores clave para completar tu boda ideal.
+                </p>
+              </header>
+
+              <div className="featured__grid">
+                {featuredCompanies.map((company) => (
+                  <article key={company.id} className="featured-card">
+                    <img
+                      src={company.image}
+                      alt={company.name}
+                      className="featured-card__image"
+                    />
+                    <div className="featured-card__name">{company.name}</div>
+                    <div className="featured-card__category">
+                      {company.category}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 }
