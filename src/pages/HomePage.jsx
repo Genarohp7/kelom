@@ -1,6 +1,11 @@
 // src/pages/HomePage.jsx
 import "../styles/HomePage.css";
 import { Link } from "react-router-dom";
+// 👉 Aquí colocarás la ruta de tu imagen local
+// Cuando tengas tu archivo, por ejemplo en:
+// src/assets/web/pages/home/home-tips.jpg
+// esta importación ya quedará funcionando:
+import tipsImage from "../assets/web/pages/home/home-tips.jpg.png";
 
 function HomePage() {
   const venues = [
@@ -187,24 +192,36 @@ function HomePage() {
             </p>
           </header>
 
-          <div className="tips__list">
-            <article className="tips-card">
-              <h3 className="tips-card__title">Empieza por el presupuesto</h3>
-              <p className="tips-card__text">
-                Definir un rango claro desde el inicio te ayudará a elegir
-                opciones realistas sin renunciar al estilo que quieres.
-              </p>
-            </article>
+          {/* 👉 Nuevo contenedor para texto + imagen */}
+          <div className="tips__content">
+            <div className="tips__list">
+              <article className="tips-card">
+                <h3 className="tips-card__title">Empieza por el presupuesto</h3>
+                <p className="tips-card__text">
+                  Definir un rango claro desde el inicio te ayudará a elegir
+                  opciones realistas sin renunciar al estilo que quieres.
+                </p>
+              </article>
 
-            <article className="tips-card">
-              <h3 className="tips-card__title">
-                Haz una lista de prioridades
-              </h3>
-              <p className="tips-card__text">
-                ¿Es más importante el lugar, la comida o la música? Ponerlo en
-                papel facilita las decisiones cuando tengas que elegir.
-              </p>
-            </article>
+              <article className="tips-card">
+                <h3 className="tips-card__title">
+                  Haz una lista de prioridades
+                </h3>
+                <p className="tips-card__text">
+                  ¿Es más importante el lugar, la comida o la música? Ponerlo en
+                  papel facilita las decisiones cuando tengas que elegir.
+                </p>
+              </article>
+            </div>
+
+            {/* 👉 Aquí se muestra la imagen. Solo cambia el archivo de tipsImage arriba cuando la tengas */}
+            <div className="tips__image-wrap">
+              <img
+                src={tipsImage}
+                alt="Pareja organizando su boda con calma"
+                className="tips__image"
+              />
+            </div>
           </div>
         </div>
       </section>
