@@ -1,3 +1,8 @@
+// src/pages/NosotrosPage.jsx
+// 👉 Ajusta estas rutas/nombres de archivo según cómo guardes tus imágenes en assets
+import aboutHeroImage from "../assets/web/pages/nosotros/nosotros-1.png";
+import aboutBandImage from "../assets/web/pages/nosotros/nosotros-2.png";
+
 function NosotrosPage() {
   return (
     <main className="page__content">
@@ -25,7 +30,7 @@ function NosotrosPage() {
             <div className="about__hero-image-wrapper">
               <img
                 className="about__hero-image"
-                src="https://images.pexels.com/photos/3951628/pexels-photo-3951628.jpeg?auto=compress&cs=tinysrgb&w=800"
+                src={aboutHeroImage}
                 alt="Equipo organizando detalles de una boda"
                 loading="lazy"
               />
@@ -95,7 +100,7 @@ function NosotrosPage() {
             <div className="about__image-band-inner">
               <img
                 className="about__image-band-photo"
-                src="https://images.pexels.com/photos/3951627/pexels-photo-3951627.jpeg?auto=compress&cs=tinysrgb&w=1200"
+                src={aboutBandImage}
                 alt="Pareja celebrando en un venue iluminado"
                 loading="lazy"
               />
