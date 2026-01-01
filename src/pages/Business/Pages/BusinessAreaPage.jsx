@@ -2,6 +2,7 @@
 import "../../../../Blocks/Business/BusinessAreaPage.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
 import { NavLink } from "react-router-dom";
+import BusinessArea from "../../../assets/web/pages/empresas/Business/business-1.png";  
 
 function BusinessAreaPage() {
   return (
@@ -130,7 +131,7 @@ function BusinessAreaPage() {
                 <div className="business__hero-photo-wrap">
                   {/* Puedes cambiar esta URL por una imagen local cuando quieras */}
                   <img
-                    src="https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=800"
+                    src={BusinessArea}
                     alt="Proveedor de eventos gestionando su negocio en línea"
                     className="business__hero-photo"
                   />
