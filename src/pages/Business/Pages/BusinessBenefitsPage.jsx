@@ -1,6 +1,7 @@
 // src/pages/BusinessBenefitsPage.jsx
 import Kelom from "../../../assets/web/logo/logoKelom.png";
 import { NavLink } from "react-router-dom";
+import benefitsBussines from "../../../assets/web/pages/empresas/Beneficios/beneficios-1.png";
 
 function BusinessBenefitsPage() {
   return (
@@ -83,7 +84,7 @@ function BusinessBenefitsPage() {
               <div className="business-benefits__hero-image-wrapper">
                 <img
                   className="business-benefits__hero-image"
-                  src="https://images.pexels.com/photos/3951675/pexels-photo-3951675.jpeg?auto=compress&cs=tinysrgb&w=1200"
+                  src={benefitsBussines}
                   alt="Equipo revisando métricas de un negocio en computadora"
                   loading="lazy"
                 />
