@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
+import { sendBusinessRegisterEmails } from "../../../services/emailService";
 
 function BusinessRegisterPage() {
   const [step, setStep] = useState(1);
@@ -77,7 +78,7 @@ function BusinessRegisterPage() {
   };
 
   // ========== SUBMIT PASO 1 ==========
-  const handleBasicSubmit = (e) => {
+  const handleBasicSubmit = async (e) => {
     e.preventDefault();
 
     // Solo validamos los campos visibles en pantalla
@@ -111,12 +112,27 @@ function BusinessRegisterPage() {
       return;
     }
 
-    // No se valida password ni confirmPassword porque los campos están ocultos
+    try {
+      // Enviar correos por EmailJS
+      await sendBusinessRegisterEmails({
+        companyName: companyName.trim(),
+        ownerName: ownerName.trim(),
+        email: email.trim(),
+        phone: phone.replace(/\D/g, ""),
+      });
 
-    console.log("Datos básicos válidos (demo):", basicData);
-    setStep(2);
-    // Mostramos popup de agradecimiento
-    setShowThanks(true);
+      console.log("Datos básicos válidos (demo):", basicData);
+      setStep(2);
+      setShowThanks(true);
+    } catch (error) {
+      console.error("Error al enviar correos de registro de proveedor:", error);
+      alert(
+        "Tu registro se guardó en modo demo, pero hubo un problema al enviar los correos. Lo revisaremos más tarde."
+      );
+      // Aun así dejamos pasar al paso 2
+      setStep(2);
+      setShowThanks(true);
+    }
   };
 
   // ========== SUBMIT PASO 2 ==========
@@ -720,7 +736,7 @@ function BusinessRegisterPage() {
             inset: 0,
             background: "rgba(15, 23, 42, 0.55)",
             display: "flex",
-            alignItems: "center",
+            Aligns: "center",
             justifyContent: "center",
             zIndex: 9999,
             padding: "1.5rem",
