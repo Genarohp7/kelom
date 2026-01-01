@@ -1,5 +1,4 @@
-// src/pages/NosotrosPage.jsx
-// 👉 Ajusta estas rutas/nombres de archivo según cómo guardes tus imágenes en assets
+import { NavLink } from "react-router-dom";
 import aboutHeroImage from "../assets/web/pages/nosotros/nosotros-1.png";
 import aboutBandImage from "../assets/web/pages/nosotros/nosotros-2.png";
 
@@ -149,9 +148,12 @@ function NosotrosPage() {
                 className="newsletter__input"
                 placeholder="Tu correo electrónico"
               />
-              <button type="button" className="newsletter__button">
-                Mantenerme al día
-              </button>
+               <NavLink
+              to="/registro"
+              className="header__btn header__btn--outline"
+            >
+              Registrarme
+            </NavLink>
             </form>
           </div>
         </section>

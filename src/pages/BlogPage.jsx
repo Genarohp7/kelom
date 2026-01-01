@@ -1,12 +1,6 @@
 
 
-// 👉 Coloca estas imágenes en:
-// src/assets/web/pages/blog/blog-hero.jpg
-// src/assets/web/pages/blog/blog-featured.jpg
-// src/assets/web/pages/blog/blog-post-1.jpg
-// src/assets/web/pages/blog/blog-post-2.jpg
-// src/assets/web/pages/blog/blog-post-3.jpg
-// src/assets/web/pages/blog/blog-post-4.jpg
+import { NavLink } from "react-router-dom";
 import blogHeroImage from "../assets/web/pages/blog/blog-1.png";
 import blogFeaturedImage from "../assets/web/pages/blog/blog-2.png";
 import blogPostImage1 from "../assets/web/pages/blog/blog-lugares.png";
@@ -197,9 +191,12 @@ function BlogPage() {
                 className="newsletter__input"
                 placeholder="Tu correo electrónico"
               />
-              <button type="button" className="newsletter__button">
-                Mantenerme al día
-              </button>
+                 <NavLink
+              to="/registro"
+              className="header__btn header__btn--outline"
+            >
+              Registrarme
+            </NavLink>
             </form>
           </div>
         </section>
