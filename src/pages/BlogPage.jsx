@@ -1,3 +1,19 @@
+
+
+// 👉 Coloca estas imágenes en:
+// src/assets/web/pages/blog/blog-hero.jpg
+// src/assets/web/pages/blog/blog-featured.jpg
+// src/assets/web/pages/blog/blog-post-1.jpg
+// src/assets/web/pages/blog/blog-post-2.jpg
+// src/assets/web/pages/blog/blog-post-3.jpg
+// src/assets/web/pages/blog/blog-post-4.jpg
+import blogHeroImage from "../assets/web/pages/blog/blog-1.png";
+import blogFeaturedImage from "../assets/web/pages/blog/blog-2.png";
+import blogPostImage1 from "../assets/web/pages/blog/blog-lugares.png";
+import blogPostImage2 from "../assets/web/pages/blog/blog-presupuesto.png";
+import blogPostImage3 from "../assets/web/pages/blog/blog-banquetes.png";
+import blogPostImage4 from "../assets/web/pages/blog/blog-experiencias.png";
+
 function BlogPage() {
   const featuredPost = {
     id: 1,
@@ -6,8 +22,7 @@ function BlogPage() {
     excerpt:
       "Entre presupuesto, invitados, lugares y mil pendientes, es fácil abrumarse. Aquí te damos una ruta clara para que planees con calma y disfrutes el proceso.",
     readTime: "7 min de lectura",
-    image:
-      "https://images.pexels.com/photos/3951622/pexels-photo-3951622.jpeg?auto=compress&cs=tinysrgb&w=1200",
+    image: blogFeaturedImage,
   };
 
   const posts = [
@@ -18,8 +33,7 @@ function BlogPage() {
       excerpt:
         "Jardines, haciendas, terrazas, hoteles y salones. Qué ofrece cada uno y para qué tipo de pareja encaja mejor.",
       readTime: "5 min",
-      image:
-        "https://images.pexels.com/photos/3712583/pexels-photo-3712583.jpeg?auto=compress&cs=tinysrgb&w=800",
+      image: blogPostImage1,
     },
     {
       id: 3,
@@ -28,8 +42,7 @@ function BlogPage() {
       excerpt:
         "Te contamos en qué se va el dinero sin que te des cuenta y cómo evitar esos descuidos.",
       readTime: "6 min",
-      image:
-        "https://images.pexels.com/photos/3951623/pexels-photo-3951623.jpeg?auto=compress&cs=tinysrgb&w=800",
+      image: blogPostImage2,
     },
     {
       id: 4,
@@ -38,8 +51,7 @@ function BlogPage() {
       excerpt:
         "Tips para elegir un menú que haga felices a tus invitados… y también a tu bolsillo.",
       readTime: "4 min",
-      image:
-        "https://images.pexels.com/photos/3171770/pexels-photo-3171770.jpeg?auto=compress&cs=tinysrgb&w=800",
+      image: blogPostImage3,
     },
     {
       id: 5,
@@ -48,8 +60,7 @@ function BlogPage() {
       excerpt:
         "Desde la música hasta los mensajes en las mesas. Lo que realmente se queda en la memoria de quienes te acompañan.",
       readTime: "5 min",
-      image:
-        "https://images.pexels.com/photos/2306281/pexels-photo-2306281.jpeg?auto=compress&cs=tinysrgb&w=800",
+      image: blogPostImage4,
     },
   ];
 
@@ -96,7 +107,7 @@ function BlogPage() {
           <div className="blog__hero-image-wrapper">
             <img
               className="blog__hero-image"
-              src="https://images.pexels.com/photos/3951625/pexels-photo-3951625.jpeg?auto=compress&cs=tinysrgb&w=1000"
+              src={blogHeroImage}
               alt="Pareja revisando detalles de su boda en una mesa"
               loading="lazy"
             />

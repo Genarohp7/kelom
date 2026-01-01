@@ -222,11 +222,13 @@
 .blog-card__image-wrapper {
   position: relative;
   overflow: hidden;
+  height: 300px;
 }
 
 .blog-card__image {
   width: 100%;
-  height: 210px; /* todas iguales */
+  height: 180px; /* todas iguales */
+  object-position: top;
   object-fit: cover;
   display: block;
   transition: transform 0.25s ease;
@@ -358,17 +360,13 @@
   }
 
   .blog__list-header {
-    text-align: center;
-    margin-left: auto;
-    margin-right: auto;
+    text-align:center;
+    margin-left:auto;
+    margin-right:auto;
   }
 
   .blog__grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .blog-card__image {
-    height: 190px;
   }
 }
 
