@@ -3,12 +3,20 @@
 @import url("../../Blocks/Business/BusinessBenefitsPage.css");
 @import url("../../Blocks/User/UserAuth.css");
 
+/* Fuentes de Google: títulos (Poppins) y cuerpo (Nunito) */
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Nunito:wght@300;400;500;600&display=swap");
+
 :root {
   --color-bg: #fff7f3;
   --color-primary: #e89aa9;
   --color-primary-dark: #c87486;
   --color-text-main: #3e3e3e;
   --color-text-soft: #220707;
+
+  --font-body: "Nunito", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  --font-heading: "Poppins", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
 }
 
 *,
@@ -19,10 +27,63 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+  font-family: var(--font-body);
+  line-height: 1.6;
+  letter-spacing: 0.01em;
   background: radial-gradient(circle at top, #ffeef5 0, #fff 45%, #fff 100%);
   color: var(--color-text-main);
+}
+
+/* Titulares más "vivos" */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.hero__title,
+.blog__title,
+.blog__featured-title,
+.blog-card__title,
+.about__title,
+.section-title,
+.register-card__title,
+.profile-card__title,
+.preview-card__title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+/* Subtítulos y textos largos, más suaves y legibles */
+p,
+.register-card__subtitle,
+.blog__subtitle,
+.blog__section-subtitle,
+.preview-card__subtitle {
+  font-family: var(--font-body);
+  font-weight: 400;
+}
+
+/* Navegación y botones con fuente de títulos para dar carácter */
+.header__nav-link,
+.header__btn,
+.business-register__logo-pill,
+.business-register__logo-text,
+.blog__badge,
+.blog__category-pill,
+.blog-card__tag,
+.preview-card__pill {
+  font-family: var(--font-heading);
+  font-weight: 500;
+}
+
+/* Textos más pequeños en áreas secundarias siguen el body pero suaves */
+.footer,
+.form__hint,
+.form__label,
+.form__error {
+  font-family: var(--font-body);
 }
 
 img {
@@ -275,7 +336,7 @@ a {
 @media (max-width: 600px) {
   .header__inner {
     flex-direction: column;
-    align-items: center;      /* centramos todo el contenido */
+    align-items: center; /* centramos todo el contenido */
     text-align: center;
     padding: 0.9rem 0 1.1rem;
     gap: 0.8rem;
@@ -298,7 +359,7 @@ a {
 
   .header__right {
     width: 100%;
-    align-items: center;      /* centramos botones + redes */
+    align-items: center; /* centramos botones + redes */
   }
 
   .header__actions {
