@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/src/assets/web/logo/logoKelom.svg" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="/src/assets/web/logo/logoKelom.svg"
+    />
     <script
       src="https://kit.fontawesome.com/e41f03414c.js"
       crossorigin="anonymous"
@@ -10,6 +14,20 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>kelom</title>
+    <script>
+      function loadScript(a) {
+        var b = document.getElementsByTagName("head")[0],
+          c = document.createElement("script");
+        (c.type = "text/javascript"),
+          (c.src = "https://tracker.metricool.com/resources/be.js"),
+          (c.onreadystatechange = a),
+          (c.onload = a),
+          b.appendChild(c);
+      }
+      loadScript(function () {
+        beTracker.t({ hash: "703ea674b4b5236542b51b95d9553c83" });
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>
