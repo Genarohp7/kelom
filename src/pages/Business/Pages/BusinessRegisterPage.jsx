@@ -129,7 +129,7 @@ function BusinessRegisterPage() {
       alert(
         "Tu registro se guardó en modo demo, pero hubo un problema al enviar los correos. Lo revisaremos más tarde."
       );
-      // Aun así dejamos pasar al paso 2
+      // Aún así dejamos pasar al paso 2
       setStep(2);
       setShowThanks(true);
     }
@@ -213,8 +213,8 @@ function BusinessRegisterPage() {
               <h1 className="register-card__title">Registra tu empresa</h1>
               <p className="register-card__subtitle">
                 Con este primer paso nos pondremos en contacto contigo para
-                poder dar de alta tu negocio y formar parte del catalogo de
-                kelom
+                poder dar de alta tu negocio y formar parte del catálogo de
+                Kelom.
               </p>
 
               <form
@@ -366,7 +366,7 @@ function BusinessRegisterPage() {
                     className="btn btn--primary"
                     disabled={!isPrivacyChecked}
                   >
-                    Registrar mi Negocio
+                    Registrar mi negocio
                   </button>
                 </div>
               </form>
@@ -509,7 +509,7 @@ function BusinessRegisterPage() {
                       name="spaces"
                       className="form__textarea"
                       rows={3}
-                      placeholder="Ej. Jardín, salón, terraza..."
+                      placeholder="Ej. jardín, salón, terraza..."
                       value={profileData.spaces}
                       onChange={handleProfileChange}
                       required
@@ -736,7 +736,7 @@ function BusinessRegisterPage() {
             inset: 0,
             background: "rgba(15, 23, 42, 0.55)",
             display: "flex",
-            Aligns: "center",
+            alignItems: "center",
             justifyContent: "center",
             zIndex: 9999,
             padding: "1.5rem",
@@ -791,17 +791,17 @@ function BusinessRegisterPage() {
               }}
             >
               <p className="register-card__subtitle">
-                Al firmar el presente aviso de privacidad Usted otorga su
+                Al firmar el presente aviso de privacidad usted otorga su
                 consentimiento expreso en relación con lo siguiente:
               </p>
 
               <p className="register-card__subtitle">
                 Kelom.com.mx, señalando como domicilio convencional para los
                 efectos relacionados con el presente aviso, el ubicado en Calle
-                21, N° 2020, Colonia Las Águilas, Ciudad México, Municipio
+                21, N.º 2020, Colonia Las Águilas, Ciudad de México, Municipio
                 Nezahualcóyotl, C.P. 57900, en el Estado de México, México, hace
                 de su conocimiento que sus datos personales serán protegidos de
-                acuerdo a lo establecido por la Ley Federal de Protección de
+                acuerdo con lo establecido por la Ley Federal de Protección de
                 Datos Personales en Posesión de los Particulares, así como por
                 nuestra política de privacidad y que el tratamiento que se haga
                 de sus datos será con la finalidad, enunciando sin limitar, de
@@ -811,7 +811,7 @@ function BusinessRegisterPage() {
               </p>
 
               <p className="register-card__subtitle">
-                Los datos personales que recabamos de usted, los utilizaremos
+                Los datos personales que recabamos de usted los utilizaremos
                 para las siguientes finalidades:
               </p>
 
@@ -824,7 +824,7 @@ function BusinessRegisterPage() {
               <p className="register-card__subtitle">
                 Mediante el presente aviso de privacidad Kelom solo es un
                 intermediario de consulta tanto para los proveedores de bienes y
-                servicios, como para los consumidores de éstos, por lo que no
+                servicios como para los consumidores de estos, por lo que no
                 lleva a cabo ningún evento, servicio o bien, de tal forma que
                 solo se hace responsable de la publicidad de los proveedores
                 registrados en páginas oficiales. Kelom no hace publicidad
@@ -840,8 +840,8 @@ function BusinessRegisterPage() {
                 cancelación u oposición de datos personales, sus datos
                 personales podrán ser modificados conforme al propio
                 procedimiento previsto dentro de este aviso de privacidad, pues
-                de lo contrario al dar clic en la casilla de Aviso de
-                Privacidad se entiende que acepta los fines para los que serán
+                de lo contrario, al dar clic en la casilla de Aviso de
+                Privacidad, se entiende que acepta los fines para los que serán
                 utilizados los datos personales.
               </p>
 
@@ -870,13 +870,13 @@ function BusinessRegisterPage() {
                 Los cuales son llenados previamente y de manera manual por el
                 usuario antes de enviar y aceptar el Aviso de Privacidad.
                 Conforme a lo anterior, se señala que el presente aviso de
-                privacidad NO solicita datos personales sensibles, por lo que el
+                privacidad no solicita datos personales sensibles, por lo que el
                 consentimiento expreso para la aceptación del presente aviso de
                 privacidad se manifestará por medios electrónicos o por
-                cualquier otra tecnología una vez que seleccione y se dé clic en
-                la casilla de Aviso de Privacidad, cuyo llenado y aceptación
-                hace las veces de manifestación y consentimiento del tratamiento
-                de los datos personales consignados en el presente aviso de
+                cualquier otra tecnología una vez que seleccione y dé clic en la
+                casilla de Aviso de Privacidad, cuyo llenado y aceptación hace
+                las veces de manifestación y consentimiento del tratamiento de
+                los datos personales consignados en el presente aviso de
                 privacidad.
               </p>
 
@@ -898,7 +898,7 @@ function BusinessRegisterPage() {
                 presente aviso, así como para fines promocionales relacionados
                 con bienes o servicios relacionados con las actividades propias
                 de Kelom.com.mx y derivadas de nuestro objeto social, en el
-                entendido que podrá revocar esta autorización en cualquier
+                entendido de que podrá revocar esta autorización en cualquier
                 tiempo mediante solicitud por escrito enviada a la dirección de
                 correo electrónico info@kelom.com.mx.
               </p>
@@ -960,11 +960,11 @@ function BusinessRegisterPage() {
               <p className="register-card__subtitle">
                 Kelom.com.mx responderá en el domicilio o en el medio que el
                 titular de los datos personales designe en su solicitud, en un
-                plazo de 20 días hábiles si la respuesta respecto a la
-                solicitud de acceso, rectificación, cancelación u oposición es
-                procedente o no y, en su caso, hará efectiva la solicitud
-                planteada dentro de los 20 días hábiles siguientes a la fecha en
-                que comunique la respuesta.
+                plazo de 20 días hábiles si la respuesta respecto a la solicitud
+                de acceso, rectificación, cancelación u oposición es procedente
+                o no y, en su caso, hará efectiva la solicitud planteada dentro
+                de los 20 días hábiles siguientes a la fecha en que comunique la
+                respuesta.
               </p>
 
               <p className="register-card__subtitle">
@@ -975,7 +975,7 @@ function BusinessRegisterPage() {
                 veces de consentimiento expreso tanto de la aceptación del uso
                 de datos personales del presente aviso de privacidad como de la
                 transferencia de datos personales a personas, empresas y
-                organizaciones distintas al responsable de conformidad con los
+                organizaciones distintas al responsable, de conformidad con los
                 fines señalados en el presente aviso de privacidad.
               </p>
             </div>

@@ -144,7 +144,7 @@ function UserRegisterPage() {
             <p className="register-card__eyebrow">Alta inicial</p>
             <h1 className="register-card__title">Registrate con nosotros </h1>
             <p className="register-card__subtitle">
-              Rcibiras informacion Util para que tu gran dia sea como lo dueñas
+              Rcibiras información útil para que tu gran dia sea como lo sueñas
             </p>
 
             <form className="form" onSubmit={handleSubmit} noValidate>
