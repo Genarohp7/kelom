@@ -34,20 +34,18 @@ function Header() {
         {/* Acciones + redes */}
         <div className="header__right">
           <div className="header__actions">
-            {/* 🔹 Ahora este botón manda a la página de registro de novi@s */}
-            <NavLink
-              to="/registro"
-              className="header__btn header__btn--outline"
-            >
-              Registrarme
+            {/* 🔹 Acceso a cuenta de parejas (login) */}
+            <NavLink to="/acceso" className="header__btn header__btn--primary">
+              Mi cuenta
             </NavLink>
 
-            {/* <NavLink
+            {/* 🔹 Registro directo de parejas */}
+            <NavLink
               to="/registro"
               className="header__btn header__btn--primary"
             >
               Regístrate
-            </NavLink> */}
+            </NavLink>
 
             <NavLink
               to="/empresas"
