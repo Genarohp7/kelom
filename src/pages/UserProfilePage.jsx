@@ -59,12 +59,21 @@ function UserProfilePage() {
     imageDataUrl: "",
   });
 
+  // Estado para edición de idea existente
+  const [isEditingIdea, setIsEditingIdea] = useState(false);
+  const [editingIdeaId, setEditingIdeaId] = useState(null);
+  const [editingIdea, setEditingIdea] = useState({
+    title: "",
+    note: "",
+    imageDataUrl: "",
+  });
+
   // Si no hay usuario, redirigimos al login
   if (!user) {
     return <Navigate to="/acceso" replace />;
   }
 
-  // Cálculo del porcentaje de completitud del perfil (sin hooks extra)
+  // Cálculo del porcentaje de completitud del perfil
   const completion = (() => {
     const keys = [
       "email",
@@ -89,11 +98,11 @@ function UserProfilePage() {
     return Math.round((filled / total) * 100);
   })();
 
-  // Foto de perfil (soportamos varios nombres de campo, por si acaso)
+  // Foto de perfil
   const profilePhoto =
     user.avatar || user.profilePhoto || user.profileImage || "";
 
-  // Ejemplos estáticos de proveedores elegidos (luego se conectará a favoritos reales)
+  // Ejemplos estáticos de proveedores elegidos
   const sampleProviders = [
     {
       id: 1,
@@ -123,7 +132,7 @@ function UserProfilePage() {
     navigate("/");
   }
 
-  // Handlers para "Ideas para mi boda"
+  // Handlers "Agregar idea"
   function handleNewIdeaFieldChange(e) {
     const { name, value } = e.target;
     setNewIdea((prev) => ({ ...prev, [name]: value }));
@@ -166,7 +175,6 @@ function UserProfilePage() {
     const updatedIdeas = [ideaToAdd, ...ideas];
     setIdeas(updatedIdeas);
 
-    // Guardamos en el perfil (modo demo/localStorage)
     try {
       updateCurrentUserProfile({ ideas: updatedIdeas });
     } catch (err) {
@@ -177,11 +185,90 @@ function UserProfilePage() {
     setIsAddingIdea(false);
   }
 
+  // Handlers edición
+  function handleStartEditIdea(idea) {
+    setIsAddingIdea(false);
+    setIsEditingIdea(true);
+    setEditingIdeaId(idea.id);
+    setEditingIdea({
+      title: idea.title,
+      note: idea.note,
+      imageDataUrl: idea.image,
+    });
+  }
+
+  function handleEditIdeaFieldChange(e) {
+    const { name, value } = e.target;
+    setEditingIdea((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function handleEditIdeaImageChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const result = evt.target?.result;
+      if (typeof result === "string") {
+        setEditingIdea((prev) => ({ ...prev, imageDataUrl: result }));
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleEditIdeaCancel() {
+    setIsEditingIdea(false);
+    setEditingIdeaId(null);
+    setEditingIdea({ title: "", note: "", imageDataUrl: "" });
+  }
+
+  function handleEditIdeaSave() {
+    if (!editingIdeaId) return;
+
+    const updatedIdeas = ideas.map((idea) =>
+      idea.id === editingIdeaId
+        ? {
+            ...idea,
+            title: editingIdea.title.trim() || idea.title,
+            note: editingIdea.note.trim() || idea.note,
+            image: editingIdea.imageDataUrl || idea.image,
+          }
+        : idea
+    );
+
+    setIdeas(updatedIdeas);
+
+    try {
+      updateCurrentUserProfile({ ideas: updatedIdeas });
+    } catch (err) {
+      console.error("No se pudo actualizar las ideas en el perfil (demo):", err);
+    }
+
+    handleEditIdeaCancel();
+  }
+
+  // Eliminar idea
+  function handleDeleteIdea(id) {
+    const confirmed = window.confirm(
+      "¿Quieres eliminar esta idea? Esta acción no se puede deshacer."
+    );
+    if (!confirmed) return;
+
+    const updatedIdeas = ideas.filter((idea) => idea.id !== id);
+    setIdeas(updatedIdeas);
+
+    try {
+      updateCurrentUserProfile({ ideas: updatedIdeas });
+    } catch (err) {
+      console.error("No se pudo eliminar la idea en el perfil (demo):", err);
+    }
+  }
+
   return (
     <div className="user-profile">
       <div className="user-profile__container">
         <div className="user-profile__grid">
-          {/* Columna izquierda: resumen de perfil */}
+          {/* Columna izquierda: resumen */}
           <section className="profile-card">
             <p className="profile-card__eyebrow">Tu resumen</p>
             <h1 className="profile-card__title">Hola, {user.fullName}</h1>
@@ -259,9 +346,9 @@ function UserProfilePage() {
             </div>
           </section>
 
-          {/* Columna derecha: foto, proveedores e ideas */}
+          {/* Columna derecha */}
           <aside className="preview-card">
-            {/* Foto de perfil */}
+            {/* Foto perfil */}
             <section
               style={{
                 display: "flex",
@@ -410,7 +497,7 @@ function UserProfilePage() {
               </div>
             </section>
 
-            {/* Galería de ideas para la boda */}
+            {/* Ideas para la boda */}
             <section>
               <h2 className="preview-card__title">Ideas para mi boda</h2>
               <p
@@ -421,16 +508,17 @@ function UserProfilePage() {
                 a la mano cuando hables con proveedores.
               </p>
 
-              {/* Botón para agregar idea */}
+              {/* Botón agregar idea */}
               <div
                 style={{
                   marginTop: "0.6rem",
-                  marginBottom: isAddingIdea ? "0.4rem" : "0.8rem",
+                  marginBottom:
+                    isAddingIdea || isEditingIdea ? "0.4rem" : "0.8rem",
                   display: "flex",
                   justifyContent: "flex-end",
                 }}
               >
-                {!isAddingIdea && (
+                {!isAddingIdea && !isEditingIdea && (
                   <button
                     type="button"
                     className="btn btn--secondary"
@@ -438,14 +526,19 @@ function UserProfilePage() {
                       fontSize: "0.8rem",
                       padding: "0.35rem 0.9rem",
                     }}
-                    onClick={() => setIsAddingIdea(true)}
+                    onClick={() => {
+                      setIsEditingIdea(false);
+                      setEditingIdeaId(null);
+                      setNewIdea({ title: "", note: "", imageDataUrl: "" });
+                      setIsAddingIdea(true);
+                    }}
                   >
                     + Agregar idea
                   </button>
                 )}
               </div>
 
-              {/* Tarjeta de alta de nueva idea */}
+              {/* Panel nueva idea */}
               {isAddingIdea && (
                 <div
                   style={{
@@ -472,7 +565,7 @@ function UserProfilePage() {
                       alignItems: "stretch",
                     }}
                   >
-                    {/* Vista previa de la imagen */}
+                    {/* preview imagen */}
                     <div
                       style={{
                         borderRadius: "10px",
@@ -508,7 +601,7 @@ function UserProfilePage() {
                       )}
                     </div>
 
-                    {/* Campos de la idea */}
+                    {/* campos */}
                     <div>
                       <div className="form__field form__field--full">
                         <label className="form__label" htmlFor="ideaTitle">
@@ -618,11 +711,182 @@ function UserProfilePage() {
                 </div>
               )}
 
-              {/* Grid de ideas guardadas */}
+              {/* Panel edición idea */}
+              {isEditingIdea && (
+                <div
+                  style={{
+                    marginBottom: "0.9rem",
+                    padding: "0.75rem 0.85rem",
+                    borderRadius: "12px",
+                    backgroundColor: "#fff7f9",
+                    border: "1px dashed rgba(232, 154, 169, 0.7)",
+                  }}
+                >
+                  <p
+                    className="profile-card__subtitle"
+                    style={{ fontSize: "0.8rem", marginBottom: "0.65rem" }}
+                  >
+                    Edita los detalles de esta idea. Puedes cambiar el texto y
+                    la foto si lo necesitas.
+                  </p>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "120px minmax(0, 1fr)",
+                      gap: "0.75rem",
+                      alignItems: "stretch",
+                    }}
+                  >
+                    <div
+                      style={{
+                        borderRadius: "10px",
+                        overflow: "hidden",
+                        backgroundColor: "#ffffff",
+                        border: "1px solid rgba(248, 202, 214, 0.9)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {editingIdea.imageDataUrl ? (
+                        <img
+                          src={editingIdea.imageDataUrl}
+                          alt={editingIdea.title || "Editar idea"}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      ) : (
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#9ca3af",
+                            textAlign: "center",
+                            padding: "0.6rem",
+                          }}
+                        >
+                          Aquí verás una vista previa de tu foto.
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="form__field form__field--full">
+                        <label
+                          className="form__label"
+                          htmlFor="editIdeaTitle"
+                        >
+                          Título breve
+                        </label>
+                        <input
+                          id="editIdeaTitle"
+                          name="title"
+                          type="text"
+                          className="form__input"
+                          value={editingIdea.title}
+                          onChange={handleEditIdeaFieldChange}
+                        />
+                      </div>
+
+                      <div className="form__field form__field--full">
+                        <label className="form__label" htmlFor="editIdeaNote">
+                          Nota rápida
+                        </label>
+                        <textarea
+                          id="editIdeaNote"
+                          name="note"
+                          className="form__textarea"
+                          rows={2}
+                          value={editingIdea.note}
+                          onChange={handleEditIdeaFieldChange}
+                        />
+                      </div>
+
+                      <div className="form__field form__field--full">
+                        <label
+                          className="form__label"
+                          htmlFor="editIdeaImageInput"
+                        >
+                          Foto de la idea
+                        </label>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.6rem",
+                            alignItems: "center",
+                          }}
+                        >
+                          <label
+                            htmlFor="editIdeaImageInput"
+                            className="btn btn--secondary"
+                            style={{
+                              fontSize: "0.8rem",
+                              padding: "0.35rem 0.9rem",
+                              cursor: "pointer",
+                            }}
+                          >
+                            Cambiar imagen
+                          </label>
+                          <span
+                            style={{
+                              fontSize: "0.8rem",
+                              color: "#6b7280",
+                              maxWidth: "220px",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            Puedes dejar la imagen actual si ya te gusta.
+                          </span>
+                        </div>
+                        <input
+                          id="editIdeaImageInput"
+                          type="file"
+                          accept="image/*"
+                          style={{ display: "none" }}
+                          onChange={handleEditIdeaImageChange}
+                        />
+                      </div>
+
+                      <div
+                        className="form__actions"
+                        style={{
+                          marginTop: "0.4rem",
+                          display: "flex",
+                          gap: "0.5rem",
+                          justifyContent: "flex-end",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          onClick={handleEditIdeaCancel}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--primary"
+                          onClick={handleEditIdeaSave}
+                        >
+                          Guardar cambios
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Grid de ideas */}
               {ideas.length > 0 && (
                 <div
                   style={{
-                    marginTop: isAddingIdea ? "0.2rem" : "0.8rem",
+                    marginTop:
+                      isAddingIdea || isEditingIdea ? "0.2rem" : "0.8rem",
                     display: "grid",
                     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
                     gap: "0.8rem",
@@ -636,6 +900,12 @@ function UserProfilePage() {
                         overflow: "hidden",
                         backgroundColor: "#ffffff",
                         boxShadow: "0 4px 12px rgba(15, 23, 42, 0.06)",
+                        border:
+                          idea.id === editingIdeaId && isEditingIdea
+                            ? "1px solid rgba(232, 154, 169, 0.9)"
+                            : "none",
+                        display: "flex",
+                        flexDirection: "column",
                       }}
                     >
                       <div
@@ -658,7 +928,13 @@ function UserProfilePage() {
                           }}
                         />
                       </div>
-                      <div style={{ padding: "0.5rem 0.6rem 0.55rem" }}>
+
+                      <div
+                        style={{
+                          padding: "0.5rem 0.6rem 0.35rem",
+                          flexGrow: 1,
+                        }}
+                      >
                         <div
                           style={{
                             fontSize: "0.85rem",
@@ -677,6 +953,53 @@ function UserProfilePage() {
                         >
                           {idea.note}
                         </p>
+                      </div>
+
+                      {/* Botones sutiles abajo */}
+                      <div
+                        style={{
+                          padding: "0.25rem 0.55rem 0.45rem",
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          gap: "0.35rem",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditIdea(idea)}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            fontSize: "0.72rem",
+                            color: "#6b7280",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.15rem",
+                          }}
+                          title="Editar idea"
+                        >
+                          <span>✏️</span>
+                          <span>Editar</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteIdea(idea.id)}
+                          style={{
+                            border: "none",
+                            background: "transparent",
+                            fontSize: "0.72rem",
+                            color: "#9b1c1c",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.15rem",
+                          }}
+                          title="Eliminar idea"
+                        >
+                          <span>🗑️</span>
+                          <span>Eliminar</span>
+                        </button>
                       </div>
                     </div>
                   ))}
