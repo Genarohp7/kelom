@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 // 👉 Aquí colocarás la ruta de tu imagen local
 import tipsImage from "../assets/web/pages/home/home-tips.jpg.png";
 
-const SHOW_DEMO_SECTIONS = false; // cambiar a true cuando quieras mostrar hero/venues/featured
+const SHOW_DEMO_SECTIONS = true; // ahora SÍ mostramos hero/venues/featured
 
 function HomePage() {
   // ==== Datos de demo para futuros proveedores ====
@@ -127,77 +127,7 @@ function HomePage() {
 
   return (
     <div className="home">
-      {/* MENSAJE TEMPORAL SOBRE PROVEEDORES */}
-      <section className="home-message">
-        <div className="container">
-          <div className="home-message__card">
-            <h2 className="home-message__title">
-              Estamos preparando algo especial para tu boda
-            </h2>
-            <p className="home-message__text">
-              En Kelom estamos trabajando cuidadosamente para reunir a
-              proveedores con experiencia, calidad y compromiso, que realmente
-              estén a la altura de lo que tu evento merece.
-            </p>
-            <p className="home-message__text">
-              Muy pronto encontrarás aquí opciones seleccionadas para ayudarte a
-              hacer realidad tu boda con confianza y tranquilidad.
-            </p>
-            <p className="home-message__text">
-              Mientras tanto, te invitamos a seguir explorando nuestra página
-              para conocernos mejor y a mantenerte al tanto en nuestras redes
-              sociales, donde compartimos información valiosa, recomendaciones y
-              contenido pensado para acompañarte en cada paso de este proceso.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* TIPS PARA TU BODA */}
-      <section className="tips">
-        <div className="container">
-          <header className="tips__header">
-            <h2 className="tips__title">Tips para tu boda</h2>
-            <p className="tips__subtitle">
-              Consejos cortos para que disfrutes el proceso, no solo el gran
-              día.
-            </p>
-          </header>
-
-          {/* texto + imagen */}
-          <div className="tips__content">
-            <div className="tips__list">
-              <article className="tips-card">
-                <h3 className="tips-card__title">Empieza por el presupuesto</h3>
-                <p className="tips-card__text">
-                  Definir un rango claro desde el inicio te ayudará a elegir
-                  opciones realistas sin renunciar al estilo que quieres.
-                </p>
-              </article>
-
-              <article className="tips-card">
-                <h3 className="tips-card__title">
-                  Haz una lista de prioridades
-                </h3>
-                <p className="tips-card__text">
-                  ¿Es más importante el lugar, la comida o la música? Ponerlo en
-                  papel facilita las decisiones cuando tengas que elegir.
-                </p>
-              </article>
-            </div>
-
-            <div className="tips__image-wrap">
-              <img
-                src={tipsImage}
-                alt="Pareja organizando su boda con calma"
-                className="tips__image"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* BLOQUES DE PROVEEDORES OCULTOS POR AHORA */}
+      {/* HERO + BUSCADOR + PASARELA DE VENUES */}
       {SHOW_DEMO_SECTIONS && (
         <>
           {/* HERO + BUSCADOR */}
@@ -334,7 +264,9 @@ function HomePage() {
                       alt={company.name}
                       className="featured-card__image"
                     />
-                    <div className="featured-card__name">{company.name}</div>
+                    <div className="featured-card__name">
+                      {company.name}
+                    </div>
                     <div className="featured-card__category">
                       {company.category}
                     </div>
@@ -345,6 +277,50 @@ function HomePage() {
           </section>
         </>
       )}
+
+      {/* TIPS PARA TU BODA */}
+      <section className="tips">
+        <div className="container">
+          <header className="tips__header">
+            <h2 className="tips__title">Tips para tu boda</h2>
+            <p className="tips__subtitle">
+              Consejos cortos para que disfrutes el proceso, no solo el gran
+              día.
+            </p>
+          </header>
+
+          {/* texto + imagen */}
+          <div className="tips__content">
+            <div className="tips__list">
+              <article className="tips-card">
+                <h3 className="tips-card__title">Empieza por el presupuesto</h3>
+                <p className="tips-card__text">
+                  Definir un rango claro desde el inicio te ayudará a elegir
+                  opciones realistas sin renunciar al estilo que quieres.
+                </p>
+              </article>
+
+              <article className="tips-card">
+                <h3 className="tips-card__title">
+                  Haz una lista de prioridades
+                </h3>
+                <p className="tips-card__text">
+                  ¿Es más importante el lugar, la comida o la música? Ponerlo en
+                  papel facilita las decisiones cuando tengas que elegir.
+                </p>
+              </article>
+            </div>
+
+            <div className="tips__image-wrap">
+              <img
+                src={tipsImage}
+                alt="Pareja organizando su boda con calma"
+                className="tips__image"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
