@@ -9,15 +9,13 @@ function UserRegisterPage() {
     email: "",
     fullName: "",
     phone: "",
-    password: "",
-    confirmPassword: "",
   });
 
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // ✅ Nuevo: control del checkbox y del popup de aviso de privacidad
+  // ✅ Control del checkbox y del popup de aviso de privacidad
   const [isPrivacyChecked, setIsPrivacyChecked] = useState(false);
   const [showPrivacyPopup, setShowPrivacyPopup] = useState(false);
 
@@ -55,11 +53,11 @@ function UserRegisterPage() {
         "Para continuar debes aceptar nuestro aviso de privacidad.";
     }
 
-    // No validamos contraseña porque los campos están desactivados.
+    // En este paso aún no manejamos contraseña.
     return newErrors;
   }
 
-  // 👇 AHORA ES async PARA PODER USAR await CON EMAILJS
+  // 👇 async para poder usar await con EmailJS
   async function handleSubmit(e) {
     e.preventDefault();
     const validation = validate();
@@ -124,7 +122,10 @@ function UserRegisterPage() {
               </p>
 
               <div className="register-card__actions">
-                <Link to="/" className="btn btn--primary">
+                <Link to="/perfil" className="btn btn--primary">
+                  Continuar con registro
+                </Link>
+                <Link to="/" className="btn btn--ghost">
                   Volver al inicio
                 </Link>
               </div>
@@ -196,39 +197,6 @@ function UserRegisterPage() {
                 <div className="form__error">{errors.phone}</div>
               </div>
 
-              {/* Contraseña y confirmación se quedan listas pero desactivadas por ahora
-              <div className="form__field">
-                <label className="form__label" htmlFor="password">
-                  Contraseña *
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  className="form__input"
-                  placeholder="Mínimo 5 caracteres"
-                  value={form.password}
-                  onChange={handleChange}
-                />
-                <div className="form__error">{errors.password}</div>
-              </div>
-
-              <div className="form__field">
-                <label className="form__label" htmlFor="confirmPassword">
-                  Confirmar contraseña *
-                </label>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  className="form__input"
-                  value={form.confirmPassword}
-                  onChange={handleChange}
-                />
-                <div className="form__error">{errors.confirmPassword}</div>
-              </div>
-              */}
-
               {/* ✅ Checkbox + link al aviso de privacidad */}
               <div className="form__field">
                 <label className="form__label">
@@ -278,16 +246,6 @@ function UserRegisterPage() {
                 >
                   Crear mi Registro
                 </button>
-
-                {/* 
-                <p className="register-card__note">
-                  ¿Ya tienes cuenta?{" "}
-                  <Link to="/acceso" className="auth-card__link">
-                    Inicia sesión aquí
-                  </Link>
-                  .
-                </p> 
-                */}
               </div>
             </form>
           </section>
@@ -357,8 +315,7 @@ function UserRegisterPage() {
                 lineHeight: 1.5,
               }}
             >
-              {/* ... TODO el mismo texto largo que ya tenías ... */}
-              {/* No toqué nada del contenido del aviso */}
+              {/* ... mismo texto largo que ya tenías ... */}
               <p className="register-card__subtitle">
                 Al firmar el presente aviso de privacidad Usted otorga su
                 consentimiento expreso en relación con lo siguiente:

@@ -1,5 +1,5 @@
 // src/pages/UserRegisterCompletePage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   getCurrentUser,
@@ -28,7 +28,18 @@ function UserRegisterCompletePage() {
     supportFocus: user?.supportFocus || "",
     biggestDoubt: user?.biggestDoubt || "",
     contactPreference: user?.contactPreference || "",
+    // 🔐 campos de contraseña (no se precargan)
+    password: "",
+    confirmPassword: "",
+    // 📸 foto de perfil
+    avatar: user?.avatar || "",
   }));
+
+  // Error de contraseña
+  const [passwordError, setPasswordError] = useState("");
+
+  // Ref para abrir el input de archivo desde el círculo
+  const fileInputRef = useRef(null);
 
   // 3) El efecto SOLO redirige, no hace setState
   useEffect(() => {
@@ -63,16 +74,63 @@ function UserRegisterCompletePage() {
 
   function handleChange(evt) {
     const { name, value } = evt.target;
+
+    // Si está tocando la contraseña, limpiamos error
+    if (name === "password" || name === "confirmPassword") {
+      setPasswordError("");
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
     }));
   }
 
+  // 📸 Manejo de subida de foto
+  function handleAvatarChange(evt) {
+    const file = evt.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      setFormData((prev) => ({
+        ...prev,
+        avatar: dataUrl,
+      }));
+    };
+    reader.readAsDataURL(file);
+  }
+
   function handleSubmit(evt) {
     evt.preventDefault();
+
+    const { password, confirmPassword, ...rest } = formData;
+    let dataToSave = rest;
+
+    // Si el usuario escribió algo en alguno de los dos campos,
+    // validamos y guardamos la contraseña.
+    if (password || confirmPassword) {
+      if (!password || !confirmPassword) {
+        setPasswordError("Escribe y confirma tu contraseña.");
+        return;
+      }
+
+      if (password.length < 5) {
+        setPasswordError("La contraseña debe tener al menos 5 caracteres.");
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setPasswordError("Las contraseñas no coinciden.");
+        return;
+      }
+
+      dataToSave = { ...rest, password };
+    }
+
     try {
-      updateCurrentUserProfile(formData);
+      updateCurrentUserProfile(dataToSave);
       navigate("/perfil");
     } catch (err) {
       alert(err.message || "No se pudo guardar tu información.");
@@ -94,7 +152,17 @@ function UserRegisterCompletePage() {
           {/* Columna izquierda: formulario */}
           <section className="profile-card">
             <p className="profile-card__eyebrow">Detalles de tu boda</p>
-            <h1 className="profile-card__title">Completa tu ficha de novi@s</h1>
+
+            {/* Título + porcentaje de completado */}
+            <div className="profile-card__title-row">
+              <h1 className="profile-card__title">
+                Completa tu ficha de novi@s
+              </h1>
+              <span className="profile-card__completion">
+                Perfil completado: {completion}%
+              </span>
+            </div>
+
             <p className="profile-card__subtitle">
               Mientras más información tengamos, mejor podremos ayudarte a
               encontrar lugares y proveedores que encajen con lo que buscas.
@@ -302,6 +370,43 @@ function UserRegisterCompletePage() {
                 </select>
               </div>
 
+              {/* 🔐 Contraseña */}
+              <div className="form__field">
+                <label className="form__label" htmlFor="password">
+                  Contraseña para tu cuenta
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  className="form__input"
+                  placeholder="Mínimo 5 caracteres"
+                  value={formData.password}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="form__field">
+                <label className="form__label" htmlFor="confirmPassword">
+                  Confirmar contraseña
+                </label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  className="form__input"
+                  placeholder="Repite tu contraseña"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                />
+              </div>
+
+              {passwordError && (
+                <div className="form__error form__error--password">
+                  {passwordError}
+                </div>
+              )}
+
               {/* Botones */}
               <div className="form__actions">
                 <button type="submit" className="btn btn--primary">
@@ -314,24 +419,57 @@ function UserRegisterCompletePage() {
             </form>
           </section>
 
-          {/* Columna derecha: explicación + porcentaje */}
-          <aside className="preview-card">
-            <span className="preview-card__pill">
-              Perfil completado: {completion}%
-            </span>
-            <h2 className="preview-card__title">
-              ¿Para qué usamos estos datos?
-            </h2>
-            <p className="preview-card__subtitle">
-              Con tu ficha completa podremos:
-            </p>
-            <p className="preview-card__text">
-              • Recomendarte venues con el aforo y presupuesto adecuados. <br />
-              • Conectar contigo con proveedores que tengan sentido para tu
-              estilo de boda. <br />• Enviarte tips y recordatorios según lo
-              cerca que esté tu fecha.
-            </p>
-          </aside>
+         {/* Columna derecha: foto de perfil */}
+<aside className="preview-card">
+  <h2 className="preview-card__title">Foto de perfil</h2>
+  <p className="preview-card__subtitle">
+    Agrega una foto para que sea más fácil reconocerte en tu ficha.
+  </p>
+
+  <div className="profile-avatar-upload">
+    {/* Círculo clickable con imagen o texto */}
+    <button
+      type="button"
+      onClick={() => fileInputRef.current?.click()}
+      className="profile-avatar__button"
+    >
+      {formData.avatar ? (
+        <img
+          src={formData.avatar}
+          alt={`Foto de perfil de ${
+            formData.fullName || user.fullName
+          }`}
+          className="profile-avatar__image"
+        />
+      ) : (
+        <span className="profile-avatar__placeholder">
+          Foto de perfil
+        </span>
+      )}
+
+      {/* Icono de lápiz flotando abajo a la derecha */}
+      <span className="profile-avatar__edit-icon">
+        <i className="fa-solid fa-pen"></i>
+      </span>
+    </button>
+
+    {/* Input real, oculto */}
+    <input
+      ref={fileInputRef}
+      id="avatar"
+      name="avatar"
+      type="file"
+      accept="image/*"
+      onChange={handleAvatarChange}
+      className="profile-avatar__file-input"
+    />
+
+    <p className="form__hint profile-avatar-upload__hint">
+      Formato recomendado: JPG o PNG, máximo 5&nbsp;MB.
+    </p>
+  </div>
+</aside>
+
         </div>
       </main>
     </div>

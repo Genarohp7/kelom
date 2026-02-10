@@ -53,8 +53,7 @@ function UserLoginPage() {
     <div className="user-auth">
       <header className="business-auth__header">
         <div className="business-auth__header-inner">
-          <span className="business-auth__logo-text">Kelom</span>
-          <span className="business-auth__logo-pill">Acceso parejas</span>
+          
         </div>
       </header>
 
@@ -133,7 +132,7 @@ function UserLoginPage() {
       </main>
 
       <footer className="business-auth__footer">
-        Kelom · Organiza tu boda con calma, paso a paso.
+        
       </footer>
     </div>
   );

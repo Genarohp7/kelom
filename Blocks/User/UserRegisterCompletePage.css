@@ -1,0 +1,131 @@
+/* ========== REGISTER COMPLETE LAYOUT ========== */
+
+.user-register-complete {
+  padding: 2.5rem 0 3rem;
+}
+
+/* Título + chip de completitud */
+.profile-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.profile-card__completion {
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background-color: rgba(232, 154, 169, 0.12);
+  color: #c87486;
+  font-weight: 500;
+}
+
+/* Margen específico para el error de contraseña */
+.form__error--password {
+  margin-top: 0.4rem;
+}
+
+/* ========== AVATAR UPLOAD (COLUMNA DERECHA) ========== */
+
+.profile-avatar-upload {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+/* Círculo grande clickable */
+.profile-avatar__button {
+  position: relative;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  border: 3px solid rgba(232, 154, 169, 0.7);
+  overflow: hidden;
+  background: radial-gradient(
+    circle at top,
+    #ffeef5 0,
+    #fff7f3 55%,
+    #ffe3ee 100%
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+.profile-avatar__button:hover {
+  box-shadow: 0 10px 25px rgba(148, 27, 72, 0.25);
+  transform: translateY(-1px);
+}
+
+.profile-avatar__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar__placeholder {
+  font-size: 0.9rem;
+  color: #c87486;
+  text-align: center;
+  padding: 0 1.2rem;
+}
+
+/* Icono de lápiz flotando abajo a la derecha */
+.profile-avatar__edit-icon {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c87486;
+  font-size: 0.95rem;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.profile-avatar__button:hover .profile-avatar__edit-icon {
+  background-color: var(--color-primary);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(148, 27, 72, 0.35);
+}
+
+/* Input de archivo oculto */
+.profile-avatar__file-input {
+  display: none;
+}
+
+.profile-avatar-upload__hint {
+  font-size: 0.8rem;
+}
+
+/* ========== RESPONSIVE ========== */
+
+@media (max-width: 960px) {
+  .user-register-complete {
+    padding-top: 2rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .profile-card__title-row {
+    align-items: flex-start;
+  }
+}
