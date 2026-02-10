@@ -48,6 +48,27 @@ function UserProfilePage() {
           <section className="profile-card">
             <p className="profile-card__eyebrow">Tu resumen</p>
             <h1 className="profile-card__title">Hola, {user.fullName}</h1>
+
+            {/* Foto de perfil si existe */}
+            {user.avatar && (
+              <div
+                className="profile-card__avatar"
+                style={{ marginTop: "0.8rem", marginBottom: "0.8rem" }}
+              >
+                <img
+                  src={user.avatar}
+                  alt={`Foto de perfil de ${user.fullName}`}
+                  style={{
+                    width: "96px",
+                    height: "96px",
+                    borderRadius: "50%",
+                    objectFit: "cover",
+                    border: "3px solid rgba(232, 154, 169, 0.6)",
+                  }}
+                />
+              </div>
+            )}
+
             <p className="profile-card__subtitle">
               Esta es una vista rápida de la información de tu boda. Puedes
               actualizarla cuando quieras.
