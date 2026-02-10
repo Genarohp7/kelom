@@ -1,79 +1,70 @@
 // src/pages/UserProfilePage.jsx
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import {
-  getCurrentUser,
-  logoutCurrentUser,
-  updateCurrentUserProfile,
-} from "../utils/userStorage.js";
+import { getCurrentUser, logoutCurrentUser } from "../utils/userStorage.js";
+
+// Ejemplos de proveedores seleccionados (modo demo)
+const sampleProviders = [
+  {
+    id: 1,
+    category: "Jardín / venue",
+    name: "Jardín Las Bugambilias",
+    logo:
+      "https://images.pexels.com/photos/3951851/pexels-photo-3951851.jpeg?auto=compress&cs=tinysrgb&w=200",
+  },
+  {
+    id: 2,
+    category: "Banquete",
+    name: "Sabores del Lago Catering",
+    logo:
+      "https://images.pexels.com/photos/169192/pexels-photo-169192.jpeg?auto=compress&cs=tinysrgb&w=200",
+  },
+  {
+    id: 3,
+    category: "Wedding planner",
+    name: "Luna Eventos Boutique",
+    logo:
+      "https://images.pexels.com/photos/3843286/pexels-photo-3843286.jpeg?auto=compress&cs=tinysrgb&w=200",
+  },
+];
+
+// Ejemplos de ideas (modo demo)
+const sampleIdeas = [
+  {
+    id: 1,
+    title: "Ceremonia al atardecer",
+    note: "Me encanta la luz cálida y las sillas de madera claras.",
+    image:
+      "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=800",
+  },
+  {
+    id: 2,
+    title: "Mesa de novios",
+    note: "Flores blancas y verdes, nada demasiado recargado.",
+    image:
+      "https://images.pexels.com/photos/3951850/pexels-photo-3951850.jpeg?auto=compress&cs=tinysrgb&w=800",
+  },
+];
 
 function UserProfilePage() {
   const navigate = useNavigate();
   const user = getCurrentUser(); // leemos directamente del storage
 
-  // Ideas por defecto (ejemplos)
-  const defaultIdeas = [
-    {
-      id: 1,
-      title: "Ceremonia en jardín al atardecer",
-      note: "Luces cálidas, sillas de madera y flores blancas.",
-      image:
-        "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 2,
-      title: "Mesa larga estilo familiar",
-      note: "Mantelería neutra, centros con flores pastel y velas.",
-      image:
-        "https://images.pexels.com/photos/3951628/pexels-photo-3951628.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 3,
-      title: "Pista con luces",
-      note: "Pista iluminada para fotos memorables del baile.",
-      image:
-        "https://images.pexels.com/photos/169190/pexels-photo-169190.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 4,
-      title: "Pastel minimalista",
-      note: "Blanco, con detalles sutiles en dorado y flores naturales.",
-      image:
-        "https://images.pexels.com/photos/1128782/pexels-photo-1128782.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-  ];
+  // ======== HOOKS (siempre arriba, sin condicionales) ========
+  const [providers, setProviders] = useState(sampleProviders);
 
-  // Estado para ideas (si el usuario ya tiene ideas guardadas, las usamos)
-  const [ideas, setIdeas] = useState(() => {
-    if (Array.isArray(user?.ideas) && user.ideas.length > 0) {
-      return user.ideas;
-    }
-    return defaultIdeas;
-  });
+  const [ideas, setIdeas] = useState(sampleIdeas);
+  const [newIdeaTitle, setNewIdeaTitle] = useState("");
+  const [newIdeaNote, setNewIdeaNote] = useState("");
+  const [previewImageUrl, setPreviewImageUrl] = useState("");
+  const [editingId, setEditingId] = useState(null);
 
-  // Estado para el formulario de nueva idea
-  const [isAddingIdea, setIsAddingIdea] = useState(false);
-  const [newIdea, setNewIdea] = useState({
-    title: "",
-    note: "",
-    imageDataUrl: "",
-  });
-
-  // Estado para edición de idea existente
-  const [isEditingIdea, setIsEditingIdea] = useState(false);
-  const [editingIdeaId, setEditingIdeaId] = useState(null);
-  const [editingIdea, setEditingIdea] = useState({
-    title: "",
-    note: "",
-    imageDataUrl: "",
-  });
-
-  // Si no hay usuario, redirigimos al login
+  // Si no hay usuario, redirigimos al login (después de declarar hooks)
   if (!user) {
     return <Navigate to="/acceso" replace />;
   }
 
-  // Cálculo del porcentaje de completitud del perfil
+  // Porcentaje de perfil completado
   const completion = (() => {
     const keys = [
       "email",
@@ -98,169 +89,86 @@ function UserProfilePage() {
     return Math.round((filled / total) * 100);
   })();
 
-  // Foto de perfil
-  const profilePhoto =
-    user.avatar || user.profilePhoto || user.profileImage || "";
-
-  // Ejemplos estáticos de proveedores elegidos
-  const sampleProviders = [
-    {
-      id: 1,
-      category: "Venue / Jardín",
-      name: "Jardín Las Bugambilias",
-      logo:
-        "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=400",
-    },
-    {
-      id: 2,
-      category: "Banquete",
-      name: "Sabores del Valle Catering",
-      logo:
-        "https://images.pexels.com/photos/3171770/pexels-photo-3171770.jpeg?auto=compress&cs=tinysrgb&w=400",
-    },
-    {
-      id: 3,
-      category: "Wedding planner",
-      name: "Momentos Kelom",
-      logo:
-        "https://images.pexels.com/photos/2567370/pexels-photo-2567370.jpeg?auto=compress&cs=tinysrgb&w=400",
-    },
-  ];
-
   function handleLogout() {
     logoutCurrentUser();
     navigate("/");
   }
 
-  // Handlers "Agregar idea"
-  function handleNewIdeaFieldChange(e) {
-    const { name, value } = e.target;
-    setNewIdea((prev) => ({ ...prev, [name]: value }));
+  // ======== Proveedores (demo) ========
+  function handleRemoveProvider(id) {
+    setProviders((prev) => prev.filter((p) => p.id !== id));
   }
 
-  function handleNewIdeaImageChange(e) {
+  // ======== Ideas: helpers ========
+  function resetIdeaForm() {
+    setNewIdeaTitle("");
+    setNewIdeaNote("");
+    setPreviewImageUrl("");
+    setEditingId(null);
+  }
+
+  function handleIdeaImageChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      const result = evt.target?.result;
-      if (typeof result === "string") {
-        setNewIdea((prev) => ({ ...prev, imageDataUrl: result }));
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        setPreviewImageUrl(reader.result);
       }
     };
     reader.readAsDataURL(file);
   }
 
-  function handleAddIdeaCancel() {
-    setNewIdea({ title: "", note: "", imageDataUrl: "" });
-    setIsAddingIdea(false);
-  }
+  function handleAddOrUpdateIdea() {
+    const title = newIdeaTitle.trim();
+    const note = newIdeaNote.trim();
 
-  function handleAddIdeaSave() {
-    if (!newIdea.imageDataUrl) {
-      alert("Agrega una foto para tu idea antes de guardar.");
+    if (!title && !note && !previewImageUrl) {
       return;
     }
 
-    const ideaToAdd = {
-      id: Date.now(),
-      title: newIdea.title.trim() || "Idea sin título",
-      note:
-        newIdea.note.trim() ||
-        "Descripción pendiente. Puedes editarla más adelante.",
-      image: newIdea.imageDataUrl,
-    };
-
-    const updatedIdeas = [ideaToAdd, ...ideas];
-    setIdeas(updatedIdeas);
-
-    try {
-      updateCurrentUserProfile({ ideas: updatedIdeas });
-    } catch (err) {
-      console.error("No se pudo guardar las ideas en el perfil (demo):", err);
+    if (editingId) {
+      // Editar idea existente
+      setIdeas((prev) =>
+        prev.map((idea) =>
+          idea.id === editingId
+            ? {
+                ...idea,
+                title: title || idea.title,
+                note: note || idea.note,
+                image: previewImageUrl || idea.image,
+              }
+            : idea
+        )
+      );
+    } else {
+      // Nueva idea
+      const newIdea = {
+        id: Date.now(),
+        title: title || "Idea sin título",
+        note: note || "",
+        image:
+          previewImageUrl ||
+          "https://images.pexels.com/photos/3951879/pexels-photo-3951879.jpeg?auto=compress&cs=tinysrgb&w=800",
+      };
+      setIdeas((prev) => [newIdea, ...prev]);
     }
 
-    setNewIdea({ title: "", note: "", imageDataUrl: "" });
-    setIsAddingIdea(false);
+    resetIdeaForm();
   }
 
-  // Handlers edición
-  function handleStartEditIdea(idea) {
-    setIsAddingIdea(false);
-    setIsEditingIdea(true);
-    setEditingIdeaId(idea.id);
-    setEditingIdea({
-      title: idea.title,
-      note: idea.note,
-      imageDataUrl: idea.image,
-    });
+  function handleEditIdea(idea) {
+    setEditingId(idea.id);
+    setNewIdeaTitle(idea.title || "");
+    setNewIdeaNote(idea.note || "");
+    setPreviewImageUrl(idea.image || "");
   }
 
-  function handleEditIdeaFieldChange(e) {
-    const { name, value } = e.target;
-    setEditingIdea((prev) => ({ ...prev, [name]: value }));
-  }
-
-  function handleEditIdeaImageChange(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const result = evt.target?.result;
-      if (typeof result === "string") {
-        setEditingIdea((prev) => ({ ...prev, imageDataUrl: result }));
-      }
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function handleEditIdeaCancel() {
-    setIsEditingIdea(false);
-    setEditingIdeaId(null);
-    setEditingIdea({ title: "", note: "", imageDataUrl: "" });
-  }
-
-  function handleEditIdeaSave() {
-    if (!editingIdeaId) return;
-
-    const updatedIdeas = ideas.map((idea) =>
-      idea.id === editingIdeaId
-        ? {
-            ...idea,
-            title: editingIdea.title.trim() || idea.title,
-            note: editingIdea.note.trim() || idea.note,
-            image: editingIdea.imageDataUrl || idea.image,
-          }
-        : idea
-    );
-
-    setIdeas(updatedIdeas);
-
-    try {
-      updateCurrentUserProfile({ ideas: updatedIdeas });
-    } catch (err) {
-      console.error("No se pudo actualizar las ideas en el perfil (demo):", err);
-    }
-
-    handleEditIdeaCancel();
-  }
-
-  // Eliminar idea
   function handleDeleteIdea(id) {
-    const confirmed = window.confirm(
-      "¿Quieres eliminar esta idea? Esta acción no se puede deshacer."
-    );
-    if (!confirmed) return;
-
-    const updatedIdeas = ideas.filter((idea) => idea.id !== id);
-    setIdeas(updatedIdeas);
-
-    try {
-      updateCurrentUserProfile({ ideas: updatedIdeas });
-    } catch (err) {
-      console.error("No se pudo eliminar la idea en el perfil (demo):", err);
+    setIdeas((prev) => prev.filter((idea) => idea.id !== id));
+    if (editingId === id) {
+      resetIdeaForm();
     }
   }
 
@@ -268,7 +176,7 @@ function UserProfilePage() {
     <div className="user-profile">
       <div className="user-profile__container">
         <div className="user-profile__grid">
-          {/* Columna izquierda: resumen */}
+          {/* Columna izquierda: resumen de perfil */}
           <section className="profile-card">
             <p className="profile-card__eyebrow">Tu resumen</p>
             <h1 className="profile-card__title">Hola, {user.fullName}</h1>
@@ -346,74 +254,58 @@ function UserProfilePage() {
             </div>
           </section>
 
-          {/* Columna derecha */}
+          {/* Columna derecha: foto + proveedores + ideas */}
           <aside className="preview-card">
-            {/* Foto perfil */}
-            <section
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                marginBottom: "1.6rem",
-              }}
-            >
-              <div
-                style={{
-                  width: "150px",
-                  height: "150px",
-                  borderRadius: "50%",
-                  overflow: "hidden",
-                  border: "3px solid rgba(232, 154, 169, 0.9)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background:
-                    "radial-gradient(circle at top, #ffeef5 0, #fff7f9 45%, #fff 100%)",
-                  marginBottom: "0.75rem",
-                }}
-              >
-                {profilePhoto ? (
-                  <img
-                    src={profilePhoto}
-                    alt={user.fullName || "Foto de perfil"}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      fontSize: "2.4rem",
-                      fontWeight: 600,
-                      color: "#c87486",
-                    }}
-                  >
-                    {user.fullName
-                      ? user.fullName.charAt(0).toUpperCase()
-                      : "?"}
-                  </span>
-                )}
-              </div>
-
-              <h2
-                className="preview-card__title"
-                style={{ marginBottom: "0.25rem", textAlign: "center" }}
-              >
-                Tu foto de perfil
-              </h2>
+            {/* Foto de perfil (solo visual, se edita en el formulario) */}
+            <section style={{ marginBottom: "1.3rem" }}>
+              <h2 className="preview-card__title">Foto de perfil</h2>
               <p
                 className="preview-card__subtitle"
+                style={{ fontSize: "0.85rem" }}
+              >
+                Edita tu foto desde la sección “Completar / editar mi perfil”.
+              </p>
+
+              <div
                 style={{
-                  textAlign: "center",
-                  fontSize: "0.85rem",
-                  marginBottom: 0,
+                  marginTop: "0.8rem",
+                  display: "flex",
+                  justifyContent: "center",
                 }}
               >
-                Esta es la imagen que usarán las parejas y proveedores para
-                reconocerte en tu ficha.
-              </p>
+                <div
+                  style={{
+                    width: "120px",
+                    height: "120px",
+                    borderRadius: "50%",
+                    border: "3px solid rgba(232, 154, 169, 0.6)",
+                    overflow: "hidden",
+                    background:
+                      "radial-gradient(circle at 30% 20%, #ffe4ef, #fecdd3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "2.2rem",
+                    fontWeight: 600,
+                    color: "#7f1d1d",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.fullName}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    (user.fullName || "K")[0]
+                  )}
+                </div>
+              </div>
             </section>
 
             {/* Proveedores elegidos */}
@@ -437,7 +329,7 @@ function UserProfilePage() {
                   gap: "0.7rem",
                 }}
               >
-                {sampleProviders.map((p) => (
+                {providers.map((p) => (
                   <div
                     key={p.id}
                     style={{
@@ -492,12 +384,43 @@ function UserProfilePage() {
                         {p.name}
                       </div>
                     </div>
+
+                    {/* Botón eliminar proveedor (solo icono) */}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveProvider(p.id)}
+                      aria-label="Eliminar proveedor"
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        padding: "0.15rem 0.25rem",
+                        borderRadius: "999px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "0.9rem",
+                        color: "#9ca3af",
+                      }}
+                    >
+                      🗑️
+                    </button>
                   </div>
                 ))}
+
+                {providers.length === 0 && (
+                  <p
+                    className="preview-card__subtitle"
+                    style={{ fontSize: "0.8rem", marginTop: "0.3rem" }}
+                  >
+                    Aún no has elegido proveedores. Cuando guardes tus
+                    favoritos, aparecerán aquí.
+                  </p>
+                )}
               </div>
             </section>
 
-            {/* Ideas para la boda */}
+            {/* Galería de ideas para la boda */}
             <section>
               <h2 className="preview-card__title">Ideas para mi boda</h2>
               <p
@@ -508,503 +431,262 @@ function UserProfilePage() {
                 a la mano cuando hables con proveedores.
               </p>
 
-              {/* Botón agregar idea */}
+              {/* Grid de ideas guardadas */}
               <div
                 style={{
-                  marginTop: "0.6rem",
-                  marginBottom:
-                    isAddingIdea || isEditingIdea ? "0.4rem" : "0.8rem",
-                  display: "flex",
-                  justifyContent: "flex-end",
+                  marginTop: "0.8rem",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: "0.8rem",
                 }}
               >
-                {!isAddingIdea && !isEditingIdea && (
-                  <button
-                    type="button"
-                    className="btn btn--secondary"
-                    style={{
-                      fontSize: "0.8rem",
-                      padding: "0.35rem 0.9rem",
-                    }}
-                    onClick={() => {
-                      setIsEditingIdea(false);
-                      setEditingIdeaId(null);
-                      setNewIdea({ title: "", note: "", imageDataUrl: "" });
-                      setIsAddingIdea(true);
-                    }}
-                  >
-                    + Agregar idea
-                  </button>
-                )}
-              </div>
-
-              {/* Panel nueva idea */}
-              {isAddingIdea && (
-                <div
-                  style={{
-                    marginBottom: "0.9rem",
-                    padding: "0.75rem 0.85rem",
-                    borderRadius: "12px",
-                    backgroundColor: "#fff7f9",
-                    border: "1px dashed rgba(232, 154, 169, 0.7)",
-                  }}
-                >
-                  <p
-                    className="profile-card__subtitle"
-                    style={{ fontSize: "0.8rem", marginBottom: "0.65rem" }}
-                  >
-                    Sube una foto y escribe una nota rápida para recordar qué te
-                    gustó.
-                  </p>
-
+                {ideas.map((idea) => (
                   <div
+                    key={idea.id}
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "120px minmax(0, 1fr)",
-                      gap: "0.75rem",
-                      alignItems: "stretch",
-                    }}
-                  >
-                    {/* preview imagen */}
-                    <div
-                      style={{
-                        borderRadius: "10px",
-                        overflow: "hidden",
-                        backgroundColor: "#ffffff",
-                        border: "1px solid rgba(248, 202, 214, 0.9)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {newIdea.imageDataUrl ? (
-                        <img
-                          src={newIdea.imageDataUrl}
-                          alt={newIdea.title || "Nueva idea"}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#9ca3af",
-                            textAlign: "center",
-                            padding: "0.6rem",
-                          }}
-                        >
-                          Aquí verás una vista previa de tu foto.
-                        </span>
-                      )}
-                    </div>
-
-                    {/* campos */}
-                    <div>
-                      <div className="form__field form__field--full">
-                        <label className="form__label" htmlFor="ideaTitle">
-                          Título breve
-                        </label>
-                        <input
-                          id="ideaTitle"
-                          name="title"
-                          type="text"
-                          className="form__input"
-                          placeholder="Ej. Mesa de novios con flores blancas"
-                          value={newIdea.title}
-                          onChange={handleNewIdeaFieldChange}
-                        />
-                      </div>
-
-                      <div className="form__field form__field--full">
-                        <label className="form__label" htmlFor="ideaNote">
-                          Nota rápida
-                        </label>
-                        <textarea
-                          id="ideaNote"
-                          name="note"
-                          className="form__textarea"
-                          rows={2}
-                          placeholder="Qué te inspira de esta foto, qué quieres recordar..."
-                          value={newIdea.note}
-                          onChange={handleNewIdeaFieldChange}
-                        />
-                      </div>
-
-                      <div className="form__field form__field--full">
-                        <label
-                          className="form__label"
-                          htmlFor="ideaImageInput"
-                        >
-                          Foto de la idea
-                        </label>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "0.6rem",
-                            alignItems: "center",
-                          }}
-                        >
-                          <label
-                            htmlFor="ideaImageInput"
-                            className="btn btn--secondary"
-                            style={{
-                              fontSize: "0.8rem",
-                              padding: "0.35rem 0.9rem",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Elegir imagen
-                          </label>
-                          <span
-                            style={{
-                              fontSize: "0.8rem",
-                              color: "#6b7280",
-                              maxWidth: "220px",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {newIdea.imageDataUrl
-                              ? "Imagen lista para guardar."
-                              : "JPG o PNG, máximo 5 MB (modo demo)."}
-                          </span>
-                        </div>
-                        <input
-                          id="ideaImageInput"
-                          type="file"
-                          accept="image/*"
-                          style={{ display: "none" }}
-                          onChange={handleNewIdeaImageChange}
-                        />
-                      </div>
-
-                      <div
-                        className="form__actions"
-                        style={{
-                          marginTop: "0.4rem",
-                          display: "flex",
-                          gap: "0.5rem",
-                          justifyContent: "flex-end",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          onClick={handleAddIdeaCancel}
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--primary"
-                          onClick={handleAddIdeaSave}
-                        >
-                          Guardar idea
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Panel edición idea */}
-              {isEditingIdea && (
-                <div
-                  style={{
-                    marginBottom: "0.9rem",
-                    padding: "0.75rem 0.85rem",
-                    borderRadius: "12px",
-                    backgroundColor: "#fff7f9",
-                    border: "1px dashed rgba(232, 154, 169, 0.7)",
-                  }}
-                >
-                  <p
-                    className="profile-card__subtitle"
-                    style={{ fontSize: "0.8rem", marginBottom: "0.65rem" }}
-                  >
-                    Edita los detalles de esta idea. Puedes cambiar el texto y
-                    la foto si lo necesitas.
-                  </p>
-
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "120px minmax(0, 1fr)",
-                      gap: "0.75rem",
-                      alignItems: "stretch",
+                      borderRadius: "12px",
+                      overflow: "hidden",
+                      backgroundColor: "#ffffff",
+                      boxShadow: "0 4px 12px rgba(15, 23, 42, 0.06)",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
                     }}
                   >
                     <div
                       style={{
-                        borderRadius: "10px",
+                        position: "relative",
+                        width: "100%",
+                        paddingTop: "65%",
                         overflow: "hidden",
-                        backgroundColor: "#ffffff",
-                        border: "1px solid rgba(248, 202, 214, 0.9)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
                       }}
                     >
-                      {editingIdea.imageDataUrl ? (
-                        <img
-                          src={editingIdea.imageDataUrl}
-                          alt={editingIdea.title || "Editar idea"}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "#9ca3af",
-                            textAlign: "center",
-                            padding: "0.6rem",
-                          }}
-                        >
-                          Aquí verás una vista previa de tu foto.
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="form__field form__field--full">
-                        <label
-                          className="form__label"
-                          htmlFor="editIdeaTitle"
-                        >
-                          Título breve
-                        </label>
-                        <input
-                          id="editIdeaTitle"
-                          name="title"
-                          type="text"
-                          className="form__input"
-                          value={editingIdea.title}
-                          onChange={handleEditIdeaFieldChange}
-                        />
-                      </div>
-
-                      <div className="form__field form__field--full">
-                        <label className="form__label" htmlFor="editIdeaNote">
-                          Nota rápida
-                        </label>
-                        <textarea
-                          id="editIdeaNote"
-                          name="note"
-                          className="form__textarea"
-                          rows={2}
-                          value={editingIdea.note}
-                          onChange={handleEditIdeaFieldChange}
-                        />
-                      </div>
-
-                      <div className="form__field form__field--full">
-                        <label
-                          className="form__label"
-                          htmlFor="editIdeaImageInput"
-                        >
-                          Foto de la idea
-                        </label>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "0.6rem",
-                            alignItems: "center",
-                          }}
-                        >
-                          <label
-                            htmlFor="editIdeaImageInput"
-                            className="btn btn--secondary"
-                            style={{
-                              fontSize: "0.8rem",
-                              padding: "0.35rem 0.9rem",
-                              cursor: "pointer",
-                            }}
-                          >
-                            Cambiar imagen
-                          </label>
-                          <span
-                            style={{
-                              fontSize: "0.8rem",
-                              color: "#6b7280",
-                              maxWidth: "220px",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            Puedes dejar la imagen actual si ya te gusta.
-                          </span>
-                        </div>
-                        <input
-                          id="editIdeaImageInput"
-                          type="file"
-                          accept="image/*"
-                          style={{ display: "none" }}
-                          onChange={handleEditIdeaImageChange}
-                        />
-                      </div>
-
-                      <div
-                        className="form__actions"
+                      <img
+                        src={idea.image}
+                        alt={idea.title}
                         style={{
-                          marginTop: "0.4rem",
-                          display: "flex",
-                          gap: "0.5rem",
-                          justifyContent: "flex-end",
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          onClick={handleEditIdeaCancel}
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn--primary"
-                          onClick={handleEditIdeaSave}
-                        >
-                          Guardar cambios
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Grid de ideas */}
-              {ideas.length > 0 && (
-                <div
-                  style={{
-                    marginTop:
-                      isAddingIdea || isEditingIdea ? "0.2rem" : "0.8rem",
-                    display: "grid",
-                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                    gap: "0.8rem",
-                  }}
-                >
-                  {ideas.map((idea) => (
-                    <div
-                      key={idea.id}
-                      style={{
-                        borderRadius: "12px",
-                        overflow: "hidden",
-                        backgroundColor: "#ffffff",
-                        boxShadow: "0 4px 12px rgba(15, 23, 42, 0.06)",
-                        border:
-                          idea.id === editingIdeaId && isEditingIdea
-                            ? "1px solid rgba(232, 154, 169, 0.9)"
-                            : "none",
-                        display: "flex",
-                        flexDirection: "column",
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: "relative",
+                          position: "absolute",
+                          inset: 0,
                           width: "100%",
-                          paddingTop: "65%",
-                          overflow: "hidden",
+                          height: "100%",
+                          objectFit: "cover",
                         }}
-                      >
-                        <img
-                          src={idea.image}
-                          alt={idea.title}
-                          style={{
-                            position: "absolute",
-                            inset: 0,
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      </div>
-
+                      />
+                    </div>
+                    <div style={{ padding: "0.5rem 0.6rem 0.55rem" }}>
                       <div
                         style={{
-                          padding: "0.5rem 0.6rem 0.35rem",
-                          flexGrow: 1,
+                          fontSize: "0.85rem",
+                          fontWeight: 500,
+                          marginBottom: "0.1rem",
                         }}
                       >
-                        <div
-                          style={{
-                            fontSize: "0.85rem",
-                            fontWeight: 500,
-                            marginBottom: "0.1rem",
-                          }}
-                        >
-                          {idea.title}
-                        </div>
-                        <p
-                          style={{
-                            fontSize: "0.78rem",
-                            color: "#6b7280",
-                            margin: 0,
-                          }}
-                        >
-                          {idea.note}
-                        </p>
+                        {idea.title}
                       </div>
+                      <p
+                        style={{
+                          fontSize: "0.78rem",
+                          color: "#6b7280",
+                          margin: 0,
+                        }}
+                      >
+                        {idea.note}
+                      </p>
 
-                      {/* Botones sutiles abajo */}
+                      {/* Acciones editar / eliminar idea (discretas y abajo) */}
                       <div
                         style={{
-                          padding: "0.25rem 0.55rem 0.45rem",
+                          marginTop: "0.4rem",
                           display: "flex",
                           justifyContent: "flex-end",
-                          gap: "0.35rem",
+                          gap: "0.3rem",
                         }}
                       >
                         <button
                           type="button"
-                          onClick={() => handleStartEditIdea(idea)}
+                          onClick={() => handleEditIdea(idea)}
+                          aria-label="Editar idea"
                           style={{
                             border: "none",
                             background: "transparent",
-                            fontSize: "0.72rem",
-                            color: "#6b7280",
                             cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.15rem",
+                            padding: "0.1rem 0.25rem",
+                            borderRadius: "999px",
+                            fontSize: "0.85rem",
+                            color: "#6b7280",
                           }}
-                          title="Editar idea"
                         >
-                          <span>✏️</span>
-                          <span>Editar</span>
+                          ✏️
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteIdea(idea.id)}
+                          aria-label="Eliminar idea"
                           style={{
                             border: "none",
                             background: "transparent",
-                            fontSize: "0.72rem",
-                            color: "#9b1c1c",
                             cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "0.15rem",
+                            padding: "0.1rem 0.25rem",
+                            borderRadius: "999px",
+                            fontSize: "0.85rem",
+                            color: "#9ca3af",
                           }}
-                          title="Eliminar idea"
                         >
-                          <span>🗑️</span>
-                          <span>Eliminar</span>
+                          🗑️
                         </button>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
+              </div>
+
+              {/* Bloque para agregar / editar idea */}
+              <div
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem 0.85rem",
+                  borderRadius: "12px",
+                  backgroundColor: "#fff7f9",
+                  border: "1px dashed rgba(232, 154, 169, 0.55)",
+                }}
+              >
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "0.9rem",
+                    fontWeight: 600,
+                    marginBottom: "0.4rem",
+                  }}
+                >
+                  {editingId ? "Editar idea" : "Agregar nueva idea"}
+                </h3>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: "0.78rem",
+                    color: "#6b7280",
+                    marginBottom: "0.55rem",
+                  }}
+                >
+                  Sube una imagen y escribe una nota corta para recordarte qué
+                  te gustó.
+                </p>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "80px minmax(0, 1fr)",
+                    gap: "0.7rem",
+                    alignItems: "center",
+                  }}
+                >
+                  {/* Preview imagen */}
+                  <div
+                    style={{
+                      width: "80px",
+                      height: "80px",
+                      borderRadius: "12px",
+                      overflow: "hidden",
+                      backgroundColor: "#fee2e2",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "0.75rem",
+                      color: "#7f1d1d",
+                    }}
+                  >
+                    {previewImageUrl ? (
+                      <img
+                        src={previewImageUrl}
+                        alt="Previsualización"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      "Sin imagen"
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      className="form__input"
+                      placeholder="Título o nombre de la idea"
+                      value={newIdeaTitle}
+                      onChange={(e) => setNewIdeaTitle(e.target.value)}
+                      style={{ fontSize: "0.8rem" }}
+                    />
+                    <textarea
+                      className="form__textarea"
+                      rows={2}
+                      placeholder="Describe brevemente qué te gusta de esta idea."
+                      value={newIdeaNote}
+                      onChange={(e) => setNewIdeaNote(e.target.value)}
+                      style={{ fontSize: "0.8rem" }}
+                    />
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.4rem",
+                        marginTop: "0.2rem",
+                      }}
+                    >
+                      <label
+                        style={{
+                          borderRadius: "999px",
+                          padding: "0.25rem 0.75rem",
+                          border: "1px solid rgba(148, 163, 184, 0.9)",
+                          fontSize: "0.78rem",
+                          cursor: "pointer",
+                          background: "#ffffff",
+                        }}
+                      >
+                        Subir imagen
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: "none" }}
+                          onChange={handleIdeaImageChange}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn--primary"
+                        style={{
+                          fontSize: "0.78rem",
+                          padding: "0.25rem 0.9rem",
+                        }}
+                        onClick={handleAddOrUpdateIdea}
+                      >
+                        {editingId ? "Actualizar idea" : "Agregar idea"}
+                      </button>
+                      {editingId && (
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          style={{
+                            fontSize: "0.78rem",
+                            padding: "0.25rem 0.9rem",
+                          }}
+                          onClick={resetIdeaForm}
+                        >
+                          Cancelar edición
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
+              </div>
             </section>
           </aside>
         </div>
