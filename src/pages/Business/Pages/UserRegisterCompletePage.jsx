@@ -154,29 +154,11 @@ function UserRegisterCompletePage() {
             <p className="profile-card__eyebrow">Detalles de tu boda</p>
 
             {/* Título + porcentaje de completado */}
-            <div
-              className="profile-card__title-row"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.8rem",
-                flexWrap: "wrap",
-              }}
-            >
+            <div className="profile-card__title-row">
               <h1 className="profile-card__title">
                 Completa tu ficha de novi@s
               </h1>
-              <span
-                className="profile-card__completion"
-                style={{
-                  fontSize: "0.85rem",
-                  padding: "0.3rem 0.7rem",
-                  borderRadius: "999px",
-                  backgroundColor: "rgba(232, 154, 169, 0.12)",
-                  color: "#c87486",
-                  fontWeight: 500,
-                }}
-              >
+              <span className="profile-card__completion">
                 Perfil completado: {completion}%
               </span>
             </div>
@@ -420,10 +402,7 @@ function UserRegisterCompletePage() {
               </div>
 
               {passwordError && (
-                <div
-                  className="form__error"
-                  style={{ marginTop: "0.4rem" }}
-                >
+                <div className="form__error form__error--password">
                   {passwordError}
                 </div>
               )}
@@ -440,108 +419,57 @@ function UserRegisterCompletePage() {
             </form>
           </section>
 
-          {/* Columna derecha: foto de perfil */}
-          <aside className="preview-card">
-            <h2 className="preview-card__title">Foto de perfil</h2>
-            <p className="preview-card__subtitle">
-              Agrega una foto para que sea más fácil reconocerte en tu ficha.
-            </p>
+         {/* Columna derecha: foto de perfil */}
+<aside className="preview-card">
+  <h2 className="preview-card__title">Foto de perfil</h2>
+  <p className="preview-card__subtitle">
+    Agrega una foto para que sea más fácil reconocerte en tu ficha.
+  </p>
 
-            <div
-              className="profile-avatar-upload"
-              style={{
-                marginTop: "1.2rem",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "0.9rem",
-              }}
-            >
-              {/* Círculo clickable con imagen o texto */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="profile-avatar__button"
-                style={{
-                  position: "relative",
-                  width: "180px",
-                  height: "180px",
-                  borderRadius: "50%",
-                  border: "3px solid rgba(232, 154, 169, 0.7)",
-                  overflow: "hidden",
-                  background:
-                    "radial-gradient(circle at top, #ffeef5 0, #fff7f3 55%, #ffe3ee 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-              >
-                {formData.avatar ? (
-                  <img
-                    src={formData.avatar}
-                    alt={`Foto de perfil de ${
-                      formData.fullName || user.fullName
-                    }`}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                    }}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      fontSize: "0.9rem",
-                      color: "#c87486",
-                      textAlign: "center",
-                      padding: "0 1.2rem",
-                    }}
-                  >
-                    Foto de perfil
-                  </span>
-                )}
+  <div className="profile-avatar-upload">
+    {/* Círculo clickable con imagen o texto */}
+    <button
+      type="button"
+      onClick={() => fileInputRef.current?.click()}
+      className="profile-avatar__button"
+    >
+      {formData.avatar ? (
+        <img
+          src={formData.avatar}
+          alt={`Foto de perfil de ${
+            formData.fullName || user.fullName
+          }`}
+          className="profile-avatar__image"
+        />
+      ) : (
+        <span className="profile-avatar__placeholder">
+          Foto de perfil
+        </span>
+      )}
 
-                {/* Icono de lápiz flotando abajo a la derecha */}
-                <span
-                  className="profile-avatar__edit-icon"
-                  style={{
-                    position: "absolute",
-                    right: "10px",
-                    bottom: "10px",
-                    width: "38px",
-                    height: "38px",
-                    borderRadius: "50%",
-                    backgroundColor: "#ffffff",
-                    boxShadow: "0 4px 10px rgba(15, 23, 42, 0.3)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#c87486",
-                    fontSize: "0.95rem",
-                  }}
-                >
-                  <i className="fa-solid fa-pen"></i>
-                </span>
-              </button>
+      {/* Icono de lápiz flotando abajo a la derecha */}
+      <span className="profile-avatar__edit-icon">
+        <i className="fa-solid fa-pen"></i>
+      </span>
+    </button>
 
-              {/* Input real, oculto */}
-              <input
-                ref={fileInputRef}
-                id="avatar"
-                name="avatar"
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={handleAvatarChange}
-              />
+    {/* Input real, oculto */}
+    <input
+      ref={fileInputRef}
+      id="avatar"
+      name="avatar"
+      type="file"
+      accept="image/*"
+      onChange={handleAvatarChange}
+      className="profile-avatar__file-input"
+    />
 
-              <p className="form__hint" style={{ fontSize: "0.8rem" }}>
-                Formato recomendado: JPG o PNG, máximo 5&nbsp;MB.
-              </p>
-            </div>
-          </aside>
+    <p className="form__hint profile-avatar-upload__hint">
+      Formato recomendado: JPG o PNG, máximo 5&nbsp;MB.
+    </p>
+  </div>
+</aside>
+
         </div>
       </main>
     </div>
