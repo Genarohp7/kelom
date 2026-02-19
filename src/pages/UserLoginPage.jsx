@@ -1,29 +1,33 @@
-// src/pages/UserLoginPage.jsx
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { getCurrentUser, loginUser } from "../utils/userStorage.js";
+import { getToken, login, fetchMe } from "../utils/auth.js";
 
 function UserLoginPage() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const u = getCurrentUser();
-    if (u) navigate("/perfil");
+    // Si hay token, intenta validar y manda a perfil
+    const token = getToken();
+    if (!token) return;
+
+    fetchMe()
+      .then(() => navigate("/perfil"))
+      .catch(() => {
+        // token malo: lo ignoramos (logout lo haremos en perfil si quieres)
+      });
   }, [navigate]);
 
   function handleChange(e) {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((p) => ({ ...p, [name]: value }));
     setError("");
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError("");
 
     const email = form.email.trim();
     const password = form.password;
@@ -34,14 +38,10 @@ function UserLoginPage() {
     }
 
     try {
-      setLoading(true);
-      await loginUser(email, password);
+      await login(email, password);
       navigate("/perfil");
     } catch (err) {
-      console.error(err);
-      setError(err?.message || "Correo o contraseña incorrectos.");
-    } finally {
-      setLoading(false);
+      setError(err.message || "No se pudo iniciar sesión.");
     }
   }
 
@@ -93,14 +93,9 @@ function UserLoginPage() {
               )}
 
               <div className="auth-card__actions">
-                <button
-                  type="submit"
-                  className="btn btn--primary"
-                  disabled={loading}
-                >
-                  {loading ? "Entrando..." : "Acceder"}
+                <button type="submit" className="btn btn--primary">
+                  Acceder
                 </button>
-
                 <button
                   type="button"
                   className="btn btn--ghost"

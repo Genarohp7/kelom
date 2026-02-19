@@ -1,21 +1,28 @@
 // src/pages/Business/Pages/UserRegisterCompletePage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+
 import {
   clearPendingRegistration,
   getPendingRegistration,
-  getCurrentUser,
-  registerUserFinal,
 } from "../../../utils/userStorage.js";
+
+import { getToken, fetchMe, registerUser, login } from "../../../utils/auth.js";
 
 function UserRegisterCompletePage() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  // Si ya está logueado (por ejemplo, ya se registró), mándalo al perfil
+  // Si ya hay sesión (token), valida y manda al perfil
   useEffect(() => {
-    const u = getCurrentUser();
-    if (u) navigate("/perfil");
+    const token = getToken();
+    if (!token) return;
+
+    fetchMe()
+      .then(() => navigate("/perfil"))
+      .catch(() => {
+        // token inválido: lo ignoramos aquí
+      });
   }, [navigate]);
 
   const pending = getPendingRegistration();
@@ -42,6 +49,7 @@ function UserRegisterCompletePage() {
 
   const [passwordError, setPasswordError] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Si no hay pending, regresa a /registro
   useEffect(() => {
@@ -94,10 +102,13 @@ function UserRegisterCompletePage() {
 
   async function handleSubmit(evt) {
     evt.preventDefault();
+    if (isSubmitting) return;
 
-    const { password, confirmPassword } = formData;
+    const email = formData.email?.trim();
+    const password = formData.password;
+    const confirmPassword = formData.confirmPassword;
 
-    // Aquí SÍ exigimos contraseña (es el “compromiso” del paso 2)
+    // Paso 2: aquí SÍ exigimos contraseña
     if (!password || !confirmPassword) {
       setPasswordError("Escribe y confirma tu contraseña.");
       return;
@@ -112,26 +123,39 @@ function UserRegisterCompletePage() {
     }
 
     try {
-      // Creamos el usuario real en backend
-      await registerUserFinal({
-        email: formData.email,
+      setIsSubmitting(true);
+      setSubmitError("");
+
+      // 1) Crear usuario en DB (Postgres)
+      await registerUser({
+        email,
         password,
         name: formData.fullName,
       });
 
-      // Ya no necesitamos el pending
+      // 2) Login para obtener JWT y guardar sesión en localStorage
+      await login(email, password);
+
+      // 3) Ya no necesitamos el pending
       clearPendingRegistration();
 
-      // De momento mandamos a perfil
+      // 4) Perfil
       navigate("/perfil");
     } catch (err) {
       console.error(err);
-      // Mensajes típicos del backend
-      if (err?.status === 409) {
+
+      // Mensajes típicos (según lo que regrese tu backend)
+      const msg = String(err?.message || "");
+
+      if (msg.toLowerCase().includes("ya existe") || msg.includes("409")) {
         setSubmitError("Ese correo ya existe. Intenta iniciar sesión.");
-        return;
+      } else if (msg.toLowerCase().includes("cors")) {
+        setSubmitError("Bloqueado por CORS. Revisa allowedOrigins en el backend.");
+      } else {
+        setSubmitError(msg || "No se pudo completar el registro.");
       }
-      setSubmitError(err?.message || "No se pudo completar el registro.");
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -396,8 +420,8 @@ function UserRegisterCompletePage() {
               )}
 
               <div className="form__actions">
-                <button type="submit" className="btn btn--primary">
-                  Crear cuenta
+                <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
+                  {isSubmitting ? "Creando..." : "Crear cuenta"}
                 </button>
                 <Link to="/" className="btn btn--ghost">
                   Cancelar
