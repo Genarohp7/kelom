@@ -1,23 +1,41 @@
+// src/pages/UserLoginPage.jsx
 import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { getToken, login, fetchMe } from "../utils/auth.js";
+import { getToken, login, fetchMe, logout } from "../utils/auth.js";
 
 function UserLoginPage() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Si hay token, intenta validar y manda a perfil
-    const token = getToken();
-    if (!token) return;
+    let cancelled = false;
 
-    fetchMe()
-      .then(() => navigate("/perfil"))
-      .catch(() => {
-        // token malo: lo ignoramos (logout lo haremos en perfil si quieres)
-      });
+    async function checkSession() {
+      const token = getToken();
+      if (!token) {
+        if (!cancelled) setIsCheckingSession(false);
+        return;
+      }
+
+      try {
+        await fetchMe(); // valida token real contra backend
+        if (!cancelled) navigate("/perfil", { replace: true });
+      } catch {
+        // token inválido/expirado o backend no responde
+        logout(); // 👈 mata token zombie
+      } finally {
+        if (!cancelled) setIsCheckingSession(false);
+      }
+    }
+
+    checkSession();
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   function handleChange(e) {
@@ -28,6 +46,7 @@ function UserLoginPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    setError("");
 
     const email = form.email.trim();
     const password = form.password;
@@ -38,11 +57,28 @@ function UserLoginPage() {
     }
 
     try {
-      await login(email, password);
-      navigate("/perfil");
+      setIsSubmitting(true);
+      await login(email, password); // POST /auth/login + guarda token
+      navigate("/perfil", { replace: true });
     } catch (err) {
-      setError(err.message || "No se pudo iniciar sesión.");
+      setError(err?.message || "No se pudo iniciar sesión.");
+    } finally {
+      setIsSubmitting(false);
     }
+  }
+
+  if (isCheckingSession) {
+    return (
+      <div className="user-auth">
+        <main className="business-auth__content">
+          <div className="business-auth__container">
+            <section className="auth-card">
+              <p style={{ padding: "1.5rem" }}>Verificando sesión…</p>
+            </section>
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (
@@ -68,6 +104,8 @@ function UserLoginPage() {
                   placeholder="tucorreo@ejemplo.com"
                   value={form.email}
                   onChange={handleChange}
+                  disabled={isSubmitting}
+                  autoComplete="email"
                 />
               </div>
 
@@ -83,6 +121,8 @@ function UserLoginPage() {
                   placeholder="Tu contraseña"
                   value={form.password}
                   onChange={handleChange}
+                  disabled={isSubmitting}
+                  autoComplete="current-password"
                 />
               </div>
 
@@ -93,12 +133,18 @@ function UserLoginPage() {
               )}
 
               <div className="auth-card__actions">
-                <button type="submit" className="btn btn--primary">
-                  Acceder
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Accediendo…" : "Acceder"}
                 </button>
+
                 <button
                   type="button"
                   className="btn btn--ghost"
+                  disabled={isSubmitting}
                   onClick={() =>
                     alert("En la versión actual aún no recuperamos contraseñas.")
                   }
@@ -108,7 +154,9 @@ function UserLoginPage() {
               </div>
 
               <div className="auth-card__links">
-                <span className="auth-card__link--muted">¿Aún no tienes cuenta?</span>
+                <span className="auth-card__link--muted">
+                  ¿Aún no tienes cuenta?
+                </span>
                 <Link to="/registro" className="auth-card__link">
                   Crear cuenta
                 </Link>

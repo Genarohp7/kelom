@@ -61,15 +61,27 @@ function UserProfilePage() {
       return;
     }
 
-    setIsLoadingUser(true);
+    let cancelled = false;
+
     fetchMe()
-      .then((me) => setUser(me))
+      .then((me) => {
+        if (cancelled) return;
+        setUser(me);
+      })
       .catch(() => {
         // token inválido/expirado o backend no responde
         logout();
+        if (cancelled) return;
         navigate("/acceso", { replace: true });
       })
-      .finally(() => setIsLoadingUser(false));
+      .finally(() => {
+        if (cancelled) return;
+        setIsLoadingUser(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   // ======== HOOKS DEMO (siempre arriba, sin condicionales) ========
