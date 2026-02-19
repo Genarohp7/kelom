@@ -36,7 +36,8 @@ app.get("/health", async (req, res) => {
   try {
     await pool.query("SELECT 1");
     res.json({ status: "ok", message: "Kelom API funcionando", db: "ok" });
-  } catch (e) {
+  } catch {
+    // no necesitamos el error aquí
     res.status(500).json({ status: "error", message: "DB no disponible" });
   }
 });
@@ -65,11 +66,11 @@ app.post("/users", async (req, res) => {
     const { password_hash: _PASSWORD_HASH, ...safeUser } = result.rows[0];
 
     return res.status(201).json({ data: safeUser });
-  } catch (e) {
-    if (e?.code === "23505") {
+  } catch (err) {
+    if (err?.code === "23505") {
       return res.status(409).json({ error: "Ese email ya existe" });
     }
-    console.error(e);
+    console.error(err);
     return res.status(500).json({ error: "Error interno" });
   }
 });
