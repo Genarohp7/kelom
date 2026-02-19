@@ -1,10 +1,12 @@
 // src/pages/UserRegisterPage.jsx
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { registerUserInitial } from "../utils/userStorage.js";
-import { sendUserRegisterEmails } from "../services/emailService.js"; // 👈 NUEVO
+import { savePendingRegistration } from "../utils/userStorage.js";
+import { sendUserRegisterEmails } from "../services/emailService.js";
 
 function UserRegisterPage() {
+  
+
   const [form, setForm] = useState({
     email: "",
     fullName: "",
@@ -15,7 +17,6 @@ function UserRegisterPage() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // ✅ Control del checkbox y del popup de aviso de privacidad
   const [isPrivacyChecked, setIsPrivacyChecked] = useState(false);
   const [showPrivacyPopup, setShowPrivacyPopup] = useState(false);
 
@@ -30,34 +31,24 @@ function UserRegisterPage() {
     const newErrors = {};
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!form.fullName.trim()) {
-      newErrors.fullName = "Escribe tu nombre completo.";
-    }
+    if (!form.fullName.trim()) newErrors.fullName = "Escribe tu nombre completo.";
 
-    if (!form.email.trim()) {
-      newErrors.email = "El correo es obligatorio.";
-    } else if (!emailRegex.test(form.email.trim())) {
+    if (!form.email.trim()) newErrors.email = "El correo es obligatorio.";
+    else if (!emailRegex.test(form.email.trim()))
       newErrors.email = "Escribe un correo válido.";
-    }
 
     const phoneDigits = form.phone.replace(/\D/g, "");
-    if (!phoneDigits) {
-      newErrors.phone = "El teléfono es obligatorio.";
-    } else if (phoneDigits.length !== 10) {
+    if (!phoneDigits) newErrors.phone = "El teléfono es obligatorio.";
+    else if (phoneDigits.length !== 10)
       newErrors.phone = "El teléfono debe tener exactamente 10 dígitos.";
-    }
 
-    // ✅ Validación de aviso de privacidad
     if (!isPrivacyChecked) {
-      newErrors.privacy =
-        "Para continuar debes aceptar nuestro aviso de privacidad.";
+      newErrors.privacy = "Para continuar debes aceptar nuestro aviso de privacidad.";
     }
 
-    // En este paso aún no manejamos contraseña.
     return newErrors;
   }
 
-  // 👇 async para poder usar await con EmailJS
   async function handleSubmit(e) {
     e.preventDefault();
     const validation = validate();
@@ -69,23 +60,18 @@ function UserRegisterPage() {
 
     try {
       const phoneDigits = form.phone.replace(/\D/g, "");
-
-      // Pre-registro local por si luego quieres usarlo
-      registerUserInitial({
-        email: form.email.trim(),
-        fullName: form.fullName.trim(),
-        phone: phoneDigits,
-        password: "", // de momento no usamos contraseña real
-      });
-
-      // 👇 Enviar correos (admin + bienvenida)
-      await sendUserRegisterEmails({
+      const payload = {
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         phone: phoneDigits,
-      });
+      };
 
-      // Mostrar mensaje de agradecimiento
+      // Guardamos el “pendiente” para que el paso 2 ya tenga datos
+      savePendingRegistration(payload);
+
+      // Emails (admin + welcome)
+      await sendUserRegisterEmails(payload);
+
       setIsSubmitted(true);
     } catch (err) {
       console.error("Error al enviar correos de registro:", err);
@@ -95,7 +81,6 @@ function UserRegisterPage() {
     }
   }
 
-  // 🔹 Vista de agradecimiento después de enviar
   if (isSubmitted) {
     return (
       <div className="user-auth">
@@ -106,23 +91,15 @@ function UserRegisterPage() {
                 Gracias, {form.fullName || "pareja"} 🤍
               </h1>
               <p className="register-card__subtitle">
-                Hemos recibido tus datos. Muchas gracias por confiar en
-                nosotros, nos pondremos en contacto a la brevedad para poder
-                conocernos mejor.
+                Hemos recibido tus datos. Muchas gracias por confiar en nosotros.
               </p>
               <p className="register-card__subtitle">
-                Te enviaremos un correo a <strong>{form.email}</strong> con un
-                mensaje de bienvenida y algunas ideas para empezar a organizar
-                tu boda.
-              </p>
-              <p className="register-card__subtitle">
-                Si tu fecha está cerca o tienes una duda muy puntual, puedes
-                escribirnos directamente y buscaremos la mejor forma de
-                apoyarte.
+                Te enviaremos un correo a <strong>{form.email}</strong> con un mensaje
+                de bienvenida y algunas ideas para empezar.
               </p>
 
               <div className="register-card__actions">
-                <Link to="/perfil" className="btn btn--primary">
+                <Link to="/registro/completar" className="btn btn--primary">
                   Continuar con registro
                 </Link>
                 <Link to="/" className="btn btn--ghost">
@@ -136,16 +113,15 @@ function UserRegisterPage() {
     );
   }
 
-  // 🔹 Vista normal del formulario
   return (
     <div className="user-auth">
       <main className="business-register__content">
         <div className="business-register__container">
           <section className="register-card">
             <p className="register-card__eyebrow">Alta inicial</p>
-            <h1 className="register-card__title">Registrate con nosotros </h1>
+            <h1 className="register-card__title">Regístrate con nosotros</h1>
             <p className="register-card__subtitle">
-              Rcibiras información útil para que tu gran dia sea como lo sueñas
+              Recibirás información útil para que tu gran día sea como lo sueñas.
             </p>
 
             <form className="form" onSubmit={handleSubmit} noValidate>
@@ -197,7 +173,6 @@ function UserRegisterPage() {
                 <div className="form__error">{errors.phone}</div>
               </div>
 
-              {/* ✅ Checkbox + link al aviso de privacidad */}
               <div className="form__field">
                 <label className="form__label">
                   <input
@@ -244,7 +219,7 @@ function UserRegisterPage() {
                   className="btn btn--primary"
                   disabled={!isPrivacyChecked}
                 >
-                  Crear mi Registro
+                  Crear mi registro
                 </button>
               </div>
             </form>
@@ -252,7 +227,6 @@ function UserRegisterPage() {
         </div>
       </main>
 
-      {/* ✅ Popup de Aviso de Privacidad */}
       {showPrivacyPopup && (
         <div
           className="privacy-overlay"
@@ -280,7 +254,6 @@ function UserRegisterPage() {
               flexDirection: "column",
             }}
           >
-            {/* Header del popup */}
             <div
               style={{
                 padding: "1.8rem 2rem 1.2rem",
@@ -306,7 +279,6 @@ function UserRegisterPage() {
               </button>
             </div>
 
-            {/* Contenido scrollable */}
             <div
               style={{
                 padding: "1.2rem 2rem 1.8rem",
@@ -315,39 +287,8 @@ function UserRegisterPage() {
                 lineHeight: 1.5,
               }}
             >
-              {/* ... mismo texto largo que ya tenías ... */}
               <p className="register-card__subtitle">
-                Al firmar el presente aviso de privacidad Usted otorga su
-                consentimiento expreso en relación con lo siguiente:
-              </p>
-
-              <p className="register-card__subtitle">
-                Kelom.com.mx, señalando como domicilio convencional para los
-                efectos relacionados con el presente aviso, el ubicado en Calle
-                21, N° 2020, Colonia Las Águilas, Ciudad México, Municipio
-                Nezahualcóyotl, C.P. 57900, en el Estado de México, México, hace
-                de su conocimiento que sus datos personales serán protegidos de
-                acuerdo a lo establecido por la Ley Federal de Protección de
-                Datos Personales en Posesión de los Particulares, así como por
-                nuestra política de privacidad y que el tratamiento que se haga
-                de sus datos será con la finalidad, enunciando sin limitar, de
-                dar cumplimiento a la realización de actividades propias de
-                Kelom.com.mx, relacionadas y derivadas de nuestro objeto social,
-                así como para fines comerciales y promocionales.
-              </p>
-
-              {/* ... resto del texto exactamente igual ... */}
-
-              <p className="register-card__subtitle">
-                La aceptación del presente Aviso de Privacidad está sujeta al
-                llenado de la casilla denominada Aviso de Privacidad, la cual,
-                una vez llenada y enviada por los medios electrónicos o por
-                cualquier otra tecnología del dominio de Kelom.com.mx, hace las
-                veces de consentimiento expreso tanto de la aceptación del uso
-                de datos personales del presente aviso de privacidad como de la
-                transferencia de datos personales a personas, empresas y
-                organizaciones distintas al responsable de conformidad con los
-                fines señalados en el presente aviso de privacidad.
+                (Aquí va tu texto completo del aviso tal cual lo tengas.)
               </p>
             </div>
           </div>

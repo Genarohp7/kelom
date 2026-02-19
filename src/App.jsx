@@ -1,5 +1,7 @@
 // src/App.jsx
 import { Routes, Route, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+
 import Header from "./Components/Header.jsx";
 import Footer from "./Components/Footer.jsx";
 import HomePage from "./pages/HomePage.jsx";
@@ -17,8 +19,8 @@ import VenueDetailPage from "./pages/VenueDetailPage.jsx";
 
 // Formularios y páginas de parejas
 import UserLoginPage from "./pages/UserLoginPage.jsx";
-import UserRegisterPage from "../src/pages/UserRegisterPage.jsx";
-import UserRegisterCompletePage from "../src/pages/Business/Pages/UserRegisterCompletePage.jsx";
+import UserRegisterPage from "./pages/UserRegisterPage.jsx";
+import UserRegisterCompletePage from "./pages/Business/Pages/UserRegisterCompletePage.jsx";
 import UserProfilePage from "./pages/UserProfilePage.jsx";
 
 // Scroll al cambiar de ruta
@@ -27,6 +29,19 @@ import ScrollToTop from "./Components/ScrollToTop.jsx";
 function App() {
   const location = useLocation();
   const isBusinessArea = location.pathname.startsWith("/empresas");
+
+  // ✅ Hook SIEMPRE dentro del componente
+  useEffect(() => {
+    // Toma la URL de tu API desde .env / .env.production
+    // Ej: VITE_API_URL=https://api.kelom.com.mx
+    const apiBase = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
+
+    // Chequeo simple de salud (opcional, pero útil)
+    fetch(`${apiBase}/health`, { method: "GET" })
+      .then((r) => r.json())
+      .then((data) => console.log("API HEALTH:", data))
+      .catch((err) => console.error("API HEALTH ERROR:", err));
+  }, []);
 
   return (
     <div className="page">
@@ -47,23 +62,14 @@ function App() {
           {/* Flujo parejas (usuarios finales) */}
           <Route path="/acceso" element={<UserLoginPage />} />
           <Route path="/registro" element={<UserRegisterPage />} />
-          <Route
-            path="/registro/completar"
-            element={<UserRegisterCompletePage />}
-          />
+          <Route path="/registro/completar" element={<UserRegisterCompletePage />} />
           <Route path="/perfil" element={<UserProfilePage />} />
 
           {/* Área de empresas (usa header/footer propios) */}
           <Route path="/empresas" element={<BusinessAreaPage />} />
-          <Route
-            path="/empresas/beneficios"
-            element={<BusinessBenefitsPage />}
-          />
+          <Route path="/empresas/beneficios" element={<BusinessBenefitsPage />} />
           <Route path="/empresas/acceso" element={<BusinessLoginPage />} />
-          <Route
-            path="/empresas/registro"
-            element={<BusinessRegisterPage />}
-          />
+          <Route path="/empresas/registro" element={<BusinessRegisterPage />} />
 
           {/* Detalle de proveedor (venues) */}
           <Route path="/proveedores/:id" element={<VenueDetailPage />} />

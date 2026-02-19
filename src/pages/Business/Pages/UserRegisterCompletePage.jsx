@@ -1,54 +1,53 @@
-// src/pages/UserRegisterCompletePage.jsx
-import { useEffect, useMemo, useState, useRef } from "react";
+// src/pages/Business/Pages/UserRegisterCompletePage.jsx
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  clearPendingRegistration,
+  getPendingRegistration,
   getCurrentUser,
-  updateCurrentUserProfile,
-} from "../../../utils/userStorage";
+  registerUserFinal,
+} from "../../../utils/userStorage.js";
 
 function UserRegisterCompletePage() {
   const navigate = useNavigate();
-
-  // 1) Leemos al usuario UNA sola vez, fuera del efecto
-  const [user] = useState(() => getCurrentUser());
-
-  // 2) Inicializamos el formulario con los datos del usuario (si existen)
-  const [formData, setFormData] = useState(() => ({
-    email: user?.email || "",
-    fullName: user?.fullName || "",
-    phone: user?.phone || "",
-    gender: user?.gender || "",
-    partnerName: user?.partnerName || "",
-    city: user?.city || "",
-    weddingDate: user?.weddingDate || "",
-    guests: user?.guests || "",
-    budgetRange: user?.budgetRange || "",
-    ceremonyType: user?.ceremonyType || "",
-    receptionType: user?.receptionType || "",
-    supportFocus: user?.supportFocus || "",
-    biggestDoubt: user?.biggestDoubt || "",
-    contactPreference: user?.contactPreference || "",
-    // 🔐 campos de contraseña (no se precargan)
-    password: "",
-    confirmPassword: "",
-    // 📸 foto de perfil
-    avatar: user?.avatar || "",
-  }));
-
-  // Error de contraseña
-  const [passwordError, setPasswordError] = useState("");
-
-  // Ref para abrir el input de archivo desde el círculo
   const fileInputRef = useRef(null);
 
-  // 3) El efecto SOLO redirige, no hace setState
+  // Si ya está logueado (por ejemplo, ya se registró), mándalo al perfil
   useEffect(() => {
-    if (!user) {
-      navigate("/registro");
-    }
-  }, [user, navigate]);
+    const u = getCurrentUser();
+    if (u) navigate("/perfil");
+  }, [navigate]);
 
-  // 4) Cálculo del porcentaje de completitud del perfil
+  const pending = getPendingRegistration();
+
+  const [formData, setFormData] = useState(() => ({
+    email: pending?.email || "",
+    fullName: pending?.fullName || "",
+    phone: pending?.phone || "",
+    gender: "",
+    partnerName: "",
+    city: "",
+    weddingDate: "",
+    guests: "",
+    budgetRange: "",
+    ceremonyType: "",
+    receptionType: "",
+    supportFocus: "",
+    biggestDoubt: "",
+    contactPreference: "",
+    password: "",
+    confirmPassword: "",
+    avatar: "",
+  }));
+
+  const [passwordError, setPasswordError] = useState("");
+  const [submitError, setSubmitError] = useState("");
+
+  // Si no hay pending, regresa a /registro
+  useEffect(() => {
+    if (!pending) navigate("/registro");
+  }, [pending, navigate]);
+
   const completion = useMemo(() => {
     const keys = [
       "email",
@@ -70,23 +69,17 @@ function UserRegisterCompletePage() {
     return Math.round((filled / keys.length) * 100);
   }, [formData]);
 
-  if (!user) return null;
-
   function handleChange(evt) {
     const { name, value } = evt.target;
 
-    // Si está tocando la contraseña, limpiamos error
     if (name === "password" || name === "confirmPassword") {
       setPasswordError("");
     }
+    setSubmitError("");
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   }
 
-  // 📸 Manejo de subida de foto
   function handleAvatarChange(evt) {
     const file = evt.target.files?.[0];
     if (!file) return;
@@ -94,52 +87,58 @@ function UserRegisterCompletePage() {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result;
-      setFormData((prev) => ({
-        ...prev,
-        avatar: dataUrl,
-      }));
+      setFormData((prev) => ({ ...prev, avatar: dataUrl }));
     };
     reader.readAsDataURL(file);
   }
 
-  function handleSubmit(evt) {
+  async function handleSubmit(evt) {
     evt.preventDefault();
 
-    const { password, confirmPassword, ...rest } = formData;
-    let dataToSave = rest;
+    const { password, confirmPassword } = formData;
 
-    // Si el usuario escribió algo en alguno de los dos campos,
-    // validamos y guardamos la contraseña.
-    if (password || confirmPassword) {
-      if (!password || !confirmPassword) {
-        setPasswordError("Escribe y confirma tu contraseña.");
-        return;
-      }
-
-      if (password.length < 5) {
-        setPasswordError("La contraseña debe tener al menos 5 caracteres.");
-        return;
-      }
-
-      if (password !== confirmPassword) {
-        setPasswordError("Las contraseñas no coinciden.");
-        return;
-      }
-
-      dataToSave = { ...rest, password };
+    // Aquí SÍ exigimos contraseña (es el “compromiso” del paso 2)
+    if (!password || !confirmPassword) {
+      setPasswordError("Escribe y confirma tu contraseña.");
+      return;
+    }
+    if (password.length < 5) {
+      setPasswordError("La contraseña debe tener al menos 5 caracteres.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setPasswordError("Las contraseñas no coinciden.");
+      return;
     }
 
     try {
-      updateCurrentUserProfile(dataToSave);
+      // Creamos el usuario real en backend
+      await registerUserFinal({
+        email: formData.email,
+        password,
+        name: formData.fullName,
+      });
+
+      // Ya no necesitamos el pending
+      clearPendingRegistration();
+
+      // De momento mandamos a perfil
       navigate("/perfil");
     } catch (err) {
-      alert(err.message || "No se pudo guardar tu información.");
+      console.error(err);
+      // Mensajes típicos del backend
+      if (err?.status === 409) {
+        setSubmitError("Ese correo ya existe. Intenta iniciar sesión.");
+        return;
+      }
+      setSubmitError(err?.message || "No se pudo completar el registro.");
     }
   }
 
+  if (!pending) return null;
+
   return (
     <div className="user-register-complete">
-      {/* Header del flujo de registro de usuari@s */}
       <header className="business-auth__header">
         <div className="business-auth__header-inner container">
           <span className="business-auth__logo-text">Kelom · Registro</span>
@@ -149,27 +148,21 @@ function UserRegisterCompletePage() {
 
       <main className="business-profile__content">
         <div className="business-profile__container profile-layout">
-          {/* Columna izquierda: formulario */}
           <section className="profile-card">
             <p className="profile-card__eyebrow">Detalles de tu boda</p>
 
-            {/* Título + porcentaje de completado */}
             <div className="profile-card__title-row">
-              <h1 className="profile-card__title">
-                Completa tu ficha de novi@s
-              </h1>
+              <h1 className="profile-card__title">Completa tu ficha de novi@s</h1>
               <span className="profile-card__completion">
                 Perfil completado: {completion}%
               </span>
             </div>
 
             <p className="profile-card__subtitle">
-              Mientras más información tengamos, mejor podremos ayudarte a
-              encontrar lugares y proveedores que encajen con lo que buscas.
+              Mientras más información tengamos, mejor podremos ayudarte.
             </p>
 
             <form className="form form--grid" onSubmit={handleSubmit}>
-              {/* Información básica */}
               <div className="form__field form__field--full">
                 <label className="form__label" htmlFor="fullName">
                   Nombre completo
@@ -181,7 +174,6 @@ function UserRegisterCompletePage() {
                   className="form__input"
                   value={formData.fullName}
                   onChange={handleChange}
-                  placeholder="Tu nombre y apellido"
                 />
               </div>
 
@@ -196,7 +188,6 @@ function UserRegisterCompletePage() {
                   className="form__input"
                   value={formData.partnerName}
                   onChange={handleChange}
-                  placeholder="Nombre de tu pareja"
                 />
               </div>
 
@@ -218,7 +209,6 @@ function UserRegisterCompletePage() {
                 </select>
               </div>
 
-              {/* Detalles de la boda */}
               <div className="form__field">
                 <label className="form__label" htmlFor="city">
                   Ciudad donde planean casarse
@@ -230,7 +220,6 @@ function UserRegisterCompletePage() {
                   className="form__input"
                   value={formData.city}
                   onChange={handleChange}
-                  placeholder="Ej. CDMX, Querétaro, Puebla..."
                 />
               </div>
 
@@ -250,7 +239,7 @@ function UserRegisterCompletePage() {
 
               <div className="form__field">
                 <label className="form__label" htmlFor="guests">
-                  Número aproximado de invitad@s
+                  Invitad@s aprox.
                 </label>
                 <input
                   id="guests"
@@ -260,13 +249,12 @@ function UserRegisterCompletePage() {
                   className="form__input"
                   value={formData.guests}
                   onChange={handleChange}
-                  placeholder="Ej. 150"
                 />
               </div>
 
               <div className="form__field">
                 <label className="form__label" htmlFor="budgetRange">
-                  Presupuesto aproximado
+                  Presupuesto aprox.
                 </label>
                 <select
                   id="budgetRange"
@@ -282,7 +270,6 @@ function UserRegisterCompletePage() {
                 </select>
               </div>
 
-              {/* Ceremonia y recepción */}
               <div className="form__field">
                 <label className="form__label" htmlFor="ceremonyType">
                   Tipo de ceremonia
@@ -304,7 +291,7 @@ function UserRegisterCompletePage() {
 
               <div className="form__field">
                 <label className="form__label" htmlFor="receptionType">
-                  Tipo de recepción que imaginan
+                  Tipo de recepción
                 </label>
                 <select
                   id="receptionType"
@@ -319,14 +306,13 @@ function UserRegisterCompletePage() {
                   <option value="hacienda">Hacienda</option>
                   <option value="playa">Playa</option>
                   <option value="restaurante">Restaurante</option>
-                  <option value="otro">Otro formato</option>
+                  <option value="otro">Otro</option>
                 </select>
               </div>
 
-              {/* Cómo podemos ayudar */}
               <div className="form__field form__field--full">
                 <label className="form__label" htmlFor="supportFocus">
-                  ¿En qué te gustaría que te apoyáramos más?
+                  ¿En qué te gustaría apoyo?
                 </label>
                 <textarea
                   id="supportFocus"
@@ -334,13 +320,12 @@ function UserRegisterCompletePage() {
                   className="form__textarea"
                   value={formData.supportFocus}
                   onChange={handleChange}
-                  placeholder="Ej. ayuda para elegir lugar, organizar el presupuesto, coordinar proveedores..."
                 />
               </div>
 
               <div className="form__field form__field--full">
                 <label className="form__label" htmlFor="biggestDoubt">
-                  ¿Cuál es tu duda más grande sobre el gran día?
+                  Tu duda más grande
                 </label>
                 <textarea
                   id="biggestDoubt"
@@ -348,13 +333,12 @@ function UserRegisterCompletePage() {
                   className="form__textarea"
                   value={formData.biggestDoubt}
                   onChange={handleChange}
-                  placeholder="Cuéntanos qué te preocupa o qué te tiene más en duda."
                 />
               </div>
 
               <div className="form__field form__field--full">
                 <label className="form__label" htmlFor="contactPreference">
-                  ¿Cómo prefieres que te contactemos?
+                  Preferencia de contacto
                 </label>
                 <select
                   id="contactPreference"
@@ -364,25 +348,24 @@ function UserRegisterCompletePage() {
                   onChange={handleChange}
                 >
                   <option value="">Sin preferencia</option>
-                  <option value="email">Correo electrónico</option>
-                  <option value="phone">Llamada telefónica</option>
+                  <option value="email">Correo</option>
+                  <option value="phone">Llamada</option>
                   <option value="whatsapp">WhatsApp</option>
                 </select>
               </div>
 
-              {/* 🔐 Contraseña */}
               <div className="form__field">
                 <label className="form__label" htmlFor="password">
-                  Contraseña para tu cuenta
+                  Contraseña
                 </label>
                 <input
                   id="password"
                   name="password"
                   type="password"
                   className="form__input"
-                  placeholder="Mínimo 5 caracteres"
                   value={formData.password}
                   onChange={handleChange}
+                  placeholder="Mínimo 5 caracteres"
                 />
               </div>
 
@@ -395,7 +378,6 @@ function UserRegisterCompletePage() {
                   name="confirmPassword"
                   type="password"
                   className="form__input"
-                  placeholder="Repite tu contraseña"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                 />
@@ -407,69 +389,63 @@ function UserRegisterCompletePage() {
                 </div>
               )}
 
-              {/* Botones */}
+              {submitError && (
+                <div className="form__error" style={{ marginTop: "0.6rem" }}>
+                  {submitError}
+                </div>
+              )}
+
               <div className="form__actions">
                 <button type="submit" className="btn btn--primary">
-                  Guardar información
+                  Crear cuenta
                 </button>
-                <Link to="/perfil" className="btn btn--ghost">
-                  Guardar y ver mi perfil
+                <Link to="/" className="btn btn--ghost">
+                  Cancelar
                 </Link>
               </div>
             </form>
           </section>
 
-         {/* Columna derecha: foto de perfil */}
-<aside className="preview-card">
-  <h2 className="preview-card__title">Foto de perfil</h2>
-  <p className="preview-card__subtitle">
-    Agrega una foto para que sea más fácil reconocerte en tu ficha.
-  </p>
+          <aside className="preview-card">
+            <h2 className="preview-card__title">Foto de perfil</h2>
+            <p className="preview-card__subtitle">Agrega una foto si quieres.</p>
 
-  <div className="profile-avatar-upload">
-    {/* Círculo clickable con imagen o texto */}
-    <button
-      type="button"
-      onClick={() => fileInputRef.current?.click()}
-      className="profile-avatar__button"
-    >
-      {formData.avatar ? (
-        <img
-          src={formData.avatar}
-          alt={`Foto de perfil de ${
-            formData.fullName || user.fullName
-          }`}
-          className="profile-avatar__image"
-        />
-      ) : (
-        <span className="profile-avatar__placeholder">
-          Foto de perfil
-        </span>
-      )}
+            <div className="profile-avatar-upload">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="profile-avatar__button"
+              >
+                {formData.avatar ? (
+                  <img
+                    src={formData.avatar}
+                    alt={`Foto de perfil de ${formData.fullName || "usuario"}`}
+                    className="profile-avatar__image"
+                  />
+                ) : (
+                  <span className="profile-avatar__placeholder">Foto de perfil</span>
+                )}
 
-      {/* Icono de lápiz flotando abajo a la derecha */}
-      <span className="profile-avatar__edit-icon">
-        <i className="fa-solid fa-pen"></i>
-      </span>
-    </button>
+                <span className="profile-avatar__edit-icon">
+                  <i className="fa-solid fa-pen"></i>
+                </span>
+              </button>
 
-    {/* Input real, oculto */}
-    <input
-      ref={fileInputRef}
-      id="avatar"
-      name="avatar"
-      type="file"
-      accept="image/*"
-      onChange={handleAvatarChange}
-      className="profile-avatar__file-input"
-    />
+              <input
+                ref={fileInputRef}
+                id="avatar"
+                name="avatar"
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="profile-avatar__file-input"
+              />
 
-    <p className="form__hint profile-avatar-upload__hint">
-      Formato recomendado: JPG o PNG, máximo 5&nbsp;MB.
-    </p>
-  </div>
-</aside>
-
+              <p className="form__hint profile-avatar-upload__hint">
+                JPG o PNG. (Luego validamos tamaño.)
+              </p>
+            </div>
+          </aside>
         </div>
       </main>
     </div>

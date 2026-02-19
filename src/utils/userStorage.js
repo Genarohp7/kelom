@@ -1,131 +1,88 @@
 // src/utils/userStorage.js
+import { apiRequest } from "../services/apiClient.js";
 
-const USERS_KEY = "kelom_users";
-const CURRENT_USER_EMAIL_KEY = "kelom_current_user_email";
+const SESSION_KEY = "kelom_session_user";
+const PENDING_KEY = "kelom_pending_registration";
 
-// -------- helpers internos --------
-function loadUsers() {
-  try {
-    const raw = window.localStorage.getItem(USERS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (err) {
-    console.error("Error leyendo usuarios de localStorage", err);
-    return [];
-  }
-}
-
-function saveUsers(users) {
-  window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
-// -------- registro paso 1 (datos básicos) --------
-export function registerUserInitial({ email, fullName, phone, password }) {
-  const users = loadUsers();
-  const normalizedEmail = email.trim().toLowerCase();
-
-  let user = users.find(
-    (u) =>
-      typeof u.email === "string" &&
-      u.email.trim().toLowerCase() === normalizedEmail
-  );
-
-  if (!user) {
-    // nuevo usuario
-    user = {
-      id:
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : String(Date.now()),
-      email: normalizedEmail,
-      fullName: fullName.trim(),
-      phone: phone.trim(),
-      password, // simple por ahora, ya habrá tiempo de encriptar
-      gender: "",
-      partnerName: "",
-      city: "",
-      weddingDate: "",
-      guests: "",
-      budgetRange: "",
-      ceremonyType: "",
-      receptionType: "",
-      supportFocus: "",
-      biggestDoubt: "",
-      contactPreference: "",
-      createdAt: new Date().toISOString(),
-    };
-    users.push(user);
-  } else {
-    // si ya existe, actualizamos básicos
-    user.fullName = fullName.trim() || user.fullName;
-    user.phone = phone.trim() || user.phone;
-    user.password = password || user.password;
-  }
-
-  saveUsers(users);
-  window.localStorage.setItem(CURRENT_USER_EMAIL_KEY, user.email);
-  return user;
-}
-
-// -------- registro paso 2 (perfil / ficha) --------
-export function updateCurrentUserProfile(profileData) {
-  const currentEmail = window.localStorage.getItem(CURRENT_USER_EMAIL_KEY);
-  if (!currentEmail) return null;
-
-  const users = loadUsers();
-  const idx = users.findIndex(
-    (u) =>
-      typeof u.email === "string" &&
-      u.email.trim().toLowerCase() === currentEmail.trim().toLowerCase()
-  );
-
-  if (idx === -1) return null;
-
-  users[idx] = {
-    ...users[idx],
-    ...profileData,
+// =======================
+// Registro paso 1 (sin password)
+// =======================
+export function savePendingRegistration({ email, fullName, phone }) {
+  const payload = {
+    email: (email || "").trim().toLowerCase(),
+    fullName: (fullName || "").trim(),
+    phone: (phone || "").trim(),
+    createdAt: new Date().toISOString(),
   };
-
-  saveUsers(users);
-  return users[idx];
+  window.localStorage.setItem(PENDING_KEY, JSON.stringify(payload));
+  return payload;
 }
 
-// -------- util: buscar por email --------
-export function findUserByEmail(email) {
-  if (!email) return null;
-  const normalized = email.trim().toLowerCase();
-  const users = loadUsers();
-
-  return (
-    users.find(
-      (u) =>
-        typeof u.email === "string" &&
-        u.email.trim().toLowerCase() === normalized
-    ) || null
-  );
+export function getPendingRegistration() {
+  try {
+    const raw = window.localStorage.getItem(PENDING_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
-// -------- login --------
-export function loginUser(email, password) {
-  const user = findUserByEmail(email);
-  if (!user) return null;
-
-  // login sencillito: comparar texto plano
-  if (user.password !== password) return null;
-
-  window.localStorage.setItem(CURRENT_USER_EMAIL_KEY, user.email);
-  return user;
+export function clearPendingRegistration() {
+  window.localStorage.removeItem(PENDING_KEY);
 }
 
-// -------- sesión actual --------
+// =======================
+// Sesión (usuario logueado)
+// =======================
+export function setSessionUser(user) {
+  window.localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+}
+
 export function getCurrentUser() {
-  const email = window.localStorage.getItem(CURRENT_USER_EMAIL_KEY);
-  if (!email) return null;
-
-  return findUserByEmail(email);
+  try {
+    const raw = window.localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
 }
 
 export function logoutCurrentUser() {
-  window.localStorage.removeItem(CURRENT_USER_EMAIL_KEY);
+  window.localStorage.removeItem(SESSION_KEY);
+}
+
+// =======================
+// API: registro final (con password)
+// =======================
+export async function registerUserFinal({ email, password, name }) {
+  const data = await apiRequest("/users", {
+    method: "POST",
+    body: {
+      email: (email || "").trim().toLowerCase(),
+      password,
+      name: (name || "").trim() || null,
+    },
+  });
+
+  // Guardamos sesión con lo que regresa el backend
+  setSessionUser(data.data);
+  return data.data;
+}
+
+// =======================
+// API: login real
+// =======================
+export async function loginUser(email, password) {
+  const data = await apiRequest("/login", {
+    method: "POST",
+    body: {
+      email: (email || "").trim().toLowerCase(),
+      password,
+    },
+  });
+
+  setSessionUser(data.data);
+  return data.data;
 }

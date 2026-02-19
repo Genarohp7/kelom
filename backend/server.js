@@ -1,4 +1,5 @@
 /* eslint-env node */
+/* global process */
 
 import dotenv from "dotenv";
 dotenv.config();
@@ -10,9 +11,6 @@ import { pool } from "./db.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-
-// ...tu código igual...
-
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -49,7 +47,9 @@ app.post("/users", async (req, res) => {
     const { email, password, name } = req.body || {};
 
     if (!email || !password) {
-      return res.status(400).json({ error: "email y password son obligatorios" });
+      return res
+        .status(400)
+        .json({ error: "email y password son obligatorios" });
     }
 
     const password_hash = await bcrypt.hash(password, 10);
@@ -57,17 +57,20 @@ app.post("/users", async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, name)
        VALUES ($1, $2, $3)
-       RETURNING id, email, name, created_at`,
+       RETURNING id, email, name, created_at, role`,
       [email.toLowerCase(), password_hash, name || null]
     );
 
-    res.status(201).json({ data: result.rows[0] });
+    // Nunca regreses password_hash al front
+    const { password_hash: _PASSWORD_HASH, ...safeUser } = result.rows[0];
+
+    return res.status(201).json({ data: safeUser });
   } catch (e) {
     if (e?.code === "23505") {
       return res.status(409).json({ error: "Ese email ya existe" });
     }
     console.error(e);
-    res.status(500).json({ error: "Error interno" });
+    return res.status(500).json({ error: "Error interno" });
   }
 });
 
@@ -76,4 +79,3 @@ app.get("/", (req, res) => res.send("Kelom API"));
 app.listen(PORT, () => {
   console.log(`Kelom API escuchando en el puerto ${PORT}`);
 });
-

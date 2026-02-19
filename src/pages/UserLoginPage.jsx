@@ -6,19 +6,13 @@ import { getCurrentUser, loginUser } from "../utils/userStorage.js";
 function UserLoginPage() {
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-  });
-
+  const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // Si ya hay sesión, mandamos directo al perfil
   useEffect(() => {
     const u = getCurrentUser();
-    if (u) {
-      navigate("/perfil");
-    }
+    if (u) navigate("/perfil");
   }, [navigate]);
 
   function handleChange(e) {
@@ -27,8 +21,9 @@ function UserLoginPage() {
     setError("");
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
+    setError("");
 
     const email = form.email.trim();
     const password = form.password;
@@ -38,25 +33,20 @@ function UserLoginPage() {
       return;
     }
 
-    const user = loginUser(email, password);
-
-    if (!user) {
-      setError("Correo o contraseña incorrectos.");
-      return;
+    try {
+      setLoading(true);
+      await loginUser(email, password);
+      navigate("/perfil");
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "Correo o contraseña incorrectos.");
+    } finally {
+      setLoading(false);
     }
-
-    // loginUser ya guarda el correo actual en localStorage
-    navigate("/perfil");
   }
 
   return (
     <div className="user-auth">
-      <header className="business-auth__header">
-        <div className="business-auth__header-inner">
-          
-        </div>
-      </header>
-
       <main className="business-auth__content">
         <div className="business-auth__container">
           <section className="auth-card">
@@ -103,13 +93,17 @@ function UserLoginPage() {
               )}
 
               <div className="auth-card__actions">
-                <button type="submit" className="btn btn--primary">
-                  Acceder
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={loading}
+                >
+                  {loading ? "Entrando..." : "Acceder"}
                 </button>
+
                 <button
                   type="button"
                   className="btn btn--ghost"
-                  // Aquí luego podemos montar flujo de "olvidé mi contraseña"
                   onClick={() =>
                     alert("En la versión actual aún no recuperamos contraseñas.")
                   }
@@ -119,9 +113,7 @@ function UserLoginPage() {
               </div>
 
               <div className="auth-card__links">
-                <span className="auth-card__link--muted">
-                  ¿Aún no tienes cuenta?
-                </span>
+                <span className="auth-card__link--muted">¿Aún no tienes cuenta?</span>
                 <Link to="/registro" className="auth-card__link">
                   Crear cuenta
                 </Link>
@@ -130,10 +122,6 @@ function UserLoginPage() {
           </section>
         </div>
       </main>
-
-      <footer className="business-auth__footer">
-        
-      </footer>
     </div>
   );
 }
