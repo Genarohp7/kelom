@@ -1,7 +1,8 @@
 // src/pages/UserProfilePage.jsx
-import { useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
-import { getCurrentUser, logoutCurrentUser } from "../utils/userStorage.js";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+
+import { fetchMe, logout, getToken } from "../utils/auth.js";
 
 // Ejemplos de proveedores seleccionados (modo demo)
 const sampleProviders = [
@@ -48,9 +49,30 @@ const sampleIdeas = [
 
 function UserProfilePage() {
   const navigate = useNavigate();
-  const user = getCurrentUser(); // leemos directamente del storage
 
-  // ======== HOOKS (siempre arriba, sin condicionales) ========
+  // ======== Estado de sesión real (backend) ========
+  const [user, setUser] = useState(null);
+  const [isLoadingUser, setIsLoadingUser] = useState(true);
+
+  useEffect(() => {
+    const token = getToken();
+    if (!token) {
+      navigate("/acceso", { replace: true });
+      return;
+    }
+
+    setIsLoadingUser(true);
+    fetchMe()
+      .then((me) => setUser(me))
+      .catch(() => {
+        // token inválido/expirado o backend no responde
+        logout();
+        navigate("/acceso", { replace: true });
+      })
+      .finally(() => setIsLoadingUser(false));
+  }, [navigate]);
+
+  // ======== HOOKS DEMO (siempre arriba, sin condicionales) ========
   const [providers, setProviders] = useState(sampleProviders);
 
   const [ideas, setIdeas] = useState(sampleIdeas);
@@ -59,39 +81,25 @@ function UserProfilePage() {
   const [previewImageUrl, setPreviewImageUrl] = useState("");
   const [editingId, setEditingId] = useState(null);
 
-  // Si no hay usuario, redirigimos al login (después de declarar hooks)
-  if (!user) {
-    return <Navigate to="/acceso" replace />;
-  }
-
   // Porcentaje de perfil completado
-  const completion = (() => {
+  const completion = useMemo(() => {
+    if (!user) return 0;
+
     const keys = [
       "email",
-      "fullName",
-      "phone",
-      "gender",
-      "partnerName",
-      "city",
-      "weddingDate",
-      "guests",
-      "budgetRange",
-      "ceremonyType",
-      "receptionType",
-      "supportFocus",
-      "biggestDoubt",
-      "contactPreference",
+      "name",
+      // Nota: lo demás aún no existe en DB. Cuando lo agreguemos, lo sumamos aquí.
+      // "phone", "city", "weddingDate", etc.
     ];
 
-    const filled = keys.filter((k) => !!user[k]?.toString().trim()).length;
-    const total = keys.length;
-    if (total === 0) return 0;
+    const filled = keys.filter((k) => !!user?.[k]?.toString().trim()).length;
+    const total = keys.length || 1;
     return Math.round((filled / total) * 100);
-  })();
+  }, [user]);
 
   function handleLogout() {
-    logoutCurrentUser();
-    navigate("/");
+    logout();
+    navigate("/", { replace: true });
   }
 
   // ======== Proveedores (demo) ========
@@ -129,7 +137,6 @@ function UserProfilePage() {
     }
 
     if (editingId) {
-      // Editar idea existente
       setIdeas((prev) =>
         prev.map((idea) =>
           idea.id === editingId
@@ -143,7 +150,6 @@ function UserProfilePage() {
         )
       );
     } else {
-      // Nueva idea
       const newIdea = {
         id: Date.now(),
         title: title || "Idea sin título",
@@ -172,6 +178,19 @@ function UserProfilePage() {
     }
   }
 
+  // ======== UI: loading / no-user ========
+  if (isLoadingUser) {
+    return (
+      <div className="user-profile">
+        <div className="user-profile__container">
+          <p style={{ padding: "2rem" }}>Cargando tu perfil…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
   return (
     <div className="user-profile">
       <div className="user-profile__container">
@@ -179,10 +198,10 @@ function UserProfilePage() {
           {/* Columna izquierda: resumen de perfil */}
           <section className="profile-card">
             <p className="profile-card__eyebrow">Tu resumen</p>
-            <h1 className="profile-card__title">Hola, {user.fullName}</h1>
+            <h1 className="profile-card__title">Hola, {user.name || "pareja"}</h1>
             <p className="profile-card__subtitle">
-              Esta es una vista rápida de la información de tu boda. Puedes
-              actualizarla cuando quieras.
+              Esta es una vista rápida de tu cuenta. Más adelante conectamos todo lo
+              de “ficha de boda” a la base de datos.
             </p>
 
             <div className="profile-progress">
@@ -201,34 +220,11 @@ function UserProfilePage() {
               <dt>Correo</dt>
               <dd>{user.email}</dd>
 
-              <dt>Teléfono</dt>
-              <dd>{user.phone || "Sin definir"}</dd>
+              <dt>Rol</dt>
+              <dd>{user.role || "user"}</dd>
 
-              <dt>Ciudad</dt>
-              <dd>{user.city || "Sin definir"}</dd>
-
-              <dt>Fecha de boda</dt>
-              <dd>{user.weddingDate || "Aún por definir"}</dd>
-
-              <dt>Número de invitad@s</dt>
-              <dd>{user.guests || "Aún no seguro"}</dd>
-
-              <dt>Presupuesto aproximado</dt>
-              <dd>
-                {user.budgetRange === "low" && "Hasta $150,000"}
-                {user.budgetRange === "medium" && "$150,000 - $300,000"}
-                {user.budgetRange === "high" && "Más de $300,000"}
-                {!user.budgetRange && "Sin definir"}
-              </dd>
-
-              <dt>Tipo de ceremonia</dt>
-              <dd>{user.ceremonyType || "Sin definir"}</dd>
-
-              <dt>Tipo de recepción</dt>
-              <dd>{user.receptionType || "Sin definir"}</dd>
-
-              <dt>Preferencia de contacto</dt>
-              <dd>{user.contactPreference || "Sin definir"}</dd>
+              <dt>Creado</dt>
+              <dd>{user.created_at ? new Date(user.created_at).toLocaleString() : "—"}</dd>
             </dl>
 
             <div className="profile-card__actions form__actions">
@@ -251,20 +247,12 @@ function UserProfilePage() {
             <section className="user-profile__section user-profile__section--profile">
               <h2 className="preview-card__title">Foto de perfil</h2>
               <p className="preview-card__subtitle preview-card__subtitle--small">
-                Edita tu foto desde la sección “Completar / editar mi perfil”.
+                En esta etapa la foto sigue siendo demo (local). Luego la subimos a backend.
               </p>
 
               <div className="user-profile__avatar-wrapper">
                 <div className="user-profile__avatar-circle">
-                  {user.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt={user.fullName}
-                      className="user-profile__avatar-image"
-                    />
-                  ) : (
-                    (user.fullName || "K")[0]
-                  )}
+                  {(user.name || "K")[0]}
                 </div>
               </div>
             </section>
@@ -275,8 +263,7 @@ function UserProfilePage() {
                 Tus proveedores elegidos hasta ahora
               </h2>
               <p className="preview-card__subtitle preview-card__subtitle--small">
-                Cuando guardes un venue o proveedor como favorito aparecerá
-                aquí. Por ahora te mostramos un ejemplo.
+                Esto sigue en modo demo. Más adelante lo conectamos a favoritos en backend.
               </p>
 
               <div className="providers-list">
@@ -290,13 +277,10 @@ function UserProfilePage() {
                       />
                     </div>
                     <div className="providers-list__info">
-                      <div className="providers-list__category">
-                        {p.category}
-                      </div>
+                      <div className="providers-list__category">{p.category}</div>
                       <div className="providers-list__name">{p.name}</div>
                     </div>
 
-                    {/* Botón eliminar proveedor (solo icono) */}
                     <button
                       type="button"
                       onClick={() => handleRemoveProvider(p.id)}
@@ -310,8 +294,7 @@ function UserProfilePage() {
 
                 {providers.length === 0 && (
                   <p className="preview-card__subtitle preview-card__subtitle--tiny">
-                    Aún no has elegido proveedores. Cuando guardes tus
-                    favoritos, aparecerán aquí.
+                    Aún no has elegido proveedores.
                   </p>
                 )}
               </div>
@@ -321,11 +304,9 @@ function UserProfilePage() {
             <section className="user-profile__section">
               <h2 className="preview-card__title">Ideas para mi boda</h2>
               <p className="preview-card__subtitle preview-card__subtitle--small">
-                Un pequeño tablero para recordar cosas que te gustan y tenerlas
-                a la mano cuando hables con proveedores.
+                Tablero demo (local). Luego lo guardamos en backend.
               </p>
 
-              {/* Grid de ideas guardadas */}
               <div className="ideas-grid">
                 {ideas.map((idea) => (
                   <div key={idea.id} className="idea-card">
@@ -340,7 +321,6 @@ function UserProfilePage() {
                       <div className="idea-card__title">{idea.title}</div>
                       <p className="idea-card__note">{idea.note}</p>
 
-                      {/* Acciones editar / eliminar idea */}
                       <div className="idea-card__actions">
                         <button
                           type="button"
@@ -364,18 +344,12 @@ function UserProfilePage() {
                 ))}
               </div>
 
-              {/* Bloque para agregar / editar idea */}
               <div className="ideas-editor">
                 <h3 className="ideas-editor__title">
                   {editingId ? "Editar idea" : "Agregar nueva idea"}
                 </h3>
-                <p className="ideas-editor__subtitle">
-                  Sube una imagen y escribe una nota corta para recordarte qué
-                  te gustó.
-                </p>
 
                 <div className="ideas-editor__layout">
-                  {/* Preview imagen */}
                   <div className="ideas-editor__preview">
                     {previewImageUrl ? (
                       <img
