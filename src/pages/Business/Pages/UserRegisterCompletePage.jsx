@@ -21,13 +21,11 @@ import {
 function toDateInputValue(raw) {
   if (!raw) return "";
 
-  // Si ya viene como "YYYY-MM-DD" o "YYYY-MM-DDT..."
   if (typeof raw === "string") {
     const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
     if (m) return m[1];
   }
 
-  // Si por alguna razón llega Date
   if (raw instanceof Date) {
     if (Number.isNaN(raw.getTime())) return "";
     const y = raw.getFullYear();
@@ -36,13 +34,57 @@ function toDateInputValue(raw) {
     return `${y}-${mo}-${d}`;
   }
 
-  // Fallback
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return "";
   const y = d.getFullYear();
   const mo = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${mo}-${day}`;
+}
+
+/**
+ * ✅ IMPORTANTE:
+ * Este componente DEBE estar fuera de UserRegisterCompletePage
+ * para que React no lo "remonte" en cada render y no se pierda el foco.
+ */
+function PasswordWithToggle({
+  id,
+  label,
+  value,
+  onChange,
+  show,
+  onToggle,
+  placeholder,
+}) {
+  return (
+    <div className="form__field form__field--full">
+      <label className="form__label" htmlFor={id}>
+        {label}
+      </label>
+
+      <div className="password-field">
+        <input
+          id={id}
+          type={show ? "text" : "password"}
+          className="form__input password-field__input"
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          autoComplete="off"
+        />
+
+        <button
+          type="button"
+          className="password-field__toggle"
+          onClick={onToggle}
+          aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
+          title={show ? "Ocultar" : "Mostrar"}
+        >
+          {show ? "🙈" : "👁️"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function UserRegisterCompletePage() {
@@ -77,13 +119,18 @@ function UserRegisterCompletePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingInitial, setIsLoadingInitial] = useState(hasToken);
 
-  // ======== NUEVO: Cambiar contraseña (modo edición) ========
+  // ======== Cambiar contraseña (modo edición) ========
   const [pwCurrent, setPwCurrent] = useState("");
   const [pwNew, setPwNew] = useState("");
   const [pwConfirm, setPwConfirm] = useState("");
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Toggles 👁️
+  const [showPwCurrent, setShowPwCurrent] = useState(false);
+  const [showPwNew, setShowPwNew] = useState(false);
+  const [showPwConfirm, setShowPwConfirm] = useState(false);
 
   // Si no hay pending y no hay sesión, regresa a /registro
   useEffect(() => {
@@ -129,7 +176,6 @@ function UserRegisterCompletePage() {
         }));
       })
       .catch(() => {
-        // token inválido/expirado o backend no responde
         logout();
         if (cancelled) return;
         navigate("/acceso", { replace: true });
@@ -225,7 +271,7 @@ function UserRegisterCompletePage() {
     const password = formData.password;
     const confirmPassword = formData.confirmPassword;
 
-    // Si es registro nuevo (sin token), aquí SÍ exigimos contraseña
+    // Registro nuevo: exige contraseña
     if (!isEditMode) {
       if (!password || !confirmPassword) {
         setPasswordError("Escribe y confirma tu contraseña.");
@@ -248,17 +294,12 @@ function UserRegisterCompletePage() {
       const profilePayload = buildProfilePayload();
 
       if (isEditMode) {
-        // Guardar cambios (usuario ya logueado)
         await saveMyWeddingProfile(profilePayload);
-
-        // refresca cache del user (por si cambió el nombre)
         await fetchMe().catch(() => {});
-
         navigate("/perfil");
         return;
       }
 
-      // Registro nuevo (2/2)
       await registerUser({
         email,
         password,
@@ -266,15 +307,12 @@ function UserRegisterCompletePage() {
       });
 
       await login(email, password);
-
-      // Guardar ficha ya con JWT
       await saveMyWeddingProfile(profilePayload);
 
       clearPendingRegistration();
       navigate("/perfil");
     } catch (err) {
       console.error(err);
-
       const msg = String(err?.message || "");
 
       if (msg.toLowerCase().includes("ya existe") || msg.includes("409")) {
@@ -289,7 +327,6 @@ function UserRegisterCompletePage() {
     }
   }
 
-  // ======== NUEVO: submit cambio de contraseña ========
   async function handleChangePasswordSubmit(e) {
     e.preventDefault();
     if (isChangingPassword) return;
@@ -323,14 +360,22 @@ function UserRegisterCompletePage() {
     try {
       setIsChangingPassword(true);
       await changePassword(current, next);
+
       setPwSuccess("Contraseña actualizada correctamente.");
       setPwCurrent("");
       setPwNew("");
       setPwConfirm("");
+
+      setShowPwCurrent(false);
+      setShowPwNew(false);
+      setShowPwConfirm(false);
     } catch (err) {
       const msg = String(err?.message || "");
+
       if (msg.toLowerCase().includes("incorrecta")) {
         setPwError("La contraseña actual es incorrecta.");
+      } else if (msg.toLowerCase().includes("igual")) {
+        setPwError("La nueva contraseña no puede ser igual a la actual.");
       } else if (msg.toLowerCase().includes("mínimo")) {
         setPwError("La nueva contraseña debe tener al menos 5 caracteres.");
       } else {
@@ -649,75 +694,60 @@ function UserRegisterCompletePage() {
               </div>
             </form>
 
-            {/* ======== NUEVO: Cambiar contraseña (solo edición) ======== */}
             {isEditMode && (
               <div style={{ marginTop: "1.6rem" }}>
                 <h2 className="preview-card__title" style={{ marginBottom: "0.4rem" }}>
                   Cambiar contraseña
                 </h2>
                 <p className="profile-card__subtitle" style={{ marginBottom: "0.9rem" }}>
-                  Para mayor seguridad, puedes actualizar tu contraseña aquí.
+                  Puedes actualizar tu contraseña cuando quieras.
                 </p>
 
                 <form className="form form--grid" onSubmit={handleChangePasswordSubmit}>
-                  <div className="form__field form__field--full">
-                    <label className="form__label" htmlFor="currentPassword">
-                      Contraseña actual
-                    </label>
-                    <input
-                      id="currentPassword"
-                      type="password"
-                      className="form__input"
-                      value={pwCurrent}
-                      onChange={(e) => {
-                        setPwCurrent(e.target.value);
-                        setPwError("");
-                        setPwSuccess("");
-                      }}
-                      placeholder="Tu contraseña actual"
-                    />
-                  </div>
+                  <PasswordWithToggle
+                    id="currentPassword"
+                    label="Contraseña actual"
+                    value={pwCurrent}
+                    onChange={(e) => {
+                      setPwCurrent(e.target.value);
+                      setPwError("");
+                      setPwSuccess("");
+                    }}
+                    show={showPwCurrent}
+                    onToggle={() => setShowPwCurrent((v) => !v)}
+                    placeholder="Tu contraseña actual"
+                  />
 
-                  <div className="form__field">
-                    <label className="form__label" htmlFor="newPassword">
-                      Nueva contraseña
-                    </label>
-                    <input
-                      id="newPassword"
-                      type="password"
-                      className="form__input"
-                      value={pwNew}
-                      onChange={(e) => {
-                        setPwNew(e.target.value);
-                        setPwError("");
-                        setPwSuccess("");
-                      }}
-                      placeholder="Mínimo 5 caracteres"
-                    />
-                  </div>
+                  <PasswordWithToggle
+                    id="newPassword"
+                    label="Nueva contraseña"
+                    value={pwNew}
+                    onChange={(e) => {
+                      setPwNew(e.target.value);
+                      setPwError("");
+                      setPwSuccess("");
+                    }}
+                    show={showPwNew}
+                    onToggle={() => setShowPwNew((v) => !v)}
+                    placeholder="Mínimo 5 caracteres"
+                  />
 
-                  <div className="form__field">
-                    <label className="form__label" htmlFor="confirmNewPassword">
-                      Confirmar nueva contraseña
-                    </label>
-                    <input
-                      id="confirmNewPassword"
-                      type="password"
-                      className="form__input"
-                      value={pwConfirm}
-                      onChange={(e) => {
-                        setPwConfirm(e.target.value);
-                        setPwError("");
-                        setPwSuccess("");
-                      }}
-                      placeholder="Repite la nueva contraseña"
-                    />
-                  </div>
+                  <PasswordWithToggle
+                    id="confirmNewPassword"
+                    label="Confirmar nueva contraseña"
+                    value={pwConfirm}
+                    onChange={(e) => {
+                      setPwConfirm(e.target.value);
+                      setPwError("");
+                      setPwSuccess("");
+                    }}
+                    show={showPwConfirm}
+                    onToggle={() => setShowPwConfirm((v) => !v)}
+                    placeholder="Repite la nueva contraseña"
+                  />
 
                   {pwError && (
-                    <div className="form__error form__error--password">
-                      {pwError}
-                    </div>
+                    <div className="form__error form__error--password">{pwError}</div>
                   )}
 
                   {pwSuccess && (

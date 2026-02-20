@@ -26,6 +26,51 @@
   margin-top: 0.4rem;
 }
 
+/* ========== PASSWORD TOGGLE (👁️) ========== */
+
+.password-field {
+  position: relative;
+  width: 100%;
+}
+
+.password-field__input {
+  padding-right: 3.2rem; /* espacio para el botón 👁️ */
+}
+
+.password-field__toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 154, 169, 0.7);
+  background: #ffffff;
+  color: #c87486;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.password-field__toggle:hover {
+  background-color: rgba(232, 154, 169, 0.12);
+  box-shadow: 0 6px 16px rgba(148, 27, 72, 0.12);
+}
+
+.password-field__toggle:active {
+  transform: translateY(-50%) scale(0.97);
+}
+
+.password-field__toggle:focus-visible {
+  outline: 2px solid rgba(232, 154, 169, 0.5);
+  outline-offset: 2px;
+}
+
 /* ========== AVATAR UPLOAD (COLUMNA DERECHA) ========== */
 
 .profile-avatar-upload {
@@ -55,9 +100,7 @@
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  transition:
-    box-shadow 0.2s ease,
-    transform 0.15s ease;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 .profile-avatar__button:hover {
@@ -93,10 +136,7 @@
   justify-content: center;
   color: #c87486;
   font-size: 0.95rem;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    transform 0.15s ease,
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.15s ease,
     box-shadow 0.15s ease;
 }
 
