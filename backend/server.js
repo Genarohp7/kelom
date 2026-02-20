@@ -8,10 +8,48 @@ import express from "express";
 import cors from "cors";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { pool } from "./db.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Importante: detrás de Nginx para que req.ip use X-Forwarded-For
+app.set("trust proxy", 1);
+
+// Evita revelar tecnología
+app.disable("x-powered-by");
+
+// Seguridad básica de headers
+app.use(helmet());
+
+// Rate limit global (suave) + limitadores específicos
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600, // tráfico normal sin castigar
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes. Intenta más tarde." },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30, // anti brute-force
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados intentos. Intenta más tarde." },
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20, // anti abuso de registros
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados registros desde esta IP. Intenta más tarde." },
+});
+
+app.use(globalLimiter);
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -22,6 +60,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin(origin, cb) {
+      // Permite curl/health checks sin Origin
       if (!origin) return cb(null, true);
       if (allowedOrigins.includes(origin)) return cb(null, true);
       return cb(new Error("Origen no permitido por CORS"));
@@ -30,7 +69,8 @@ app.use(
   })
 );
 
-app.use(express.json());
+// Límite de JSON para evitar payloads enormes (avatar base64 aún NO va al backend)
+app.use(express.json({ limit: "500kb" }));
 
 function requireEnv(name) {
   if (!process.env[name]) {
@@ -56,7 +96,7 @@ function authMiddleware(req, res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded; // { id, email, role }
     return next();
-  } catch (err) {
+  } catch {
     return res.status(401).json({ error: "Token inválido o expirado" });
   }
 }
@@ -76,12 +116,16 @@ function toIntOrNull(v) {
   return i;
 }
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
 // Health + DB check
 app.get("/health", async (req, res) => {
   try {
     await pool.query("SELECT 1");
     res.json({ status: "ok", message: "Kelom API funcionando", db: "ok" });
-  } catch (err) {
+  } catch {
     res.status(500).json({ status: "error", message: "DB no disponible" });
   }
 });
@@ -89,11 +133,13 @@ app.get("/health", async (req, res) => {
 // ===================== USERS (REGISTRO) =====================
 
 // Crear usuario (MVP)
-app.post("/users", async (req, res) => {
+app.post("/users", registerLimiter, async (req, res) => {
   try {
     const { email, password, name } = req.body || {};
 
-    if (!email || !password) {
+    const emailNorm = normalizeEmail(email);
+
+    if (!emailNorm || !password) {
       return res.status(400).json({ error: "email y password son obligatorios" });
     }
 
@@ -107,7 +153,7 @@ app.post("/users", async (req, res) => {
       `INSERT INTO users (email, password_hash, name)
        VALUES ($1, $2, $3)
        RETURNING id, email, name, role, created_at`,
-      [String(email).toLowerCase(), password_hash, name || null]
+      [emailNorm, password_hash, name || null]
     );
 
     res.status(201).json({ data: result.rows[0] });
@@ -123,11 +169,13 @@ app.post("/users", async (req, res) => {
 // ===================== AUTH =====================
 
 // Login: devuelve JWT
-app.post("/auth/login", async (req, res) => {
+app.post("/auth/login", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
 
-    if (!email || !password) {
+    const emailNorm = normalizeEmail(email);
+
+    if (!emailNorm || !password) {
       return res.status(400).json({ error: "email y password son obligatorios" });
     }
 
@@ -136,7 +184,7 @@ app.post("/auth/login", async (req, res) => {
        FROM users
        WHERE email = $1
        LIMIT 1`,
-      [String(email).toLowerCase()]
+      [emailNorm]
     );
 
     const user = found.rows[0];
@@ -147,7 +195,6 @@ app.post("/auth/login", async (req, res) => {
 
     const token = signToken({ id: user.id, email: user.email, role: user.role });
 
-    // No regresamos password_hash
     const safeUser = {
       id: user.id,
       email: user.email,
@@ -268,8 +315,7 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
         reception_type = EXCLUDED.reception_type,
         support_focus = EXCLUDED.support_focus,
         biggest_doubt = EXCLUDED.biggest_doubt,
-        contact_preference = EXCLUDED.contact_preference,
-        updated_at = now()
+        contact_preference = EXCLUDED.contact_preference
       RETURNING user_id, phone, gender, partner_name, city, wedding_date, guests,
                 budget_range, ceremony_type, reception_type, support_focus,
                 biggest_doubt, contact_preference, created_at, updated_at`,
@@ -307,6 +353,27 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
 });
 
 app.get("/", (req, res) => res.send("Kelom API"));
+
+// 404 JSON
+app.use((req, res) => {
+  res.status(404).json({ error: "Ruta no encontrada" });
+});
+
+// Error handler (Express lo reconoce SOLO si hay 4 params)
+app.use((err, req, res, next) => {
+  void next; // evita warning: next unused, pero mantenemos firma de error-handler
+
+  if (err?.message === "Origen no permitido por CORS") {
+    return res.status(403).json({ error: "Origen no permitido por CORS" });
+  }
+
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({ error: "Payload demasiado grande" });
+  }
+
+  console.error(err);
+  return res.status(500).json({ error: "Error interno" });
+});
 
 app.listen(PORT, () => {
   console.log(`Kelom API escuchando en el puerto ${PORT}`);

@@ -6,9 +6,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js",
-    "db:migrate": "set -a && . ./.env && set +a && PGPASSWORD=\"$DB_PASSWORD\" psql -h \"$DB_HOST\" -p \"$DB_PORT\" -U \"$DB_USER\" -d \"$DB_NAME\" -v ON_ERROR_STOP=1 -f ./migrations/001_wedding_profiles.sql",
-    "db:test": "set -a && . ./.env && set +a && PGPASSWORD=\"$DB_PASSWORD\" psql -P pager=off -h \"$DB_HOST\" -p \"$DB_PORT\" -U \"$DB_USER\" -d \"$DB_NAME\" -v ON_ERROR_STOP=1 -f ./scripts/test_wedding_profile_genaro.sql"
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
@@ -18,6 +16,8 @@
     "cors": "^2.8.6",
     "dotenv": "^16.4.5",
     "express": "^5.2.1",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^7.2.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.18.0"
   },
