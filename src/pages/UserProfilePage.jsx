@@ -52,6 +52,26 @@ const sampleIdeas = [
   },
 ];
 
+// Evita desfases de zona horaria cuando viene "YYYY-MM-DD" o "YYYY-MM-DDT..."
+function parseDateOnly(raw) {
+  if (!raw) return null;
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
+
+  if (typeof raw === "string") {
+    const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      const y = Number(m[1]);
+      const mo = Number(m[2]);
+      const d = Number(m[3]);
+      const local = new Date(y, mo - 1, d);
+      return Number.isNaN(local.getTime()) ? null : local;
+    }
+  }
+
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function UserProfilePage() {
   const navigate = useNavigate();
 
@@ -101,10 +121,8 @@ function UserProfilePage() {
   const [editingId, setEditingId] = useState(null);
 
   const weddingDateLabel = useMemo(() => {
-    const raw = weddingProfile?.wedding_date;
-    if (!raw) return "—";
-    const d = raw instanceof Date ? raw : new Date(raw);
-    if (Number.isNaN(d.getTime())) return "—";
+    const d = parseDateOnly(weddingProfile?.wedding_date);
+    if (!d) return "—";
     return d.toLocaleDateString();
   }, [weddingProfile]);
 
