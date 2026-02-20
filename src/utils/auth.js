@@ -48,3 +48,23 @@ export async function registerUser({ email, password, name }) {
   });
   return data.data;
 }
+
+// ======== NUEVO: Ficha de boda (perfil extendido) ========
+
+export async function fetchMyWeddingProfile() {
+  const data = await apiFetch("/profile/me", { method: "GET" });
+  return data.profile;
+}
+
+export async function saveMyWeddingProfile(payload) {
+  const data = await apiFetch("/profile/me", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  return data.profile;
+}
+
+// Alias para mantener compatibilidad con tu naming actual
+export function logout() {
+  clearSession();
+}

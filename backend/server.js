@@ -61,6 +61,21 @@ function authMiddleware(req, res, next) {
   }
 }
 
+function toNullIfEmpty(v) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
+function toIntOrNull(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const i = Math.trunc(n);
+  if (i < 0) return null;
+  return i;
+}
+
 // Health + DB check
 app.get("/health", async (req, res) => {
   try {
@@ -168,6 +183,126 @@ app.get("/auth/me", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ===================== PROFILE (FICHA DE BODA) =====================
+
+// Obtener ficha de boda del usuario logueado
+app.get("/profile/me", authMiddleware, async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+
+    const found = await pool.query(
+      `SELECT user_id, phone, gender, partner_name, city, wedding_date, guests,
+              budget_range, ceremony_type, reception_type, support_focus,
+              biggest_doubt, contact_preference, created_at, updated_at
+       FROM wedding_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+
+    const profile = found.rows[0] || null;
+    return res.json({ profile });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// Crear/actualizar ficha de boda (UPSERT) + opcional actualizar name en users
+app.put("/profile/me", authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id: userId } = req.user;
+
+    const body = req.body || {};
+
+    const nameFromBody = toNullIfEmpty(body.name ?? body.fullName);
+
+    const phone = toNullIfEmpty(body.phone);
+    const gender = toNullIfEmpty(body.gender);
+    const partnerName = toNullIfEmpty(body.partnerName);
+    const city = toNullIfEmpty(body.city);
+    const weddingDate = toNullIfEmpty(body.weddingDate); // YYYY-MM-DD
+    const guests = toIntOrNull(body.guests);
+
+    const budgetRange = toNullIfEmpty(body.budgetRange);
+    const ceremonyType = toNullIfEmpty(body.ceremonyType);
+    const receptionType = toNullIfEmpty(body.receptionType);
+
+    const supportFocus = toNullIfEmpty(body.supportFocus);
+    const biggestDoubt = toNullIfEmpty(body.biggestDoubt);
+    const contactPreference = toNullIfEmpty(body.contactPreference);
+
+    await client.query("BEGIN");
+
+    if (nameFromBody) {
+      await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [
+        nameFromBody,
+        userId,
+      ]);
+    }
+
+    const upsert = await client.query(
+      `INSERT INTO wedding_profiles (
+        user_id, phone, gender, partner_name, city, wedding_date, guests,
+        budget_range, ceremony_type, reception_type, support_focus,
+        biggest_doubt, contact_preference
+      )
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11,
+        $12, $13
+      )
+      ON CONFLICT (user_id) DO UPDATE SET
+        phone = EXCLUDED.phone,
+        gender = EXCLUDED.gender,
+        partner_name = EXCLUDED.partner_name,
+        city = EXCLUDED.city,
+        wedding_date = EXCLUDED.wedding_date,
+        guests = EXCLUDED.guests,
+        budget_range = EXCLUDED.budget_range,
+        ceremony_type = EXCLUDED.ceremony_type,
+        reception_type = EXCLUDED.reception_type,
+        support_focus = EXCLUDED.support_focus,
+        biggest_doubt = EXCLUDED.biggest_doubt,
+        contact_preference = EXCLUDED.contact_preference,
+        updated_at = now()
+      RETURNING user_id, phone, gender, partner_name, city, wedding_date, guests,
+                budget_range, ceremony_type, reception_type, support_focus,
+                biggest_doubt, contact_preference, created_at, updated_at`,
+      [
+        userId,
+        phone,
+        gender,
+        partnerName,
+        city,
+        weddingDate,
+        guests,
+        budgetRange,
+        ceremonyType,
+        receptionType,
+        supportFocus,
+        biggestDoubt,
+        contactPreference,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({ profile: upsert.rows[0] });
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // ignore
+    }
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  } finally {
+    client.release();
   }
 });
 

@@ -7,25 +7,22 @@ import {
   getPendingRegistration,
 } from "../../../utils/userStorage.js";
 
-import { getToken, fetchMe, registerUser, login } from "../../../utils/auth.js";
+import {
+  getToken,
+  fetchMe,
+  registerUser,
+  login,
+  saveMyWeddingProfile,
+  fetchMyWeddingProfile,
+  logout,
+} from "../../../utils/auth.js";
 
 function UserRegisterCompletePage() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  // Si ya hay sesión (token), valida y manda al perfil
-  useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-
-    fetchMe()
-      .then(() => navigate("/perfil"))
-      .catch(() => {
-        // token inválido: lo ignoramos aquí
-      });
-  }, [navigate]);
-
   const pending = getPendingRegistration();
+  const hasToken = !!getToken();
 
   const [formData, setFormData] = useState(() => ({
     email: pending?.email || "",
@@ -50,11 +47,69 @@ function UserRegisterCompletePage() {
   const [passwordError, setPasswordError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(hasToken);
 
-  // Si no hay pending, regresa a /registro
+  // Si no hay pending y no hay sesión, regresa a /registro
   useEffect(() => {
-    if (!pending) navigate("/registro");
+    const token = getToken();
+    if (!pending && !token) navigate("/registro");
   }, [pending, navigate]);
+
+  // Si hay sesión, cargamos datos reales (me + ficha)
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+
+    let cancelled = false;
+
+    setIsLoadingInitial(true);
+    Promise.all([fetchMe(), fetchMyWeddingProfile()])
+      .then(([me, profile]) => {
+        if (cancelled) return;
+
+        const weddingDate =
+          profile?.wedding_date instanceof Date
+            ? profile.wedding_date.toISOString().slice(0, 10)
+            : profile?.wedding_date || "";
+
+        setFormData((prev) => ({
+          ...prev,
+          email: me?.email || prev.email,
+          fullName: me?.name || prev.fullName,
+          phone: profile?.phone || prev.phone || "",
+          gender: profile?.gender || "",
+          partnerName: profile?.partner_name || "",
+          city: profile?.city || "",
+          weddingDate,
+          guests:
+            profile?.guests === 0 || profile?.guests
+              ? String(profile.guests)
+              : "",
+          budgetRange: profile?.budget_range || "",
+          ceremonyType: profile?.ceremony_type || "",
+          receptionType: profile?.reception_type || "",
+          supportFocus: profile?.support_focus || "",
+          biggestDoubt: profile?.biggest_doubt || "",
+          contactPreference: profile?.contact_preference || "",
+          password: "",
+          confirmPassword: "",
+        }));
+      })
+      .catch(() => {
+        // token inválido/expirado o backend no responde
+        logout();
+        if (cancelled) return;
+        navigate("/acceso", { replace: true });
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsLoadingInitial(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   const completion = useMemo(() => {
     const keys = [
@@ -100,51 +155,91 @@ function UserRegisterCompletePage() {
     reader.readAsDataURL(file);
   }
 
+  function buildProfilePayload() {
+    const phoneDigits = (formData.phone || "").replace(/\D/g, "");
+    const guests =
+      formData.guests === "" || formData.guests === null || formData.guests === undefined
+        ? null
+        : Number(formData.guests);
+
+    return {
+      name: formData.fullName?.trim() || null,
+      phone: phoneDigits || null,
+      gender: formData.gender?.trim() || null,
+      partnerName: formData.partnerName?.trim() || null,
+      city: formData.city?.trim() || null,
+      weddingDate: formData.weddingDate || null,
+      guests: Number.isFinite(guests) ? guests : null,
+      budgetRange: formData.budgetRange || null,
+      ceremonyType: formData.ceremonyType || null,
+      receptionType: formData.receptionType || null,
+      supportFocus: formData.supportFocus?.trim() || null,
+      biggestDoubt: formData.biggestDoubt?.trim() || null,
+      contactPreference: formData.contactPreference || null,
+    };
+  }
+
   async function handleSubmit(evt) {
     evt.preventDefault();
     if (isSubmitting) return;
+
+    const token = getToken();
+    const isEditMode = !!token;
 
     const email = formData.email?.trim();
     const password = formData.password;
     const confirmPassword = formData.confirmPassword;
 
-    // Paso 2: aquí SÍ exigimos contraseña
-    if (!password || !confirmPassword) {
-      setPasswordError("Escribe y confirma tu contraseña.");
-      return;
-    }
-    if (password.length < 5) {
-      setPasswordError("La contraseña debe tener al menos 5 caracteres.");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setPasswordError("Las contraseñas no coinciden.");
-      return;
+    // Si es registro nuevo (sin token), aquí SÍ exigimos contraseña
+    if (!isEditMode) {
+      if (!password || !confirmPassword) {
+        setPasswordError("Escribe y confirma tu contraseña.");
+        return;
+      }
+      if (password.length < 5) {
+        setPasswordError("La contraseña debe tener al menos 5 caracteres.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setPasswordError("Las contraseñas no coinciden.");
+        return;
+      }
     }
 
     try {
       setIsSubmitting(true);
       setSubmitError("");
 
-      // 1) Crear usuario en DB (Postgres)
+      const profilePayload = buildProfilePayload();
+
+      if (isEditMode) {
+        // Guardar cambios (usuario ya logueado)
+        await saveMyWeddingProfile(profilePayload);
+
+        // refresca cache del user (por si cambió el nombre)
+        await fetchMe().catch(() => {});
+
+        navigate("/perfil");
+        return;
+      }
+
+      // Registro nuevo (2/2)
       await registerUser({
         email,
         password,
         name: formData.fullName,
       });
 
-      // 2) Login para obtener JWT y guardar sesión en localStorage
       await login(email, password);
 
-      // 3) Ya no necesitamos el pending
-      clearPendingRegistration();
+      // Guardar ficha ya con JWT
+      await saveMyWeddingProfile(profilePayload);
 
-      // 4) Perfil
+      clearPendingRegistration();
       navigate("/perfil");
     } catch (err) {
       console.error(err);
 
-      // Mensajes típicos (según lo que regrese tu backend)
       const msg = String(err?.message || "");
 
       if (msg.toLowerCase().includes("ya existe") || msg.includes("409")) {
@@ -159,14 +254,39 @@ function UserRegisterCompletePage() {
     }
   }
 
-  if (!pending) return null;
+  if (!pending && !hasToken) return null;
+
+  if (isLoadingInitial) {
+    return (
+      <div className="user-register-complete">
+        <header className="business-auth__header">
+          <div className="business-auth__header-inner container">
+            <span className="business-auth__logo-text">Kelom · Registro</span>
+            <span className="business-auth__logo-pill">Cargando…</span>
+          </div>
+        </header>
+
+        <main className="business-profile__content">
+          <div className="business-profile__container profile-layout">
+            <section className="profile-card">
+              <p style={{ padding: "1.8rem" }}>Cargando tu ficha…</p>
+            </section>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const isEditMode = !!getToken();
 
   return (
     <div className="user-register-complete">
       <header className="business-auth__header">
         <div className="business-auth__header-inner container">
           <span className="business-auth__logo-text">Kelom · Registro</span>
-          <span className="business-auth__logo-pill">Paso 2 de 2</span>
+          <span className="business-auth__logo-pill">
+            {isEditMode ? "Editar perfil" : "Paso 2 de 2"}
+          </span>
         </div>
       </header>
 
@@ -378,39 +498,43 @@ function UserRegisterCompletePage() {
                 </select>
               </div>
 
-              <div className="form__field">
-                <label className="form__label" htmlFor="password">
-                  Contraseña
-                </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  className="form__input"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="Mínimo 5 caracteres"
-                />
-              </div>
+              {!isEditMode && (
+                <>
+                  <div className="form__field">
+                    <label className="form__label" htmlFor="password">
+                      Contraseña
+                    </label>
+                    <input
+                      id="password"
+                      name="password"
+                      type="password"
+                      className="form__input"
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="Mínimo 5 caracteres"
+                    />
+                  </div>
 
-              <div className="form__field">
-                <label className="form__label" htmlFor="confirmPassword">
-                  Confirmar contraseña
-                </label>
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  className="form__input"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                />
-              </div>
+                  <div className="form__field">
+                    <label className="form__label" htmlFor="confirmPassword">
+                      Confirmar contraseña
+                    </label>
+                    <input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type="password"
+                      className="form__input"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                    />
+                  </div>
 
-              {passwordError && (
-                <div className="form__error form__error--password">
-                  {passwordError}
-                </div>
+                  {passwordError && (
+                    <div className="form__error form__error--password">
+                      {passwordError}
+                    </div>
+                  )}
+                </>
               )}
 
               {submitError && (
@@ -420,10 +544,19 @@ function UserRegisterCompletePage() {
               )}
 
               <div className="form__actions">
-                <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
-                  {isSubmitting ? "Creando..." : "Crear cuenta"}
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting
+                    ? "Guardando..."
+                    : isEditMode
+                    ? "Guardar cambios"
+                    : "Crear cuenta"}
                 </button>
-                <Link to="/" className="btn btn--ghost">
+
+                <Link to={isEditMode ? "/perfil" : "/"} className="btn btn--ghost">
                   Cancelar
                 </Link>
               </div>
