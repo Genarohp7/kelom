@@ -49,7 +49,7 @@ export async function registerUser({ email, password, name }) {
   return data.data;
 }
 
-// ======== NUEVO: Ficha de boda (perfil extendido) ========
+// ======== Ficha de boda (perfil extendido) ========
 
 export async function fetchMyWeddingProfile() {
   const data = await apiFetch("/profile/me", { method: "GET" });
@@ -62,6 +62,16 @@ export async function saveMyWeddingProfile(payload) {
     body: JSON.stringify(payload),
   });
   return data.profile;
+}
+
+// ======== Cambiar contraseña (logueado) ========
+
+export async function changePassword(currentPassword, newPassword) {
+  const data = await apiFetch("/auth/password", {
+    method: "PUT",
+    body: JSON.stringify({ currentPassword, newPassword }),
+  });
+  return data;
 }
 
 // Alias para mantener compatibilidad con tu naming actual

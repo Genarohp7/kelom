@@ -15,19 +15,13 @@ import { pool } from "./db.js";
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Importante: detrás de Nginx para que req.ip use X-Forwarded-For
 app.set("trust proxy", 1);
-
-// Evita revelar tecnología
 app.disable("x-powered-by");
-
-// Seguridad básica de headers
 app.use(helmet());
 
-// Rate limit global (suave) + limitadores específicos
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 600, // tráfico normal sin castigar
+  max: 600,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Demasiadas solicitudes. Intenta más tarde." },
@@ -35,7 +29,7 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30, // anti brute-force
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Demasiados intentos. Intenta más tarde." },
@@ -43,10 +37,19 @@ const authLimiter = rateLimit({
 
 const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 20, // anti abuso de registros
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Demasiados registros desde esta IP. Intenta más tarde." },
+});
+
+// Cambiar contraseña (logueado): más estricto que global, pero no tan agresivo
+const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados intentos. Intenta más tarde." },
 });
 
 app.use(globalLimiter);
@@ -60,7 +63,6 @@ const allowedOrigins = [
 app.use(
   cors({
     origin(origin, cb) {
-      // Permite curl/health checks sin Origin
       if (!origin) return cb(null, true);
       if (allowedOrigins.includes(origin)) return cb(null, true);
       return cb(new Error("Origen no permitido por CORS"));
@@ -69,7 +71,6 @@ app.use(
   })
 );
 
-// Límite de JSON para evitar payloads enormes (avatar base64 aún NO va al backend)
 app.use(express.json({ limit: "500kb" }));
 
 function requireEnv(name) {
@@ -132,11 +133,9 @@ app.get("/health", async (req, res) => {
 
 // ===================== USERS (REGISTRO) =====================
 
-// Crear usuario (MVP)
 app.post("/users", registerLimiter, async (req, res) => {
   try {
     const { email, password, name } = req.body || {};
-
     const emailNorm = normalizeEmail(email);
 
     if (!emailNorm || !password) {
@@ -168,11 +167,9 @@ app.post("/users", registerLimiter, async (req, res) => {
 
 // ===================== AUTH =====================
 
-// Login: devuelve JWT
 app.post("/auth/login", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
-
     const emailNorm = normalizeEmail(email);
 
     if (!emailNorm || !password) {
@@ -210,7 +207,6 @@ app.post("/auth/login", authLimiter, async (req, res) => {
   }
 });
 
-// Me: devuelve usuario usando token
 app.get("/auth/me", authMiddleware, async (req, res) => {
   try {
     const { id } = req.user;
@@ -233,9 +229,61 @@ app.get("/auth/me", authMiddleware, async (req, res) => {
   }
 });
 
-// ===================== PROFILE (FICHA DE BODA) =====================
+/**
+ * Cambiar contraseña (usuario logueado)
+ * Body: { currentPassword, newPassword }
+ */
+app.put("/auth/password", changePasswordLimiter, authMiddleware, async (req, res) => {
+  try {
+    const { id: userId } = req.user;
+    const { currentPassword, newPassword } = req.body || {};
 
-// Obtener ficha de boda del usuario logueado
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ error: "currentPassword y newPassword son obligatorios" });
+    }
+
+    if (String(newPassword).length < 5) {
+      return res.status(400).json({ error: "password mínimo 5 caracteres" });
+    }
+
+    // Obtener hash actual
+    const found = await pool.query(
+      `SELECT password_hash FROM users WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+
+    const row = found.rows[0];
+    if (!row) return res.status(404).json({ error: "Usuario no encontrado" });
+
+    const ok = await bcrypt.compare(String(currentPassword), row.password_hash);
+    if (!ok) return res.status(401).json({ error: "Contraseña actual incorrecta" });
+
+    // Evita “cambio” a la misma contraseña (opcional, pero útil)
+    const same = await bcrypt.compare(String(newPassword), row.password_hash);
+    if (same) {
+      return res
+        .status(400)
+        .json({ error: "La nueva contraseña no puede ser igual a la actual" });
+    }
+
+    const newHash = await bcrypt.hash(String(newPassword), 10);
+
+    await pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [
+      newHash,
+      userId,
+    ]);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+});
+
+// ===================== PROFILE =====================
+
 app.get("/profile/me", authMiddleware, async (req, res) => {
   try {
     const { id: userId } = req.user;
@@ -258,12 +306,10 @@ app.get("/profile/me", authMiddleware, async (req, res) => {
   }
 });
 
-// Crear/actualizar ficha de boda (UPSERT) + opcional actualizar name en users
 app.put("/profile/me", authMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     const { id: userId } = req.user;
-
     const body = req.body || {};
 
     const nameFromBody = toNullIfEmpty(body.name ?? body.fullName);
@@ -272,7 +318,7 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
     const gender = toNullIfEmpty(body.gender);
     const partnerName = toNullIfEmpty(body.partnerName);
     const city = toNullIfEmpty(body.city);
-    const weddingDate = toNullIfEmpty(body.weddingDate); // YYYY-MM-DD
+    const weddingDate = toNullIfEmpty(body.weddingDate);
     const guests = toIntOrNull(body.guests);
 
     const budgetRange = toNullIfEmpty(body.budgetRange);
@@ -337,7 +383,6 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
     );
 
     await client.query("COMMIT");
-
     return res.json({ profile: upsert.rows[0] });
   } catch (err) {
     try {
@@ -354,14 +399,12 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
 
 app.get("/", (req, res) => res.send("Kelom API"));
 
-// 404 JSON
 app.use((req, res) => {
   res.status(404).json({ error: "Ruta no encontrada" });
 });
 
-// Error handler (Express lo reconoce SOLO si hay 4 params)
 app.use((err, req, res, next) => {
-  void next; // evita warning: next unused, pero mantenemos firma de error-handler
+  void next;
 
   if (err?.message === "Origen no permitido por CORS") {
     return res.status(403).json({ error: "Origen no permitido por CORS" });

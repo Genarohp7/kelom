@@ -15,6 +15,7 @@ import {
   saveMyWeddingProfile,
   fetchMyWeddingProfile,
   logout,
+  changePassword,
 } from "../../../utils/auth.js";
 
 function toDateInputValue(raw) {
@@ -75,6 +76,14 @@ function UserRegisterCompletePage() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingInitial, setIsLoadingInitial] = useState(hasToken);
+
+  // ======== NUEVO: Cambiar contraseña (modo edición) ========
+  const [pwCurrent, setPwCurrent] = useState("");
+  const [pwNew, setPwNew] = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // Si no hay pending y no hay sesión, regresa a /registro
   useEffect(() => {
@@ -277,6 +286,58 @@ function UserRegisterCompletePage() {
       }
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  // ======== NUEVO: submit cambio de contraseña ========
+  async function handleChangePasswordSubmit(e) {
+    e.preventDefault();
+    if (isChangingPassword) return;
+
+    setPwError("");
+    setPwSuccess("");
+
+    const current = pwCurrent.trim();
+    const next = pwNew;
+
+    if (!current || !next || !pwConfirm) {
+      setPwError("Completa los 3 campos para cambiar la contraseña.");
+      return;
+    }
+
+    if (next.length < 5) {
+      setPwError("La nueva contraseña debe tener al menos 5 caracteres.");
+      return;
+    }
+
+    if (next !== pwConfirm) {
+      setPwError("La confirmación no coincide.");
+      return;
+    }
+
+    if (current === next) {
+      setPwError("La nueva contraseña no puede ser igual a la actual.");
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      await changePassword(current, next);
+      setPwSuccess("Contraseña actualizada correctamente.");
+      setPwCurrent("");
+      setPwNew("");
+      setPwConfirm("");
+    } catch (err) {
+      const msg = String(err?.message || "");
+      if (msg.toLowerCase().includes("incorrecta")) {
+        setPwError("La contraseña actual es incorrecta.");
+      } else if (msg.toLowerCase().includes("mínimo")) {
+        setPwError("La nueva contraseña debe tener al menos 5 caracteres.");
+      } else {
+        setPwError(msg || "No se pudo cambiar la contraseña.");
+      }
+    } finally {
+      setIsChangingPassword(false);
     }
   }
 
@@ -587,6 +648,99 @@ function UserRegisterCompletePage() {
                 </Link>
               </div>
             </form>
+
+            {/* ======== NUEVO: Cambiar contraseña (solo edición) ======== */}
+            {isEditMode && (
+              <div style={{ marginTop: "1.6rem" }}>
+                <h2 className="preview-card__title" style={{ marginBottom: "0.4rem" }}>
+                  Cambiar contraseña
+                </h2>
+                <p className="profile-card__subtitle" style={{ marginBottom: "0.9rem" }}>
+                  Para mayor seguridad, puedes actualizar tu contraseña aquí.
+                </p>
+
+                <form className="form form--grid" onSubmit={handleChangePasswordSubmit}>
+                  <div className="form__field form__field--full">
+                    <label className="form__label" htmlFor="currentPassword">
+                      Contraseña actual
+                    </label>
+                    <input
+                      id="currentPassword"
+                      type="password"
+                      className="form__input"
+                      value={pwCurrent}
+                      onChange={(e) => {
+                        setPwCurrent(e.target.value);
+                        setPwError("");
+                        setPwSuccess("");
+                      }}
+                      placeholder="Tu contraseña actual"
+                    />
+                  </div>
+
+                  <div className="form__field">
+                    <label className="form__label" htmlFor="newPassword">
+                      Nueva contraseña
+                    </label>
+                    <input
+                      id="newPassword"
+                      type="password"
+                      className="form__input"
+                      value={pwNew}
+                      onChange={(e) => {
+                        setPwNew(e.target.value);
+                        setPwError("");
+                        setPwSuccess("");
+                      }}
+                      placeholder="Mínimo 5 caracteres"
+                    />
+                  </div>
+
+                  <div className="form__field">
+                    <label className="form__label" htmlFor="confirmNewPassword">
+                      Confirmar nueva contraseña
+                    </label>
+                    <input
+                      id="confirmNewPassword"
+                      type="password"
+                      className="form__input"
+                      value={pwConfirm}
+                      onChange={(e) => {
+                        setPwConfirm(e.target.value);
+                        setPwError("");
+                        setPwSuccess("");
+                      }}
+                      placeholder="Repite la nueva contraseña"
+                    />
+                  </div>
+
+                  {pwError && (
+                    <div className="form__error form__error--password">
+                      {pwError}
+                    </div>
+                  )}
+
+                  {pwSuccess && (
+                    <div
+                      className="form__error"
+                      style={{ marginTop: "0.6rem", color: "green" }}
+                    >
+                      {pwSuccess}
+                    </div>
+                  )}
+
+                  <div className="form__actions">
+                    <button
+                      type="submit"
+                      className="btn btn--primary"
+                      disabled={isChangingPassword}
+                    >
+                      {isChangingPassword ? "Actualizando..." : "Actualizar contraseña"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </section>
 
           <aside className="preview-card">
