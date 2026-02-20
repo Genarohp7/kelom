@@ -17,6 +17,33 @@ import {
   logout,
 } from "../../../utils/auth.js";
 
+function toDateInputValue(raw) {
+  if (!raw) return "";
+
+  // Si ya viene como "YYYY-MM-DD" o "YYYY-MM-DDT..."
+  if (typeof raw === "string") {
+    const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1];
+  }
+
+  // Si por alguna razón llega Date
+  if (raw instanceof Date) {
+    if (Number.isNaN(raw.getTime())) return "";
+    const y = raw.getFullYear();
+    const mo = String(raw.getMonth() + 1).padStart(2, "0");
+    const d = String(raw.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${d}`;
+  }
+
+  // Fallback
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getFullYear();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${day}`;
+}
+
 function UserRegisterCompletePage() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -62,14 +89,12 @@ function UserRegisterCompletePage() {
 
     let cancelled = false;
 
+    setIsLoadingInitial(true);
     Promise.all([fetchMe(), fetchMyWeddingProfile()])
       .then(([me, profile]) => {
         if (cancelled) return;
 
-        const weddingDate =
-          profile?.wedding_date instanceof Date
-            ? profile.wedding_date.toISOString().slice(0, 10)
-            : profile?.wedding_date || "";
+        const weddingDate = toDateInputValue(profile?.wedding_date);
 
         setFormData((prev) => ({
           ...prev,
@@ -95,6 +120,7 @@ function UserRegisterCompletePage() {
         }));
       })
       .catch(() => {
+        // token inválido/expirado o backend no responde
         logout();
         if (cancelled) return;
         navigate("/acceso", { replace: true });
@@ -190,6 +216,7 @@ function UserRegisterCompletePage() {
     const password = formData.password;
     const confirmPassword = formData.confirmPassword;
 
+    // Si es registro nuevo (sin token), aquí SÍ exigimos contraseña
     if (!isEditMode) {
       if (!password || !confirmPassword) {
         setPasswordError("Escribe y confirma tu contraseña.");
@@ -212,12 +239,17 @@ function UserRegisterCompletePage() {
       const profilePayload = buildProfilePayload();
 
       if (isEditMode) {
+        // Guardar cambios (usuario ya logueado)
         await saveMyWeddingProfile(profilePayload);
+
+        // refresca cache del user (por si cambió el nombre)
         await fetchMe().catch(() => {});
+
         navigate("/perfil");
         return;
       }
 
+      // Registro nuevo (2/2)
       await registerUser({
         email,
         password,
@@ -225,6 +257,8 @@ function UserRegisterCompletePage() {
       });
 
       await login(email, password);
+
+      // Guardar ficha ya con JWT
       await saveMyWeddingProfile(profilePayload);
 
       clearPendingRegistration();
