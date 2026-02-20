@@ -2,7 +2,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { fetchMe, logout, getToken } from "../utils/auth.js";
+import {
+  fetchMe,
+  fetchMyWeddingProfile,
+  logout,
+  getToken,
+} from "../utils/auth.js";
 
 // Ejemplos de proveedores seleccionados (modo demo)
 const sampleProviders = [
@@ -52,6 +57,7 @@ function UserProfilePage() {
 
   // ======== Estado de sesión real (backend) ========
   const [user, setUser] = useState(null);
+  const [weddingProfile, setWeddingProfile] = useState(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
 
   useEffect(() => {
@@ -63,10 +69,11 @@ function UserProfilePage() {
 
     let cancelled = false;
 
-    fetchMe()
-      .then((me) => {
+    Promise.all([fetchMe(), fetchMyWeddingProfile()])
+      .then(([me, profile]) => {
         if (cancelled) return;
         setUser(me);
+        setWeddingProfile(profile); // puede ser null si aún no hay ficha
       })
       .catch(() => {
         // token inválido/expirado o backend no responde
@@ -93,21 +100,40 @@ function UserProfilePage() {
   const [previewImageUrl, setPreviewImageUrl] = useState("");
   const [editingId, setEditingId] = useState(null);
 
-  // Porcentaje de perfil completado
+  const weddingDateLabel = useMemo(() => {
+    const raw = weddingProfile?.wedding_date;
+    if (!raw) return "—";
+    const d = raw instanceof Date ? raw : new Date(raw);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString();
+  }, [weddingProfile]);
+
+  // Porcentaje de perfil completado (user + ficha)
   const completion = useMemo(() => {
     if (!user) return 0;
 
-    const keys = [
-      "email",
-      "name",
-      // Nota: lo demás aún no existe en DB. Cuando lo agreguemos, lo sumamos aquí.
-      // "phone", "city", "weddingDate", etc.
-    ];
+    const filledUser = [
+      user?.email?.toString().trim(),
+      user?.name?.toString().trim(),
+    ].filter(Boolean).length;
 
-    const filled = keys.filter((k) => !!user?.[k]?.toString().trim()).length;
-    const total = keys.length || 1;
+    const p = weddingProfile || {};
+    const filledProfile = [
+      p.phone?.toString().trim(),
+      p.city?.toString().trim(),
+      p.wedding_date ? "x" : "",
+      p.guests === 0 || p.guests ? "x" : "",
+      p.budget_range?.toString().trim(),
+      p.ceremony_type?.toString().trim(),
+      p.reception_type?.toString().trim(),
+      p.contact_preference?.toString().trim(),
+    ].filter(Boolean).length;
+
+    const total = 2 + 8; // 2 user + 8 profile
+    const filled = filledUser + filledProfile;
+
     return Math.round((filled / total) * 100);
-  }, [user]);
+  }, [user, weddingProfile]);
 
   function handleLogout() {
     logout();
@@ -212,8 +238,8 @@ function UserProfilePage() {
             <p className="profile-card__eyebrow">Tu resumen</p>
             <h1 className="profile-card__title">Hola, {user.name || "pareja"}</h1>
             <p className="profile-card__subtitle">
-              Esta es una vista rápida de tu cuenta. Más adelante conectamos todo lo
-              de “ficha de boda” a la base de datos.
+              Esta es una vista rápida de tu cuenta. Ahora ya estamos trayendo tu
+              ficha desde backend (cuando exista).
             </p>
 
             <div className="profile-progress">
@@ -235,8 +261,23 @@ function UserProfilePage() {
               <dt>Rol</dt>
               <dd>{user.role || "user"}</dd>
 
+              <dt>Ciudad</dt>
+              <dd>{weddingProfile?.city || "—"}</dd>
+
+              <dt>Fecha boda</dt>
+              <dd>{weddingDateLabel}</dd>
+
+              <dt>Invitad@s</dt>
+              <dd>
+                {weddingProfile?.guests === 0 || weddingProfile?.guests
+                  ? weddingProfile.guests
+                  : "—"}
+              </dd>
+
               <dt>Creado</dt>
-              <dd>{user.created_at ? new Date(user.created_at).toLocaleString() : "—"}</dd>
+              <dd>
+                {user.created_at ? new Date(user.created_at).toLocaleString() : "—"}
+              </dd>
             </dl>
 
             <div className="profile-card__actions form__actions">

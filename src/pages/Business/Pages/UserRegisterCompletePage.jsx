@@ -62,7 +62,6 @@ function UserRegisterCompletePage() {
 
     let cancelled = false;
 
-    setIsLoadingInitial(true);
     Promise.all([fetchMe(), fetchMyWeddingProfile()])
       .then(([me, profile]) => {
         if (cancelled) return;
@@ -96,7 +95,6 @@ function UserRegisterCompletePage() {
         }));
       })
       .catch(() => {
-        // token inválido/expirado o backend no responde
         logout();
         if (cancelled) return;
         navigate("/acceso", { replace: true });
@@ -158,7 +156,9 @@ function UserRegisterCompletePage() {
   function buildProfilePayload() {
     const phoneDigits = (formData.phone || "").replace(/\D/g, "");
     const guests =
-      formData.guests === "" || formData.guests === null || formData.guests === undefined
+      formData.guests === "" ||
+      formData.guests === null ||
+      formData.guests === undefined
         ? null
         : Number(formData.guests);
 
@@ -190,7 +190,6 @@ function UserRegisterCompletePage() {
     const password = formData.password;
     const confirmPassword = formData.confirmPassword;
 
-    // Si es registro nuevo (sin token), aquí SÍ exigimos contraseña
     if (!isEditMode) {
       if (!password || !confirmPassword) {
         setPasswordError("Escribe y confirma tu contraseña.");
@@ -213,17 +212,12 @@ function UserRegisterCompletePage() {
       const profilePayload = buildProfilePayload();
 
       if (isEditMode) {
-        // Guardar cambios (usuario ya logueado)
         await saveMyWeddingProfile(profilePayload);
-
-        // refresca cache del user (por si cambió el nombre)
         await fetchMe().catch(() => {});
-
         navigate("/perfil");
         return;
       }
 
-      // Registro nuevo (2/2)
       await registerUser({
         email,
         password,
@@ -231,8 +225,6 @@ function UserRegisterCompletePage() {
       });
 
       await login(email, password);
-
-      // Guardar ficha ya con JWT
       await saveMyWeddingProfile(profilePayload);
 
       clearPendingRegistration();
