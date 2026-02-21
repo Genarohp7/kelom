@@ -9,6 +9,8 @@ import {
   getToken,
 } from "../utils/auth.js";
 
+const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
+
 // Ejemplos de proveedores seleccionados (modo demo)
 const sampleProviders = [
   {
@@ -80,6 +82,9 @@ function UserProfilePage() {
   const [weddingProfile, setWeddingProfile] = useState(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
 
+  // fallback si el avatar falla (link roto, etc.)
+  const [avatarBroken, setAvatarBroken] = useState(false);
+
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -94,6 +99,7 @@ function UserProfilePage() {
         if (cancelled) return;
         setUser(me);
         setWeddingProfile(profile); // puede ser null si aún no hay ficha
+        setAvatarBroken(false);
       })
       .catch(() => {
         // token inválido/expirado o backend no responde
@@ -125,6 +131,13 @@ function UserProfilePage() {
     if (!d) return "—";
     return d.toLocaleDateString();
   }, [weddingProfile]);
+
+  const avatarSrc = useMemo(() => {
+    if (!user?.avatar_url) return "";
+    if (avatarBroken) return "";
+    if (String(user.avatar_url).startsWith("http")) return user.avatar_url;
+    return `${API_BASE}${user.avatar_url}`;
+  }, [user, avatarBroken]);
 
   // Porcentaje de perfil completado (user + ficha)
   const completion = useMemo(() => {
@@ -314,17 +327,32 @@ function UserProfilePage() {
 
           {/* Columna derecha: foto + proveedores + ideas */}
           <aside className="preview-card">
-            {/* Foto de perfil (solo visual, se edita en el formulario) */}
+            {/* Foto de perfil */}
             <section className="user-profile__section user-profile__section--profile">
               <h2 className="preview-card__title">Foto de perfil</h2>
               <p className="preview-card__subtitle preview-card__subtitle--small">
-                En esta etapa la foto sigue siendo demo (local). Luego la subimos a backend.
+                Ahora ya se carga desde backend.
               </p>
 
               <div className="user-profile__avatar-wrapper">
-                <div className="user-profile__avatar-circle">
-                  {(user.name || "K")[0]}
-                </div>
+                {avatarSrc ? (
+                  <img
+                    src={avatarSrc}
+                    alt={`Avatar de ${user.name || "usuario"}`}
+                    style={{
+                      width: "120px",
+                      height: "120px",
+                      borderRadius: "50%",
+                      objectFit: "cover",
+                      border: "3px solid rgba(232, 154, 169, 0.7)",
+                    }}
+                    onError={() => setAvatarBroken(true)}
+                  />
+                ) : (
+                  <div className="user-profile__avatar-circle">
+                    {(user.name || "K")[0]}
+                  </div>
+                )}
               </div>
             </section>
 
