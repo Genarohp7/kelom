@@ -2,11 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
     <link
       rel="icon"
       type="image/svg+xml"
-      href="/src/assets/web/logo/logoKelom.svg"
+      href="./src/assets/web/logo/logoKelom.svg"
     />
+
     <script
       src="https://kit.fontawesome.com/e41f03414c.js"
       crossorigin="anonymous"
@@ -14,6 +16,7 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>kelom</title>
+
     <script>
       function loadScript(a) {
         var b = document.getElementsByTagName("head")[0],
@@ -28,7 +31,29 @@
         beTracker.t({ hash: "703ea674b4b5236542b51b95d9553c83" });
       });
     </script>
+
+    <script>
+      // SPA fix para GitHub Pages: revive la ruta original desde ?/...
+      (function (l) {
+        if (l.search && l.search[1] === "/") {
+          var decoded = l.search
+            .slice(1)
+            .split("&")
+            .map(function (s) {
+              return s.replace(/~and~/g, "&");
+            })
+            .join("?");
+
+          window.history.replaceState(
+            null,
+            null,
+            l.pathname.replace(/\/$/, "") + decoded + l.hash
+          );
+        }
+      })(window.location);
+    </script>
   </head>
+
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
