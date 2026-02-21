@@ -1,3 +1,4 @@
+// src/utils/auth.js
 import { apiFetch } from "../services/api.js";
 
 const TOKEN_KEY = "kelom_token";
@@ -72,6 +73,25 @@ export async function changePassword(currentPassword, newPassword) {
     body: JSON.stringify({ currentPassword, newPassword }),
   });
   return data;
+}
+
+// ======== Avatar (logueado) ========
+
+export async function uploadMyAvatar(file) {
+  const fd = new FormData();
+  fd.append("avatar", file);
+
+  const data = await apiFetch("/profile/avatar", {
+    method: "PUT",
+    body: fd,
+  });
+
+  // backend regresa user actualizado
+  if (data?.user) {
+    window.localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+  }
+
+  return data?.user || null;
 }
 
 // Alias para mantener compatibilidad con tu naming actual

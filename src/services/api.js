@@ -1,12 +1,20 @@
+// src/services/api.js
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
 export async function apiFetch(path, options = {}) {
   const token = window.localStorage.getItem("kelom_token");
 
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
+
   const headers = {
-    "Content-Type": "application/json",
     ...(options.headers || {}),
   };
+
+  // IMPORTANTE: si es FormData, NO seteamos Content-Type (el browser lo pone con boundary)
+  if (!isFormData) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) headers.Authorization = `Bearer ${token}`;
 

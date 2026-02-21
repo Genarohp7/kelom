@@ -16,7 +16,12 @@ import {
   fetchMyWeddingProfile,
   logout,
   changePassword,
+  uploadMyAvatar,
 } from "../../../utils/auth.js";
+
+const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
+const MAX_AVATAR_BYTES = 1024 * 1024; // 1MB
+const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 function toDateInputValue(raw) {
   if (!raw) return "";
@@ -111,11 +116,16 @@ function UserRegisterCompletePage() {
     contactPreference: "",
     password: "",
     confirmPassword: "",
-    avatar: "",
+    avatar: "", // preview (url / dataUrl)
   }));
+
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarObjectUrl, setAvatarObjectUrl] = useState("");
+  const [avatarError, setAvatarError] = useState("");
 
   const [passwordError, setPasswordError] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingInitial, setIsLoadingInitial] = useState(hasToken);
 
@@ -132,13 +142,20 @@ function UserRegisterCompletePage() {
   const [showPwNew, setShowPwNew] = useState(false);
   const [showPwConfirm, setShowPwConfirm] = useState(false);
 
+  // Limpieza de objectURL
+  useEffect(() => {
+    return () => {
+      if (avatarObjectUrl) URL.revokeObjectURL(avatarObjectUrl);
+    };
+  }, [avatarObjectUrl]);
+
   // Si no hay pending y no hay sesión, regresa a /registro
   useEffect(() => {
     const token = getToken();
     if (!pending && !token) navigate("/registro");
   }, [pending, navigate]);
 
-  // Si hay sesión, cargamos datos reales (me + ficha)
+  // Si hay sesión, cargamos datos reales (me + ficha) + avatar_url
   useEffect(() => {
     const token = getToken();
     if (!token) return;
@@ -151,6 +168,14 @@ function UserRegisterCompletePage() {
         if (cancelled) return;
 
         const weddingDate = toDateInputValue(profile?.wedding_date);
+
+        // Si el usuario ya tiene avatar_url, lo mostramos como preview
+        const remoteAvatar =
+          me?.avatar_url ? `${API_BASE}${me.avatar_url}` : "";
+
+        // Reset de file local si venimos cargando desde backend
+        setAvatarFile(null);
+        setAvatarError("");
 
         setFormData((prev) => ({
           ...prev,
@@ -173,6 +198,7 @@ function UserRegisterCompletePage() {
           contactPreference: profile?.contact_preference || "",
           password: "",
           confirmPassword: "",
+          avatar: remoteAvatar || prev.avatar,
         }));
       })
       .catch(() => {
@@ -218,6 +244,7 @@ function UserRegisterCompletePage() {
       setPasswordError("");
     }
     setSubmitError("");
+    setSubmitSuccess("");
 
     setFormData((prev) => ({ ...prev, [name]: value }));
   }
@@ -226,12 +253,31 @@ function UserRegisterCompletePage() {
     const file = evt.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      setFormData((prev) => ({ ...prev, avatar: dataUrl }));
-    };
-    reader.readAsDataURL(file);
+    setAvatarError("");
+    setSubmitError("");
+    setSubmitSuccess("");
+
+    // Validación cliente (para evitar que el backend te “regañe”)
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      setAvatarError("Formato no permitido. Usa JPG, PNG o WebP.");
+      evt.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError("Imagen demasiado grande. Máximo 1MB.");
+      evt.target.value = "";
+      return;
+    }
+
+    // Limpia objectURL anterior
+    if (avatarObjectUrl) URL.revokeObjectURL(avatarObjectUrl);
+
+    const url = URL.createObjectURL(file);
+    setAvatarObjectUrl(url);
+    setAvatarFile(file);
+
+    setFormData((prev) => ({ ...prev, avatar: url }));
   }
 
   function buildProfilePayload() {
@@ -264,6 +310,9 @@ function UserRegisterCompletePage() {
     evt.preventDefault();
     if (isSubmitting) return;
 
+    setSubmitError("");
+    setSubmitSuccess("");
+
     const token = getToken();
     const isEditMode = !!token;
 
@@ -287,19 +336,33 @@ function UserRegisterCompletePage() {
       }
     }
 
+    // Si hay error de avatar, no seguimos
+    if (avatarError) return;
+
     try {
       setIsSubmitting(true);
-      setSubmitError("");
 
       const profilePayload = buildProfilePayload();
 
       if (isEditMode) {
+        // 1) Guardar ficha
         await saveMyWeddingProfile(profilePayload);
+
+        // 2) Subir avatar si hay archivo nuevo
+        if (avatarFile) {
+          await uploadMyAvatar(avatarFile);
+          setAvatarFile(null);
+        }
+
+        // 3) refrescar cache de user (name/avatar_url)
         await fetchMe().catch(() => {});
+
+        setSubmitSuccess("Cambios guardados correctamente.");
         navigate("/perfil");
         return;
       }
 
+      // ===== Registro nuevo (2/2) =====
       await registerUser({
         email,
         password,
@@ -307,7 +370,14 @@ function UserRegisterCompletePage() {
       });
 
       await login(email, password);
+
       await saveMyWeddingProfile(profilePayload);
+
+      // Subir avatar ya con JWT
+      if (avatarFile) {
+        await uploadMyAvatar(avatarFile);
+        setAvatarFile(null);
+      }
 
       clearPendingRegistration();
       navigate("/perfil");
@@ -319,8 +389,12 @@ function UserRegisterCompletePage() {
         setSubmitError("Ese correo ya existe. Intenta iniciar sesión.");
       } else if (msg.toLowerCase().includes("cors")) {
         setSubmitError("Bloqueado por CORS. Revisa allowedOrigins en el backend.");
+      } else if (msg.toLowerCase().includes("imagen demasiado grande")) {
+        setSubmitError("Imagen demasiado grande. Máximo 1MB.");
+      } else if (msg.toLowerCase().includes("tipo de archivo")) {
+        setSubmitError("Formato no permitido. Usa JPG, PNG o WebP.");
       } else {
-        setSubmitError(msg || "No se pudo completar el registro.");
+        setSubmitError(msg || "No se pudo guardar.");
       }
     } finally {
       setIsSubmitting(false);
@@ -675,6 +749,12 @@ function UserRegisterCompletePage() {
                 </div>
               )}
 
+              {submitSuccess && (
+                <div className="form__error" style={{ marginTop: "0.6rem", color: "green" }}>
+                  {submitSuccess}
+                </div>
+              )}
+
               <div className="form__actions">
                 <button
                   type="submit"
@@ -751,10 +831,7 @@ function UserRegisterCompletePage() {
                   )}
 
                   {pwSuccess && (
-                    <div
-                      className="form__error"
-                      style={{ marginTop: "0.6rem", color: "green" }}
-                    >
+                    <div className="form__error" style={{ marginTop: "0.6rem", color: "green" }}>
                       {pwSuccess}
                     </div>
                   )}
@@ -775,7 +852,9 @@ function UserRegisterCompletePage() {
 
           <aside className="preview-card">
             <h2 className="preview-card__title">Foto de perfil</h2>
-            <p className="preview-card__subtitle">Agrega una foto si quieres.</p>
+            <p className="preview-card__subtitle">
+              JPG/PNG/WebP (máx 1MB). Se guarda en tu cuenta.
+            </p>
 
             <div className="profile-avatar-upload">
               <button
@@ -803,13 +882,19 @@ function UserRegisterCompletePage() {
                 id="avatar"
                 name="avatar"
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={handleAvatarChange}
                 className="profile-avatar__file-input"
               />
 
+              {avatarError && (
+                <div className="form__error" style={{ marginTop: "0.4rem" }}>
+                  {avatarError}
+                </div>
+              )}
+
               <p className="form__hint profile-avatar-upload__hint">
-                JPG o PNG. (Luego validamos tamaño.)
+                Tip: si eliges foto y guardas, se sube al backend automáticamente.
               </p>
             </div>
           </aside>
