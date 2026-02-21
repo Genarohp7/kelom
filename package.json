@@ -4,14 +4,16 @@
   "version": "0.0.0",
   "type": "module",
   "homepage": "https://Genarohp7.github.io/kelom",
- "scripts": {
-  "dev": "vite --open",
-  "build": "vite build",
-  "build:gh": "vite build --mode github",
-  "preview": "vite preview",
-  "predeploy": "npm run build:gh",
-  "deploy": "gh-pages -d dist"
-},
+  "scripts": {
+    "dev": "vite --open",
+    "build": "vite build",
+    "build:gh": "vite build --mode github",
+    "preview": "vite preview",
+    "predeploy": "npm run build:gh",
+    "deploy": "gh-pages -d dist",
+    "deploy:gh": "npm run deploy",
+    "build:prod": "vite build --mode production"
+  },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
     "cookie": "^1.1.1",
