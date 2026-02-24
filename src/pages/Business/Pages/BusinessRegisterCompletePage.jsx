@@ -1,5 +1,5 @@
 // src/pages/Business/Pages/BusinessRegisterCompletePage.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
@@ -38,7 +38,7 @@ function BusinessRegisterCompletePage() {
 
   const authMode = useMemo(() => {
     if (authModeFromState) return authModeFromState;
-    if (prefillProfileData) return "edit"; // si vienes de "editar perfil" asumimos cuenta existente
+    if (prefillProfileData) return "edit";
     return "register";
   }, [authModeFromState, prefillProfileData]);
 
@@ -139,7 +139,7 @@ function BusinessRegisterCompletePage() {
     };
   });
 
-  // ✅ Seguridad (estático/demo)
+  // ✅ Seguridad (demo)
   const [securityData, setSecurityData] = useState({
     password: "",
     confirmPassword: "",
@@ -156,6 +156,78 @@ function BusinessRegisterCompletePage() {
     confirmNewPassword: false,
   });
 
+  // ✅ Dropzone (nuevo)
+  const fileInputRef = useRef(null);
+  const [isDragActive, setIsDragActive] = useState(false);
+
+  const openFilePicker = () => {
+    fileInputRef.current?.click();
+  };
+
+  const addPhotos = (files) => {
+    const incoming = (files || []).filter((f) => f && f.type?.startsWith("image/"));
+    if (incoming.length === 0) return;
+
+    const keyOf = (f) => `${f.name}-${f.size}-${f.lastModified}`;
+
+    setProfileData((prev) => {
+      const existing = Array.isArray(prev.photos) ? prev.photos : [];
+      const seen = new Set(existing.map(keyOf));
+      const merged = [...existing];
+
+      incoming.forEach((f) => {
+        const k = keyOf(f);
+        if (!seen.has(k)) {
+          merged.push(f);
+          seen.add(k);
+        }
+      });
+
+      return { ...prev, photos: merged };
+    });
+  };
+
+  const handlePhotoInputChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    addPhotos(files);
+    // reset input para permitir seleccionar el mismo archivo otra vez
+    e.target.value = "";
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+
+    const files = Array.from(e.dataTransfer.files || []);
+    addPhotos(files);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+  };
+
+  const removePhotoAt = (index) => {
+    setProfileData((prev) => {
+      const next = (prev.photos || []).filter((_, i) => i !== index);
+      return { ...prev, photos: next };
+    });
+  };
+
   const handleSecurityChange = (e) => {
     const { name, value } = e.target;
     setSecurityData((prev) => ({ ...prev, [name]: value }));
@@ -170,11 +242,6 @@ function BusinessRegisterCompletePage() {
     setProfileData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePhotosChange = (e) => {
-    const files = Array.from(e.target.files || []);
-    setProfileData((prev) => ({ ...prev, photos: files }));
-  };
-
   const toggleEventType = (label) => {
     setProfileData((prev) => {
       const has = prev.eventTypes.includes(label);
@@ -185,6 +252,7 @@ function BusinessRegisterCompletePage() {
     });
   };
 
+  // Previews (limpieza incluida)
   const photoPreviews = useMemo(() => {
     return (profileData.photos || []).map((file) => URL.createObjectURL(file));
   }, [profileData.photos]);
@@ -223,7 +291,6 @@ function BusinessRegisterCompletePage() {
 
   const validateNumber = (value) => /^\d+$/.test(String(value));
 
-  // ✅ Progreso del perfil
   const completion = useMemo(() => {
     const items = [
       !!profileData.venueName.trim(),
@@ -235,7 +302,6 @@ function BusinessRegisterCompletePage() {
       !!profileData.description.trim(),
       !!profileData.services.trim(),
 
-      // extras
       (profileData.eventTypes || []).length > 0,
       !!profileData.sellingPointsText.trim(),
       !!profileData.mapText.trim(),
@@ -292,7 +358,6 @@ function BusinessRegisterCompletePage() {
       return;
     }
 
-    // Demo “verificación”
     const stored = sessionStorage.getItem(demoPasswordKey);
     if (stored && stored !== current) {
       alert("La contraseña actual no coincide (modo demo).");
@@ -364,7 +429,6 @@ function BusinessRegisterCompletePage() {
       return;
     }
 
-    // ✅ Si vienes en modo register, aquí sí “creas contraseña”
     if (authMode === "register") {
       if (!providerEmail) {
         alert(
@@ -373,7 +437,6 @@ function BusinessRegisterCompletePage() {
         return;
       }
       if (!validateCreatePassword()) return;
-
       sessionStorage.setItem(demoPasswordKey, securityData.password.trim());
     }
 
@@ -445,12 +508,14 @@ function BusinessRegisterCompletePage() {
               </p>
 
               {providerEmail && (
-                <p className="profile-card__subtitle" style={{ marginTop: "-0.6rem" }}>
+                <p
+                  className="profile-card__subtitle"
+                  style={{ marginTop: "-0.6rem" }}
+                >
                   Cuenta: <strong>{providerEmail}</strong>
                 </p>
               )}
 
-              {/* Progreso */}
               <div className="profile-progress">
                 <div className="profile-progress__row">
                   <span className="profile-progress__label">
@@ -474,7 +539,11 @@ function BusinessRegisterCompletePage() {
                 </p>
               </div>
 
-              <form className="form form--grid" onSubmit={handleSubmit} noValidate>
+              <form
+                className="form form--grid"
+                onSubmit={handleSubmit}
+                noValidate
+              >
                 <div className="form__field form__field--full">
                   <label className="form__label" htmlFor="venueName">
                     Nombre que verán las parejas *
@@ -595,7 +664,7 @@ function BusinessRegisterCompletePage() {
 
                 <div className="form__field form__field--full">
                   <label className="form__label">
-                    Tipos de evento (se mostrarán como chips)
+                    Tipos de evento (chips)
                   </label>
 
                   <div className="chip-grid">
@@ -769,25 +838,98 @@ function BusinessRegisterCompletePage() {
                   <span className="form__error" />
                 </div>
 
+                {/* ✅ NUEVO UI PRO: Dropzone */}
                 <div className="form__field form__field--full">
-                  <label className="form__label" htmlFor="photos">
-                    Fotografías del lugar
-                  </label>
-                  <input
-                    id="photos"
-                    name="photos"
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    className="form__input form__input--file"
-                    onChange={handlePhotosChange}
-                  />
-                  <p className="form__hint">
-                    La primera imagen será la principal.
-                  </p>
+                  <label className="form__label">Fotografías del lugar</label>
+
+                  <div
+                    className={
+                      isDragActive ? "dropzone dropzone--active" : "dropzone"
+                    }
+                    onClick={openFilePicker}
+                    onDragEnter={handleDragEnter}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Arrastra o selecciona fotos"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") openFilePicker();
+                    }}
+                  >
+                    <div className="dropzone__inner">
+                      <div className="dropzone__icon" aria-hidden="true">
+                        ⬆️
+                      </div>
+                      <p className="dropzone__title">Arrastra tus fotos aquí</p>
+                      <p className="dropzone__subtitle">o</p>
+
+                      <button
+                        type="button"
+                        className="dropzone__button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openFilePicker();
+                        }}
+                      >
+                        Seleccionar fotos
+                      </button>
+
+                      <p className="dropzone__hint">
+                        JPG, PNG o WebP · Puedes subir varias · La primera será
+                        la principal
+                      </p>
+
+                      {(profileData.photos || []).length > 0 && (
+                        <p className="dropzone__count">
+                          {(profileData.photos || []).length} foto(s)
+                          seleccionada(s)
+                        </p>
+                      )}
+                    </div>
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="dropzone__input"
+                      onChange={handlePhotoInputChange}
+                    />
+                  </div>
+
+                  {/* Thumbnails */}
+                  {photoPreviews.length > 0 && (
+                    <div className="dropzone__thumbs" aria-label="Fotos cargadas">
+                      {photoPreviews.map((src, idx) => (
+                        <div className="thumb" key={`${src}-${idx}`}>
+                          <img
+                            src={src}
+                            alt={`Foto seleccionada ${idx + 1}`}
+                            className="thumb__img"
+                          />
+
+                          {idx === 0 && (
+                            <span className="thumb__badge">Principal</span>
+                          )}
+
+                          <button
+                            type="button"
+                            className="thumb__remove"
+                            onClick={() => removePhotoAt(idx)}
+                            aria-label={`Eliminar foto ${idx + 1}`}
+                            title="Eliminar"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                {/* ✅ Seguridad */}
+                {/* Seguridad */}
                 <div className="form__field form__field--full">
                   <div className="security-card">
                     <h3 className="security-card__title">Seguridad</h3>
@@ -937,7 +1079,10 @@ function BusinessRegisterCompletePage() {
                   </div>
                 </div>
 
-                <div className="form__actions form__field--full" style={{ gap: "0.7rem" }}>
+                <div
+                  className="form__actions form__field--full"
+                  style={{ gap: "0.7rem" }}
+                >
                   <button
                     type="button"
                     className="btn btn--ghost"
@@ -985,7 +1130,9 @@ function BusinessRegisterCompletePage() {
                     Capacidad:{" "}
                     {profileData.capacityMin
                       ? `${profileData.capacityMin}${
-                          profileData.capacityMax ? `–${profileData.capacityMax}` : ""
+                          profileData.capacityMax
+                            ? `–${profileData.capacityMax}`
+                            : ""
                         }`
                       : "N/D"}
                   </span>
@@ -1002,7 +1149,10 @@ function BusinessRegisterCompletePage() {
                 {photoPreviews.length > 1 && (
                   <div className="preview-card__gallery" aria-label="Galería">
                     {photoPreviews.slice(1, 4).map((src, idx) => (
-                      <div className="preview-card__gallery-item" key={`${src}-${idx}`}>
+                      <div
+                        className="preview-card__gallery-item"
+                        key={`${src}-${idx}`}
+                      >
                         <img src={src} alt={`Foto ${idx + 2}`} />
                       </div>
                     ))}
