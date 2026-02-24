@@ -1,5 +1,5 @@
 // src/pages/Business/Pages/BusinessLoginPage.jsx
-import React from "react";
+import React, { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
@@ -7,14 +7,87 @@ import Kelom from "../../../assets/web/logo/logoKelom.png";
 function BusinessLoginPage() {
   const navigate = useNavigate();
 
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [errors, setErrors] = useState({
+    email: "",
+    password: "",
+    general: "",
+  });
+
+  const [showPassword, setShowPassword] = useState(false);
+
+  const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+  const validateForm = () => {
+    const nextErrors = { email: "", password: "", general: "" };
+
+    if (!formData.email.trim()) {
+      nextErrors.email = "Ingresa tu correo electrónico.";
+    } else if (!validateEmail(formData.email.trim())) {
+      nextErrors.email = "El correo no tiene un formato válido.";
+    }
+
+    if (!formData.password.trim()) {
+      nextErrors.password = "Ingresa tu contraseña.";
+    } else if (formData.password.length < 5) {
+      nextErrors.password = "La contraseña debe tener al menos 5 caracteres.";
+    }
+
+    setErrors(nextErrors);
+    return !nextErrors.email && !nextErrors.password;
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Limpieza de error del campo al escribir
+    setErrors((prev) => ({
+      ...prev,
+      [name]: "",
+      general: "",
+    }));
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    if (!validateForm()) return;
+
     // Demo: aquí luego irá la llamada al backend
-    console.log("Login demo enviado");
+    console.log("Login demo enviado:", {
+      email: formData.email.trim(),
+      passwordLength: formData.password.length,
+    });
+
+    setErrors((prev) => ({
+      ...prev,
+      general:
+        "Inicio de sesión en modo demo. El siguiente paso es conectar este formulario a tu endpoint real.",
+    }));
   };
 
   const handleForgotPassword = () => {
-    alert("Recuperación de contraseña (modo demo).");
+    if (!formData.email.trim()) {
+      alert(
+        "Modo demo: escribe primero tu correo y luego usamos ese dato para recuperación."
+      );
+      return;
+    }
+
+    if (!validateEmail(formData.email.trim())) {
+      alert("El correo no parece válido. Revísalo y vuelve a intentar.");
+      return;
+    }
+
+    alert(
+      `Recuperación de contraseña (modo demo) para: ${formData.email.trim()}`
+    );
   };
 
   const handleGoToRegister = () => {
@@ -23,7 +96,6 @@ function BusinessLoginPage() {
 
   return (
     <div className="business-auth">
-      {/* HEADER CON LOGO (usa BusinessAuth.css) */}
       <header className="business-auth__header">
         <div className="container business-auth__header-inner">
           <NavLink
@@ -34,13 +106,10 @@ function BusinessLoginPage() {
             <img src={Kelom} alt="Logo Kelom" title="Kelom" />
           </NavLink>
 
-          <span className="business-auth__logo-text">
-            Acceso de proveedores
-          </span>
+          <span className="business-auth__logo-text">Acceso de proveedores</span>
         </div>
       </header>
 
-      {/* CONTENIDO LOGIN */}
       <main className="business-auth__content">
         <div className="business-auth__container">
           <section className="auth-card">
@@ -57,12 +126,16 @@ function BusinessLoginPage() {
                 </label>
                 <input
                   id="login-email"
+                  name="email"
                   type="email"
                   className="form__input"
                   placeholder="tucorreo@empresa.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  autoComplete="email"
                   required
                 />
-                <span className="form__error" />
+                <span className="form__error">{errors.email}</span>
               </div>
 
               <div className="form__field">
@@ -71,14 +144,43 @@ function BusinessLoginPage() {
                 </label>
                 <input
                   id="login-password"
-                  type="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
                   className="form__input"
                   placeholder="Tu contraseña"
+                  value={formData.password}
+                  onChange={handleChange}
                   minLength={5}
+                  autoComplete="current-password"
                   required
                 />
-                <span className="form__error" />
+                <span className="form__error">{errors.password}</span>
+
+                <label
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.45rem",
+                    marginTop: "0.25rem",
+                    fontSize: "0.8rem",
+                    color: "var(--kelom-color-text-soft)",
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showPassword}
+                    onChange={(e) => setShowPassword(e.target.checked)}
+                  />
+                  Mostrar contraseña
+                </label>
               </div>
+
+              {errors.general && (
+                <p className="auth-card__subtitle" style={{ marginBottom: 0 }}>
+                  {errors.general}
+                </p>
+              )}
 
               <div className="auth-card__actions">
                 <button type="submit" className="btn btn--primary">

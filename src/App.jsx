@@ -13,6 +13,7 @@ import BusinessBenefitsPage from "./pages/Business/Pages/BusinessBenefitsPage.js
 // Formularios de empresas
 import BusinessLoginPage from "./pages/Business/Pages/BusinessLoginPage.jsx";
 import BusinessRegisterPage from "./pages/Business/Pages/BusinessRegisterPage.jsx";
+import BusinessRegisterCompletePage from "./pages/Business/Pages/BusinessRegisterCompletePage.jsx";
 
 // Detalle de proveedor
 import VenueDetailPage from "./pages/VenueDetailPage.jsx";
@@ -30,13 +31,9 @@ function App() {
   const location = useLocation();
   const isBusinessArea = location.pathname.startsWith("/empresas");
 
-  // ✅ Hook SIEMPRE dentro del componente
   useEffect(() => {
-    // Toma la URL de tu API desde .env / .env.production
-    // Ej: VITE_API_URL=https://api.kelom.com.mx
     const apiBase = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
-    // Chequeo simple de salud (opcional, pero útil)
     fetch(`${apiBase}/health`, { method: "GET" })
       .then((r) => r.json())
       .then((data) => console.log("API HEALTH:", data))
@@ -62,14 +59,27 @@ function App() {
           {/* Flujo parejas (usuarios finales) */}
           <Route path="/acceso" element={<UserLoginPage />} />
           <Route path="/registro" element={<UserRegisterPage />} />
-          <Route path="/registro/completar" element={<UserRegisterCompletePage />} />
+          <Route
+            path="/registro/completar"
+            element={<UserRegisterCompletePage />}
+          />
           <Route path="/perfil" element={<UserProfilePage />} />
 
           {/* Área de empresas (usa header/footer propios) */}
           <Route path="/empresas" element={<BusinessAreaPage />} />
           <Route path="/empresas/beneficios" element={<BusinessBenefitsPage />} />
           <Route path="/empresas/acceso" element={<BusinessLoginPage />} />
+
+          {/* Registro corto (lead) */}
           <Route path="/empresas/registro" element={<BusinessRegisterPage />} />
+
+          <Route path="/empresas/registro/completar" element={<BusinessRegisterCompletePage />} />
+
+          {/* Registro completo (ficha proveedor) */}
+          <Route
+            path="/empresas/registro/completar"
+            element={<BusinessRegisterCompletePage />}
+          />
 
           {/* Detalle de proveedor (venues) */}
           <Route path="/proveedores/:id" element={<VenueDetailPage />} />

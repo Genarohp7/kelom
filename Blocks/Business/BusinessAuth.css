@@ -15,7 +15,7 @@
 .business-auth,
 .business-register,
 .business-profile {
-  min-height: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   background: radial-gradient(
@@ -54,11 +54,10 @@
 .business-auth__logo-link img,
 .business-register__logo-link img,
 .business-profile__logo-link img {
-  height: 32px;      /* aquí ajustas el tamaño */
+  height: 32px;
   width: auto;
   display: block;
 }
-
 
 .business-auth__logo-text,
 .business-register__logo-text,
@@ -344,6 +343,13 @@
   transition: background-color 0.15s ease, color 0.15s ease,
     box-shadow 0.15s ease, transform 0.1s ease;
   width: 100%;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn--primary {

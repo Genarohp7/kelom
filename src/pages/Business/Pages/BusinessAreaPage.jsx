@@ -1,8 +1,8 @@
-// src/pages/BusinessAreaPage.jsx
+// src/pages/Business/Pages/BusinessAreaPage.jsx
 import "../../../../Blocks/Business/BusinessAreaPage.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
 import { NavLink } from "react-router-dom";
-import BusinessArea from "../../../assets/web/pages/empresas/Business/business-1.png";  
+import BusinessArea from "../../../assets/web/pages/empresas/Business/business-1.png";
 
 function BusinessAreaPage() {
   return (
@@ -10,13 +10,11 @@ function BusinessAreaPage() {
       {/* HEADER ESPECIAL PARA EMPRESAS */}
       <header className="business__header">
         <div className="business__header-inner container">
-          {/* Logo Kelom (vuelve al home principal) */}
           <NavLink to="/" className="header__logo" aria-label="Kelom">
             <img src={Kelom} alt="Logo Kelom" title="Kelom" />
           </NavLink>
 
           <nav className="business__nav">
-            {/* Acceso de empresas -> /empresas */}
             <NavLink
               to="/empresas"
               end
@@ -28,7 +26,6 @@ function BusinessAreaPage() {
               Acceso de empresas
             </NavLink>
 
-            {/* Beneficios -> /empresas/beneficios */}
             <NavLink
               to="/empresas/beneficios"
               className={({ isActive }) =>
@@ -39,9 +36,9 @@ function BusinessAreaPage() {
               Beneficios
             </NavLink>
 
-            {/* Acceder -> ahora también va al registro de empresas */}
+            {/* ✅ Acceder = login */}
             <NavLink
-              to="/empresas/registro"
+              to="/empresas/acceso"
               className="business__nav-link business__nav-link_button"
             >
               Acceder
@@ -50,9 +47,7 @@ function BusinessAreaPage() {
         </div>
       </header>
 
-      {/* CUERPO DE LA PÁGINA DE EMPRESAS */}
       <div className="business__body">
-        {/* SECCIÓN ACCESO DE EMPRESAS */}
         <section id="acceso" className="business__hero">
           <div className="container business__hero-grid">
             <div className="business__hero-text">
@@ -65,22 +60,44 @@ function BusinessAreaPage() {
 
               <p className="business__subtitle">
                 Con Kelom conectas con novi@s reales, no solo con visitas
-                anónimas. Te ayudamos a estar presente justo en el momento en
-                que se toman decisiones importantes.
+                anónimas. Te ayudamos a estar presente justo en el momento en que
+                se toman decisiones importantes.
               </p>
+
+              {/* ✅ Micro embudo directo en hero */}
+              <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.2rem" }}>
+                <NavLink to="/empresas/registro" className="business__cta-button">
+                  Registrar mi negocio
+                </NavLink>
+
+                <NavLink
+                  to="/empresas/acceso"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "0.8rem 1.2rem",
+                    borderRadius: "999px",
+                    border: "1px solid rgba(232,154,169,0.65)",
+                    color: "#a94f63",
+                    textDecoration: "none",
+                    fontWeight: 600,
+                    background: "#fff",
+                  }}
+                >
+                  Ya tengo cuenta
+                </NavLink>
+              </div>
 
               <div className="business__benefits-grid">
                 <article className="business-card">
                   <span className="business-card__icon" aria-hidden="true">
                     🌐
                   </span>
-                  <h3 className="business-card__title">
-                    Visibilidad en la web
-                  </h3>
+                  <h3 className="business-card__title">Visibilidad en la web</h3>
                   <p className="business-card__text">
-                    Tu negocio aparece en una plataforma especializada en
-                    eventos, justo cuando las parejas están planeando su boda.
-                    No es “una página más”, es una vitrina pensada para ti.
+                    Tu negocio aparece en una plataforma especializada en eventos,
+                    justo cuando las parejas están planeando su boda.
                   </p>
                 </article>
 
@@ -102,10 +119,8 @@ function BusinessAreaPage() {
                   </span>
                   <h3 className="business-card__title">Generas más</h3>
                   <p className="business-card__text">
-                    Igual que un anuncio en televisión o radio pone tu negocio
-                    frente a más personas, estar en Kelom te coloca frente a
-                    parejas que ya están listas para contratar, no solo a
-                    curiosos.
+                    Estar en Kelom te coloca frente a parejas que ya están listas
+                    para contratar, no solo frente a curiosos.
                   </p>
                 </article>
 
@@ -113,29 +128,23 @@ function BusinessAreaPage() {
                   <span className="business-card__icon" aria-hidden="true">
                     🤝
                   </span>
-                  <h3 className="business-card__title">
-                    Acompañamiento personal
-                  </h3>
+                  <h3 className="business-card__title">Acompañamiento personal</h3>
                   <p className="business-card__text">
-                    No solo llenas un formulario. Te ayudamos a presentar mejor
-                    tu negocio y a entender qué buscan las parejas, para que tu
-                    oferta sea clara, atractiva y más precisa.
+                    Te ayudamos a presentar mejor tu negocio y a entender qué
+                    buscan las parejas para que tu oferta sea clara y atractiva.
                   </p>
                 </article>
               </div>
             </div>
 
             <div className="business__hero-side">
-              {/* Imagen principal + favicon */}
               <figure className="business__hero-figure">
                 <div className="business__hero-photo-wrap">
-                  {/* Puedes cambiar esta URL por una imagen local cuando quieras */}
                   <img
                     src={BusinessArea}
                     alt="Proveedor de eventos gestionando su negocio en línea"
                     className="business__hero-photo"
                   />
-                  {/* Favicon de Kelom superpuesto */}
                   <img
                     src="/favicon.svg"
                     alt="Ícono Kelom"
@@ -143,9 +152,7 @@ function BusinessAreaPage() {
                   />
                 </div>
                 <figcaption className="business__hero-caption">
-                  <p className="business__hero-caption-title">
-                    Tu vitrina digital
-                  </p>
+                  <p className="business__hero-caption-title">Tu vitrina digital</p>
                   <p className="business__hero-caption-text">
                     Muestra tu marca, tus fotos y tus mejores eventos en un
                     espacio diseñado para conquistar a las parejas desde el
@@ -161,7 +168,7 @@ function BusinessAreaPage() {
                 <p className="business-highlight__text">
                   Mientras tú organizas eventos increíbles, nosotros trabajamos
                   para que más parejas te encuentren y te tengan en su lista
-                  corta de opciones.
+                  corta.
                 </p>
                 <ul className="business-highlight__list">
                   <li>Presencia constante en la web.</li>
@@ -173,7 +180,6 @@ function BusinessAreaPage() {
           </div>
         </section>
 
-        {/* SECCIÓN BENEFICIOS / ESTADÍSTICAS */}
         <section id="beneficios" className="business__stats">
           <div className="container">
             <h2 className="business__section-title">
@@ -187,42 +193,32 @@ function BusinessAreaPage() {
 
             <div className="business__stats-grid">
               <article className="stat-card">
-                <div className="stat-card__icon" aria-hidden="true">
-                  📊
-                </div>
+                <div className="stat-card__icon" aria-hidden="true">📊</div>
                 <p className="stat-card__number">+X</p>
                 <p className="stat-card__label">veces más oportunidades</p>
                 <p className="stat-card__text">
                   Estar en una plataforma especializada multiplica tus
-                  posibilidades de recibir mensajes, cotizaciones y visitas a
-                  tus redes.
+                  posibilidades de recibir mensajes, cotizaciones y visitas a tus
+                  redes.
                 </p>
               </article>
 
               <article className="stat-card">
-                <div className="stat-card__icon" aria-hidden="true">
-                  ⏰
-                </div>
+                <div className="stat-card__icon" aria-hidden="true">⏰</div>
                 <p className="stat-card__number">24/7</p>
                 <p className="stat-card__label">vitrina digital</p>
                 <p className="stat-card__text">
-                  Tu negocio está visible todos los días, a cualquier hora, aun
-                  cuando tú no estés contestando el teléfono o WhatsApp.
+                  Tu negocio está visible todos los días, a cualquier hora.
                 </p>
               </article>
 
               <article className="stat-card">
-                <div className="stat-card__icon" aria-hidden="true">
-                  🚫
-                </div>
+                <div className="stat-card__icon" aria-hidden="true">🚫</div>
                 <p className="stat-card__number">0</p>
-                <p className="stat-card__label">
-                  visibilidad sin presencia web
-                </p>
+                <p className="stat-card__label">visibilidad sin presencia web</p>
                 <p className="stat-card__text">
-                  No estar dado de alta en la web significa que muchas parejas
-                  jamás sabrán que existes, aunque estés a unas cuadras del
-                  lugar de su evento.
+                  No estar en línea significa que muchas parejas jamás sabrán que
+                  existes.
                 </p>
               </article>
             </div>
@@ -233,17 +229,13 @@ function BusinessAreaPage() {
               </h3>
               <p className="business__responsibility-text">
                 En Kelom no solo abrimos un directorio. Nuestro compromiso es
-                hacer publicidad efectiva para atraer a las personas correctas:
-                parejas que realmente están planeando su boda. Cuidamos la
-                calidad de la información, revisamos los registros y optimizamos
-                la forma en la que mostramos cada negocio para que tu presencia
-                digital tenga sentido y resultados.
+                atraer a las personas correctas: parejas que realmente están
+                planeando su boda.
               </p>
             </div>
           </div>
         </section>
 
-        {/* CTA / ACCEDER */}
         <section id="acceder" className="business__cta">
           <div className="container business__cta-inner">
             <div className="business__cta-text">
@@ -252,12 +244,15 @@ function BusinessAreaPage() {
               </h2>
               <p className="business__cta-subtitle">
                 Registra tu empresa en Kelom y forma parte de una comunidad de
-                proveedores seleccionados, con un acompañamiento cercano y un
-                enfoque real en resultados.
+                proveedores seleccionados.
+              </p>
+
+              <p className="business__cta-subtitle" style={{ marginTop: "0.4rem" }}>
+                ¿Ya te registraste?{" "}
+                <NavLink to="/empresas/acceso">Entra aquí a tu cuenta</NavLink>.
               </p>
             </div>
 
-            {/* Este ya apuntaba a /empresas/registro, lo dejamos igual */}
             <NavLink to="/empresas/registro" className="business__cta-button">
               Registrar mi negocio
             </NavLink>
@@ -265,20 +260,13 @@ function BusinessAreaPage() {
         </section>
       </div>
 
-      {/* FOOTER SOLO CON REDES */}
       <footer className="business__footer">
         <div className="container business__footer-inner">
           <p className="business__footer-text">Síguenos</p>
           <div className="business__social">
-            <a href="#" className="business__social-link">
-              Facebook
-            </a>
-            <a href="#" className="business__social-link">
-              Instagram
-            </a>
-            <a href="#" className="business__social-link">
-              WhatsApp
-            </a>
+            <a href="#" className="business__social-link">Facebook</a>
+            <a href="#" className="business__social-link">Instagram</a>
+            <a href="#" className="business__social-link">WhatsApp</a>
           </div>
         </div>
       </footer>
