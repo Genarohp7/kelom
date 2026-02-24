@@ -1,8 +1,32 @@
 // src/pages/VenueDetailPage.jsx
 import "../../Blocks/venues/VenueDetailPage.css";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useMemo } from "react";
+import { useParams, Link, useLocation } from "react-router-dom";
 
-// Datos estáticos por ahora (mismo concepto que usamos antes)
+const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
+
+function safeParse(json) {
+  try {
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+const formatMXN = (value) => {
+  if (value === null || value === undefined || value === "") return "";
+  const n = Number(value);
+  if (Number.isNaN(n)) return String(value);
+  return n.toLocaleString("es-MX");
+};
+
+const DEFAULT_GALLERY = [
+  "https://images.pexels.com/photos/3951851/pexels-photo-3951851.jpeg?auto=compress&cs=tinysrgb&w=1200",
+  "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=1200",
+  "https://images.pexels.com/photos/169190/pexels-photo-169190.jpeg?auto=compress&cs=tinysrgb&w=1200",
+];
+
+// Datos estáticos por ahora
 const venuesDetail = [
   {
     id: 1,
@@ -245,7 +269,8 @@ const venuesDetail = [
       "Opciones de menú gourmet",
       "Escenarios muy fotogénicos",
     ],
-    mapText: "Zona céntrica, perfecta para invitados que vienen de distintos puntos.",
+    mapText:
+      "Zona céntrica, perfecta para invitados que vienen de distintos puntos.",
     opinions: [
       {
         id: 1,
@@ -293,9 +318,118 @@ const venuesDetail = [
   },
 ];
 
+function mapProfileToVenue(profileData, basicData, photoPreviews = []) {
+  const capMin = profileData.capacityMin ? String(profileData.capacityMin) : "";
+  const capMax = profileData.capacityMax ? String(profileData.capacityMax) : "";
+
+  const capacity =
+    capMin && capMax
+      ? `${capMin} – ${capMax} invitados`
+      : capMin
+      ? `${capMin} invitados`
+      : "Capacidad por definir";
+
+  const priceFrom = profileData.priceFrom ? String(profileData.priceFrom) : "";
+  const priceTo = profileData.priceTo ? String(profileData.priceTo) : "";
+
+  const priceRange =
+    priceFrom && priceTo
+      ? `$${formatMXN(priceFrom)} – $${formatMXN(priceTo)}`
+      : priceFrom
+      ? `Desde $${formatMXN(priceFrom)}`
+      : "Precio por definir";
+
+  const gallery = photoPreviews.length
+    ? photoPreviews.slice(0, 3)
+    : DEFAULT_GALLERY;
+
+  const mainImage = photoPreviews.length ? photoPreviews[0] : DEFAULT_GALLERY[0];
+
+  const sellingPoints = (profileData.sellingPointsText || "")
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  const eventTypes = Array.isArray(profileData.eventTypes)
+    ? profileData.eventTypes
+    : [];
+
+  return {
+    id: "mi-perfil",
+    name: profileData.venueName || "Mi proveedor",
+    location: profileData.venueLocation || "Ubicación por definir",
+    rating: 0,
+    reviews: 0,
+    // 👇 ya NO generamos ranking/badge en perfil proveedor
+    ranking: "",
+    mainImage,
+    gallery,
+    capacity,
+    priceRange,
+    eventTypes,
+    shortDescription:
+      profileData.shortDescription ||
+      profileData.description ||
+      "Descripción por definir.",
+    sellingPoints: sellingPoints.length
+      ? sellingPoints
+      : ["Punto destacado 1", "Punto destacado 2", "Punto destacado 3"],
+    mapText:
+      profileData.mapText ||
+      "Ubicación por definir. Más adelante aquí conectaremos Google Maps.",
+    opinions: [],
+    _basicData: basicData || null,
+    _rawProfile: profileData || null,
+  };
+}
+
 function VenueDetailPage() {
   const { id } = useParams();
-  const venue = venuesDetail.find((item) => String(item.id) === id);
+  const location = useLocation();
+
+  const params = new URLSearchParams(location.search);
+  const forceProviderView = params.get("mode") === "provider";
+
+  const stateProfileData = location.state?.profileData || null;
+  const stateBasicData = location.state?.basicData || null;
+
+  const draftProfile = useMemo(() => {
+    const raw = localStorage.getItem(PROVIDER_PROFILE_DRAFT_KEY);
+    return raw ? safeParse(raw) : null;
+  }, []);
+
+  const isMyProfile = id === "mi-perfil";
+  const isProviderView = forceProviderView || isMyProfile;
+
+  const statePhotoPreviews = useMemo(() => {
+    const photos = stateProfileData?.photos;
+    if (!Array.isArray(photos) || photos.length === 0) return [];
+    return photos.map((file) => URL.createObjectURL(file));
+  }, [stateProfileData]);
+
+  useEffect(() => {
+    return () => {
+      statePhotoPreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [statePhotoPreviews]);
+
+  let venue = null;
+
+  if (isMyProfile) {
+    if (stateProfileData) {
+      venue = mapProfileToVenue(
+        stateProfileData,
+        stateBasicData,
+        statePhotoPreviews
+      );
+    } else if (draftProfile) {
+      venue = mapProfileToVenue(draftProfile, null, []);
+    } else {
+      venue = mapProfileToVenue({}, null, []);
+    }
+  } else {
+    venue = venuesDetail.find((item) => String(item.id) === id) || null;
+  }
 
   if (!venue) {
     return (
@@ -328,53 +462,92 @@ function VenueDetailPage() {
       <section className="venue-hero">
         <div className="container venue-hero__grid">
           <div className="venue-hero__info">
-            <Link to="/" className="venue-hero__back-link">
-              ← Volver a la lista de lugares
+            <Link
+              to={isProviderView ? "/empresas" : "/"}
+              className="venue-hero__back-link"
+            >
+              ←{" "}
+              {isProviderView
+                ? "Volver al área de empresas"
+                : "Volver a la lista de lugares"}
             </Link>
 
-            <span className="venue-hero__pill">Lugar para boda</span>
+            <span className="venue-hero__pill">
+              {isProviderView ? "Vista proveedor" : "Lugar para boda"}
+            </span>
 
             <h1 className="venue-hero__name">{venue.name}</h1>
 
             <p className="venue-hero__location">{venue.location}</p>
 
-            <div className="venue-hero__rating">
-              <span className="venue-hero__stars">★★★★★</span>
-              <span className="venue-hero__rating-score">
-                {venue.rating.toFixed(1)}
-              </span>
-              <span className="venue-hero__rating-count">
-                ({venue.reviews} opiniones)
-              </span>
-              {venue.ranking && (
-                <span className="venue-hero__ranking">{venue.ranking}</span>
-              )}
-            </div>
+            {/* ✅ Rating y ranking SOLO para consumidor */}
+            {!isProviderView && (
+              <div className="venue-hero__rating">
+                <span className="venue-hero__stars">★★★★★</span>
+                <span className="venue-hero__rating-score">
+                  {venue.rating.toFixed(1)}
+                </span>
+                <span className="venue-hero__rating-count">
+                  ({venue.reviews} opiniones)
+                </span>
+                {venue.ranking && (
+                  <span className="venue-hero__ranking">{venue.ranking}</span>
+                )}
+              </div>
+            )}
 
             <p className="venue-hero__lead">{venue.shortDescription}</p>
 
             <ul className="venue-hero__highlights">
               <li>{venue.capacity}</li>
               <li>{venue.priceRange}</li>
-              {venue.eventTypes.slice(0, 2).map((type) => (
+              {(venue.eventTypes || []).slice(0, 2).map((type) => (
                 <li key={type}>{type}</li>
               ))}
             </ul>
 
             <div className="venue-hero__ctas">
-              <button type="button" className="btn btn--primary" disabled>
-                Pedir cotización (próximamente)
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => {
-                  const el = document.getElementById("venue-map");
-                  if (el) el.scrollIntoView({ behavior: "smooth" });
-                }}
-              >
-                Ver ubicación
-              </button>
+              {!isProviderView ? (
+                <>
+                  <button type="button" className="btn btn--primary" disabled>
+                    Pedir cotización (próximamente)
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => {
+                      const el = document.getElementById("venue-map");
+                      if (el) el.scrollIntoView({ behavior: "smooth" });
+                    }}
+                  >
+                    Ver ubicación
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/empresas/registro/completar"
+                    className="btn btn--primary"
+                    state={{
+                      basicData: venue._basicData || null,
+                      prefillProfileData: venue._rawProfile || null,
+                    }}
+                  >
+                    Editar perfil
+                  </Link>
+
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => {
+                      const el = document.getElementById("venue-map");
+                      if (el) el.scrollIntoView({ behavior: "smooth" });
+                    }}
+                  >
+                    Ver ubicación
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -384,7 +557,9 @@ function VenueDetailPage() {
               alt={venue.name}
               className="venue-hero__image"
             />
-            {venue.ranking && (
+
+            {/* ✅ Badge SOLO para consumidor */}
+            {!isProviderView && venue.ranking && (
               <div className="venue-hero__badge">{venue.ranking}</div>
             )}
           </div>
@@ -400,7 +575,7 @@ function VenueDetailPage() {
           </p>
 
           <div className="venue-gallery__grid">
-            {venue.gallery.map((photo, index) => (
+            {(venue.gallery || []).map((photo, index) => (
               <figure key={index} className="venue-gallery__item">
                 <img
                   src={photo}
@@ -429,18 +604,27 @@ function VenueDetailPage() {
               <div className="venue-info__tags">
                 <span className="chip">{venue.capacity}</span>
                 <span className="chip">{venue.priceRange}</span>
-                {venue.eventTypes.map((type) => (
+                {(venue.eventTypes || []).map((type) => (
                   <span key={type} className="chip">
                     {type}
                   </span>
                 ))}
               </div>
+
+              {venue.sellingPoints && venue.sellingPoints.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: "1.2rem" }}>Lo mejor de este lugar</h3>
+                  <ul style={{ marginTop: "0.6rem" }}>
+                    {venue.sellingPoints.map((p) => (
+                      <li key={p}>{p}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
 
             <aside className="venue-info__sidebar">
-              <h3 className="venue-info__sidebar-title">
-                Información rápida
-              </h3>
+              <h3 className="venue-info__sidebar-title">Información rápida</h3>
               <ul className="venue-info__list">
                 <li>
                   <span className="venue-info__label">Ubicación: </span>
@@ -452,15 +636,17 @@ function VenueDetailPage() {
                 </li>
                 <li>
                   <span className="venue-info__label">Tipo de eventos: </span>
-                  {venue.eventTypes.join(", ")}
+                  {(venue.eventTypes || []).join(", ") || "Por definir"}
                 </li>
                 <li>
                   <span className="venue-info__label">Rango de precio: </span>
                   {venue.priceRange}
                 </li>
-                {venue.ranking && (
+
+                {/* ✅ Badge SOLO para consumidor */}
+                {!isProviderView && venue.ranking && (
                   <li>
-                    <span className="venue-info__label">Ranking: </span>
+                    <span className="venue-info__label">Badge: </span>
                     {venue.ranking}
                   </li>
                 )}
@@ -470,45 +656,47 @@ function VenueDetailPage() {
         </div>
       </section>
 
-      {/* OPINIONES */}
-      <section className="venue-reviews">
-        <div className="container">
-          <div className="venue-reviews__header">
-            <div>
-              <h2 className="section-title">Opiniones de parejas</h2>
-              <p className="section-subtitle">
-                Lo que otras parejas han dicho después de casarse en{" "}
-                {venue.name}.
-              </p>
-            </div>
-            <div className="venue-reviews__overall">
-              <span className="venue-reviews__score">
-                {opinionsAverage.toFixed(1)}
-              </span>
+      {/* OPINIONES (solo consumidor) */}
+      {!isProviderView && (
+        <section className="venue-reviews">
+          <div className="container">
+            <div className="venue-reviews__header">
               <div>
-                <div className="venue-reviews__stars">★★★★★</div>
-                <div className="venue-reviews__count">
-                  Basado en {venue.reviews} opiniones totales.
+                <h2 className="section-title">Opiniones de parejas</h2>
+                <p className="section-subtitle">
+                  Lo que otras parejas han dicho después de casarse en{" "}
+                  {venue.name}.
+                </p>
+              </div>
+              <div className="venue-reviews__overall">
+                <span className="venue-reviews__score">
+                  {opinionsAverage.toFixed(1)}
+                </span>
+                <div>
+                  <div className="venue-reviews__stars">★★★★★</div>
+                  <div className="venue-reviews__count">
+                    Basado en {venue.reviews} opiniones totales.
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="venue-reviews__grid">
-            {venue.opinions.map((opinion) => (
-              <article key={opinion.id} className="venue-review">
-                <div className="venue-review__rating">
-                  ★★★★★ ({opinion.rating.toFixed(1)})
-                </div>
-                <p className="venue-review__text">“{opinion.text}”</p>
-                <div className="venue-review__meta">
-                  <span>{opinion.couple}</span>
-                </div>
-              </article>
-            ))}
+            <div className="venue-reviews__grid">
+              {(venue.opinions || []).map((opinion) => (
+                <article key={opinion.id} className="venue-review">
+                  <div className="venue-review__rating">
+                    ★★★★★ ({opinion.rating.toFixed(1)})
+                  </div>
+                  <p className="venue-review__text">“{opinion.text}”</p>
+                  <div className="venue-review__meta">
+                    <span>{opinion.couple}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* MAPA */}
       <section className="venue-map" id="venue-map">
@@ -527,7 +715,6 @@ function VenueDetailPage() {
           </div>
 
           <div className="venue-map__frame">
-            {/* Placeholder de mapa por ahora */}
             <iframe
               className="venue-map__iframe"
               title={`Mapa de ${venue.name}`}

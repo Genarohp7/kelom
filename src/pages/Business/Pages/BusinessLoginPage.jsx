@@ -46,7 +46,6 @@ function BusinessLoginPage() {
 
     setFormData((prev) => ({ ...prev, [name]: value }));
 
-    // Limpieza de error del campo al escribir
     setErrors((prev) => ({
       ...prev,
       [name]: "",
@@ -56,20 +55,22 @@ function BusinessLoginPage() {
 
   const handleSubmit = (event) => {
     event.preventDefault();
-
     if (!validateForm()) return;
 
-    // Demo: aquí luego irá la llamada al backend
-    console.log("Login demo enviado:", {
-      email: formData.email.trim(),
+    const email = formData.email.trim().toLowerCase();
+
+    // Demo: “login ok” -> vamos a completar/editar perfil
+    console.log("Login demo OK:", {
+      email,
       passwordLength: formData.password.length,
     });
 
-    setErrors((prev) => ({
-      ...prev,
-      general:
-        "Inicio de sesión en modo demo. El siguiente paso es conectar este formulario a tu endpoint real.",
-    }));
+    navigate("/empresas/registro/completar", {
+      state: {
+        authMode: "edit", // 👈 al entrar desde login, mostramos "cambiar contraseña"
+        loginEmail: email,
+      },
+    });
   };
 
   const handleForgotPassword = () => {
@@ -156,17 +157,7 @@ function BusinessLoginPage() {
                 />
                 <span className="form__error">{errors.password}</span>
 
-                <label
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.45rem",
-                    marginTop: "0.25rem",
-                    fontSize: "0.8rem",
-                    color: "var(--kelom-color-text-soft)",
-                    cursor: "pointer",
-                  }}
-                >
+                <label className="form__toggle">
                   <input
                     type="checkbox"
                     checked={showPassword}

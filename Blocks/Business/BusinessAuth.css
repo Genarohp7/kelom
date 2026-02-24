@@ -11,7 +11,6 @@
 }
 
 /* Wrappers principales */
-
 .business-auth,
 .business-register,
 .business-profile {
@@ -28,7 +27,6 @@
 }
 
 /* Headers */
-
 .business-auth__header,
 .business-register__header,
 .business-profile__header {
@@ -50,7 +48,7 @@
   padding: 0.7rem 1.5rem;
 }
 
-/* Logo en headers de login / registro / ficha */
+/* Logo en headers */
 .business-auth__logo-link img,
 .business-register__logo-link img,
 .business-profile__logo-link img {
@@ -79,7 +77,6 @@
 }
 
 /* Contenido login / registro */
-
 .business-auth__content,
 .business-register__content {
   flex: 1;
@@ -101,8 +98,7 @@
   margin: 0 auto;
 }
 
-/* Contenido ficha (paso 2) */
-
+/* Contenido ficha */
 .business-profile__content {
   flex: 1;
   padding: 2.5rem 1.5rem 3rem;
@@ -114,8 +110,7 @@
   margin: 0 auto;
 }
 
-/* Cards base */
-
+/* Cards */
 .auth-card,
 .register-card,
 .profile-card,
@@ -146,7 +141,6 @@
 }
 
 /* Títulos y textos */
-
 .auth-card__title,
 .register-card__title,
 .profile-card__title {
@@ -171,15 +165,131 @@
   margin-bottom: 0.3rem;
 }
 
-/* Preview (lado derecho paso 2) */
+/* ✅ Toggle (Mostrar contraseña) */
+.form__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--kelom-color-text-soft);
+  cursor: pointer;
+}
 
+/* ✅ Progreso del perfil */
+.profile-progress {
+  margin: 0.7rem 0 1.3rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(232, 154, 169, 0.28);
+  background: #fff7fb;
+}
+
+.profile-progress__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.55rem;
+}
+
+.profile-progress__label {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--kelom-color-text-main);
+}
+
+.profile-progress__value {
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--kelom-color-primary-dark);
+}
+
+.profile-progress__bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(232, 154, 169, 0.22);
+  overflow: hidden;
+  border: 1px solid rgba(232, 154, 169, 0.25);
+}
+
+.profile-progress__fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--kelom-color-primary-dark);
+  width: 0%;
+  transition: width 220ms ease;
+}
+
+.profile-progress__hint {
+  margin: 0.6rem 0 0;
+  font-size: 0.82rem;
+  color: var(--kelom-color-text-soft);
+  line-height: 1.45;
+}
+
+/* ✅ Chips (tipos de evento) */
+.chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.35rem;
+}
+
+.chip-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.86rem;
+  cursor: pointer;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(232, 154, 169, 0.45);
+  background: #fff;
+}
+
+.chip-option--active {
+  background: rgba(232, 154, 169, 0.18);
+}
+
+/* ✅ Seguridad */
+.security-card {
+  border: 1px solid rgba(232, 154, 169, 0.28);
+  background: #fff7fb;
+  border-radius: 1rem;
+  padding: 1rem;
+}
+
+.security-card__title {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.security-card__subtitle {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  color: var(--kelom-color-text-soft);
+}
+
+.security-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1.2rem;
+}
+
+.security-card__actions {
+  margin-top: 0.9rem;
+}
+
+/* Preview (lado derecho) */
 .preview-card__pill {
   display: inline-flex;
   padding: 0.3rem 0.9rem;
   border-radius: 999px;
   background: rgba(232, 154, 169, 0.2);
   font-size: 0.78rem;
-  color: var(--color-primary-dark, var(--kelom-color-primary-dark));
+  color: var(--kelom-color-primary-dark);
   margin-bottom: 0.5rem;
 }
 
@@ -191,13 +301,24 @@
 .preview-card__subtitle {
   margin: 0 0 0.6rem;
   font-size: 0.9rem;
-  color: var(--color-text-soft, var(--kelom-color-text-soft));
+  color: var(--kelom-color-text-soft);
 }
 
 .preview-card__text {
   margin: 0;
   font-size: 0.9rem;
-  color: var(--color-text-main, var(--kelom-color-text-main));
+  color: var(--kelom-color-text-main);
+}
+
+.preview-card__chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.72rem;
+  border: 1px solid rgba(232, 154, 169, 0.45);
+  background: #ffffff;
+  color: var(--kelom-color-primary-dark);
 }
 
 .preview-card__photo-main {
@@ -233,7 +354,6 @@
 }
 
 /* Formularios */
-
 .form {
   display: flex;
   flex-direction: column;
@@ -244,12 +364,6 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem 1.4rem;
-}
-
-.form__group {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.9rem 1.3rem;
 }
 
 .form__field {
@@ -290,7 +404,7 @@
 
 .form__input:focus,
 .form__textarea:focus {
-  border-color: var(--color-primary, var(--kelom-color-primary));
+  border-color: var(--kelom-color-primary);
   box-shadow: 0 0 0 1px rgba(232, 154, 169, 0.35);
 }
 
@@ -301,7 +415,7 @@
 
 .form__hint {
   font-size: 0.75rem;
-  color: var(--color-text-soft, var(--kelom-color-text-soft));
+  color: var(--kelom-color-text-soft);
 }
 
 .form__error {
@@ -310,19 +424,7 @@
   min-height: 1.05em;
 }
 
-/* Etiquetas de sección (paso 2) */
-
-.section-label {
-  margin: 1.3rem 0 0.4rem;
-  font-size: 0.86rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--color-text-soft, var(--kelom-color-text-soft));
-}
-
 /* Botones */
-
 .auth-card__actions,
 .register-card__actions,
 .form__actions {
@@ -353,22 +455,22 @@
 }
 
 .btn--primary {
-  background: var(--color-primary-dark, var(--kelom-color-primary-dark));
+  background: var(--kelom-color-primary-dark);
   color: #fff;
-  border-color: var(--color-primary-dark, var(--kelom-color-primary-dark));
+  border-color: var(--kelom-color-primary-dark);
   box-shadow: 0 14px 36px rgba(184, 50, 96, 0.35);
 }
 
 .btn--primary:hover {
-  background: var(--color-primary, var(--kelom-color-primary));
-  border-color: var(--color-primary, var(--kelom-color-primary));
+  background: var(--kelom-color-primary);
+  border-color: var(--kelom-color-primary);
   transform: translateY(-1px);
 }
 
 .btn--ghost {
   background: #ffffff;
   border-color: rgba(232, 154, 169, 0.6);
-  color: var(--color-primary-dark, var(--kelom-color-primary-dark));
+  color: var(--kelom-color-primary-dark);
 }
 
 .btn--ghost:hover {
@@ -376,7 +478,6 @@
 }
 
 /* Links del login */
-
 .auth-card__links {
   display: flex;
   justify-content: space-between;
@@ -390,7 +491,7 @@
   padding: 0;
   background: none;
   cursor: pointer;
-  color: var(--color-primary-dark, var(--kelom-color-primary-dark));
+  color: var(--kelom-color-primary-dark);
   text-decoration: none;
 }
 
@@ -399,16 +500,10 @@
 }
 
 .auth-card__link--muted {
-  color: var(--color-text-soft, var(--kelom-color-text-soft));
+  color: var(--kelom-color-text-soft);
 }
 
-.register-card__note {
-  font-size: 0.8rem;
-  color: var(--color-text-soft, var(--kelom-color-text-soft));
-}
-
-/* Layout ficha (paso 2) */
-
+/* Layout ficha */
 .profile-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.1fr);
@@ -422,25 +517,27 @@
 }
 
 /* Footers */
-
 .business-auth__footer,
 .business-register__footer,
 .business-profile__footer {
   padding: 1.3rem 0 1.6rem;
   font-size: 0.78rem;
-  color: var(--color-text-soft, var(--kelom-color-text-soft));
+  color: var(--kelom-color-text-soft);
   text-align: center;
   background: transparent;
 }
 
 /* RESPONSIVE */
-
 @media (max-width: 960px) {
   .business-profile__content {
     padding: 2.2rem 1.5rem 3rem;
   }
 
   .profile-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .security-card__grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -460,10 +557,6 @@
   }
 
   .form--grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .form__group {
     grid-template-columns: minmax(0, 1fr);
   }
 
