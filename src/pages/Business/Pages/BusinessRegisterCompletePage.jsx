@@ -52,8 +52,9 @@ function BusinessRegisterCompletePage() {
   }, [stateBasicData]);
 
   const providerEmail = useMemo(() => {
-    const email =
-      (loginEmailFromState || basicData?.email || "").trim().toLowerCase();
+    const email = (loginEmailFromState || basicData?.email || "")
+      .trim()
+      .toLowerCase();
     return email;
   }, [loginEmailFromState, basicData]);
 
@@ -64,10 +65,24 @@ function BusinessRegisterCompletePage() {
   }, [providerEmail]);
 
   const [profileData, setProfileData] = useState(() => {
+    // 1) Prefill por navegación (editar)
     if (prefillProfileData) {
       return {
         venueName: prefillProfileData.venueName || "",
         venueLocation: prefillProfileData.venueLocation || "",
+        // ✅ Maps fields
+        locationPlaceId: prefillProfileData.locationPlaceId || "",
+        locationLat:
+          prefillProfileData.locationLat ??
+          prefillProfileData.lat ??
+          prefillProfileData.location?.lat ??
+          "",
+        locationLng:
+          prefillProfileData.locationLng ??
+          prefillProfileData.lng ??
+          prefillProfileData.location?.lng ??
+          "",
+
         capacityMin: prefillProfileData.capacityMin || "",
         capacityMax: prefillProfileData.capacityMax || "",
         priceFrom: prefillProfileData.priceFrom || "",
@@ -91,6 +106,7 @@ function BusinessRegisterCompletePage() {
       };
     }
 
+    // 2) Draft guardado (texto)
     const draft = localStorage.getItem(PROVIDER_PROFILE_DRAFT_KEY);
     const parsed = draft ? safeParse(draft) : null;
 
@@ -98,6 +114,11 @@ function BusinessRegisterCompletePage() {
       return {
         venueName: parsed.venueName || "",
         venueLocation: parsed.venueLocation || "",
+        // ✅ Maps fields
+        locationPlaceId: parsed.locationPlaceId || "",
+        locationLat: parsed.locationLat ?? "",
+        locationLng: parsed.locationLng ?? "",
+
         capacityMin: parsed.capacityMin || "",
         capacityMax: parsed.capacityMax || "",
         priceFrom: parsed.priceFrom || "",
@@ -113,13 +134,19 @@ function BusinessRegisterCompletePage() {
         website: parsed.website || "",
         instagram: parsed.instagram || "",
         facebook: parsed.facebook || "",
-        photos: [],
+        photos: [], // no persistimos File objects
       };
     }
 
+    // 3) Default
     return {
       venueName: "",
       venueLocation: "",
+      // ✅ Maps fields
+      locationPlaceId: "",
+      locationLat: "",
+      locationLng: "",
+
       capacityMin: "",
       capacityMax: "",
       priceFrom: "",
@@ -160,6 +187,11 @@ function BusinessRegisterCompletePage() {
   const fileInputRef = useRef(null);
   const [isDragActive, setIsDragActive] = useState(false);
 
+  // ✅ Google Places Autocomplete
+  const locationInputRef = useRef(null);
+  const autocompleteListenerRef = useRef(null);
+  const autocompleteRef = useRef(null);
+
   const openFilePicker = () => {
     fileInputRef.current?.click();
   };
@@ -190,7 +222,6 @@ function BusinessRegisterCompletePage() {
   const handlePhotoInputChange = (e) => {
     const files = Array.from(e.target.files || []);
     addPhotos(files);
-    // reset input para permitir seleccionar el mismo archivo otra vez
     e.target.value = "";
   };
 
@@ -239,7 +270,21 @@ function BusinessRegisterCompletePage() {
 
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
-    setProfileData((prev) => ({ ...prev, [name]: value }));
+
+    setProfileData((prev) => {
+      // ✅ Si el usuario edita manualmente la ubicación, invalidamos coords/placeId
+      if (name === "venueLocation") {
+        return {
+          ...prev,
+          venueLocation: value,
+          locationPlaceId: "",
+          locationLat: "",
+          locationLng: "",
+        };
+      }
+
+      return { ...prev, [name]: value };
+    });
   };
 
   const toggleEventType = (label) => {
@@ -251,6 +296,117 @@ function BusinessRegisterCompletePage() {
       return { ...prev, eventTypes: next };
     });
   };
+
+  // ✅ Init Google Places Autocomplete on venueLocation input
+  useEffect(() => {
+    let cancelled = false;
+
+    const ensureGooglePlaces = async () => {
+      if (window.google?.maps?.places) return window.google;
+
+      // Si App.jsx ya disparó el loader, lo esperamos
+      if (window.__kelomGoogleMapsPromise) {
+        await window.__kelomGoogleMapsPromise;
+        if (window.google?.maps?.places) return window.google;
+      }
+
+      // Fallback: cargamos script aquí si por alguna razón no existe
+      const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      if (!key) throw new Error("Missing VITE_GOOGLE_MAPS_API_KEY");
+
+      await new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-kelom="google-maps"]');
+        if (existing) {
+          existing.addEventListener("load", resolve);
+          existing.addEventListener("error", reject);
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.setAttribute("data-kelom", "google-maps");
+        script.async = true;
+        script.defer = true;
+
+        const params = new URLSearchParams({
+          key,
+          libraries: "places",
+          language: "es",
+          region: "MX",
+        });
+
+        script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+
+      if (!window.google?.maps?.places) {
+        throw new Error("Google Places not available after script load");
+      }
+
+      return window.google;
+    };
+
+    const init = async () => {
+      try {
+        const g = await ensureGooglePlaces();
+        if (cancelled) return;
+
+        const input = locationInputRef.current;
+        if (!input) return;
+
+        // Evita re-inicializar
+        if (autocompleteRef.current) return;
+
+        const ac = new g.maps.places.Autocomplete(input, {
+          fields: ["formatted_address", "geometry", "place_id", "name"],
+          types: ["geocode"],
+          componentRestrictions: { country: "mx" },
+        });
+
+        autocompleteRef.current = ac;
+
+        const listener = ac.addListener("place_changed", () => {
+          const place = ac.getPlace();
+
+          const formatted =
+            place?.formatted_address ||
+            input.value ||
+            profileData.venueLocation ||
+            "";
+
+          const lat = place?.geometry?.location?.lat?.();
+          const lng = place?.geometry?.location?.lng?.();
+
+          setProfileData((prev) => ({
+            ...prev,
+            venueLocation: formatted,
+            locationPlaceId: place?.place_id || "",
+            locationLat:
+              typeof lat === "number" && Number.isFinite(lat) ? String(lat) : "",
+            locationLng:
+              typeof lng === "number" && Number.isFinite(lng) ? String(lng) : "",
+          }));
+        });
+
+        autocompleteListenerRef.current = listener;
+      } catch (err) {
+        console.warn("Google Places Autocomplete no disponible:", err);
+      }
+    };
+
+    init();
+
+    return () => {
+      cancelled = true;
+      if (autocompleteListenerRef.current?.remove) {
+        autocompleteListenerRef.current.remove();
+      }
+      autocompleteListenerRef.current = null;
+      autocompleteRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Previews (limpieza incluida)
   const photoPreviews = useMemo(() => {
@@ -316,6 +472,10 @@ function BusinessRegisterCompletePage() {
     const percent = Math.round((done / total) * 100);
     return { done, total, percent };
   }, [profileData]);
+
+  const hasGeo =
+    !!String(profileData.locationLat || "").trim() &&
+    !!String(profileData.locationLng || "").trim();
 
   const validateCreatePassword = () => {
     const p = securityData.password.trim();
@@ -561,20 +721,30 @@ function BusinessRegisterCompletePage() {
                   <span className="form__error" />
                 </div>
 
+                {/* ✅ Ubicación con Autocomplete */}
                 <div className="form__field form__field--full">
                   <label className="form__label" htmlFor="venueLocation">
                     Ubicación *
                   </label>
                   <input
+                    ref={locationInputRef}
                     id="venueLocation"
                     name="venueLocation"
                     type="text"
                     className="form__input"
-                    placeholder="Ej. Tlalpan, Ciudad de México"
+                    placeholder="Empieza a escribir tu dirección…"
                     value={profileData.venueLocation}
                     onChange={handleProfileChange}
                     required
+                    autoComplete="off"
                   />
+
+                  <p className="form__hint" style={{ marginTop: "0.35rem" }}>
+                    {hasGeo
+                      ? "Ubicación verificada en Google Maps ✅"
+                      : "Tip: elige una sugerencia del autocompletado para activar el mapa en tu ficha."}
+                  </p>
+
                   <span className="form__error" />
                 </div>
 
@@ -663,9 +833,7 @@ function BusinessRegisterCompletePage() {
                 </div>
 
                 <div className="form__field form__field--full">
-                  <label className="form__label">
-                    Tipos de evento (chips)
-                  </label>
+                  <label className="form__label">Tipos de evento (chips)</label>
 
                   <div className="chip-grid">
                     {EVENT_TYPE_OPTIONS.map((label) => (
@@ -838,14 +1006,12 @@ function BusinessRegisterCompletePage() {
                   <span className="form__error" />
                 </div>
 
-                {/* ✅ NUEVO UI PRO: Dropzone */}
+                {/* ✅ Dropzone */}
                 <div className="form__field form__field--full">
                   <label className="form__label">Fotografías del lugar</label>
 
                   <div
-                    className={
-                      isDragActive ? "dropzone dropzone--active" : "dropzone"
-                    }
+                    className={isDragActive ? "dropzone dropzone--active" : "dropzone"}
                     onClick={openFilePicker}
                     onDragEnter={handleDragEnter}
                     onDragOver={handleDragOver}
@@ -877,14 +1043,12 @@ function BusinessRegisterCompletePage() {
                       </button>
 
                       <p className="dropzone__hint">
-                        JPG, PNG o WebP · Puedes subir varias · La primera será
-                        la principal
+                        JPG, PNG o WebP · Puedes subir varias · La primera será la principal
                       </p>
 
                       {(profileData.photos || []).length > 0 && (
                         <p className="dropzone__count">
-                          {(profileData.photos || []).length} foto(s)
-                          seleccionada(s)
+                          {(profileData.photos || []).length} foto(s) seleccionada(s)
                         </p>
                       )}
                     </div>
@@ -899,7 +1063,6 @@ function BusinessRegisterCompletePage() {
                     />
                   </div>
 
-                  {/* Thumbnails */}
                   {photoPreviews.length > 0 && (
                     <div className="dropzone__thumbs" aria-label="Fotos cargadas">
                       {photoPreviews.map((src, idx) => (
@@ -910,9 +1073,7 @@ function BusinessRegisterCompletePage() {
                             className="thumb__img"
                           />
 
-                          {idx === 0 && (
-                            <span className="thumb__badge">Principal</span>
-                          )}
+                          {idx === 0 && <span className="thumb__badge">Principal</span>}
 
                           <button
                             type="button"
@@ -1079,10 +1240,7 @@ function BusinessRegisterCompletePage() {
                   </div>
                 </div>
 
-                <div
-                  className="form__actions form__field--full"
-                  style={{ gap: "0.7rem" }}
-                >
+                <div className="form__actions form__field--full" style={{ gap: "0.7rem" }}>
                   <button
                     type="button"
                     className="btn btn--ghost"
@@ -1091,11 +1249,7 @@ function BusinessRegisterCompletePage() {
                     Volver al registro inicial
                   </button>
 
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    onClick={handleGoPreview}
-                  >
+                  <button type="button" className="btn btn--ghost" onClick={handleGoPreview}>
                     Ver mi perfil (vista proveedor)
                   </button>
 
@@ -1118,27 +1272,16 @@ function BusinessRegisterCompletePage() {
                   {profileData.venueLocation || "Ubicación del venue"}
                 </p>
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.5rem",
-                    flexWrap: "wrap",
-                    marginBottom: "0.8rem",
-                  }}
-                >
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.8rem" }}>
                   <span className="preview-card__chip">
                     Capacidad:{" "}
                     {profileData.capacityMin
-                      ? `${profileData.capacityMin}${
-                          profileData.capacityMax
-                            ? `–${profileData.capacityMax}`
-                            : ""
-                        }`
+                      ? `${profileData.capacityMin}${profileData.capacityMax ? `–${profileData.capacityMax}` : ""}`
                       : "N/D"}
                   </span>
                   <span className="preview-card__chip">
-                    Desde ${profileData.priceFrom ? formatMXN(profileData.priceFrom) : "—"}{" "}
-                    a ${profileData.priceTo ? formatMXN(profileData.priceTo) : "—"}
+                    Desde ${profileData.priceFrom ? formatMXN(profileData.priceFrom) : "—"} a $
+                    {profileData.priceTo ? formatMXN(profileData.priceTo) : "—"}
                   </span>
                 </div>
 
@@ -1149,10 +1292,7 @@ function BusinessRegisterCompletePage() {
                 {photoPreviews.length > 1 && (
                   <div className="preview-card__gallery" aria-label="Galería">
                     {photoPreviews.slice(1, 4).map((src, idx) => (
-                      <div
-                        className="preview-card__gallery-item"
-                        key={`${src}-${idx}`}
-                      >
+                      <div className="preview-card__gallery-item" key={`${src}-${idx}`}>
                         <img src={src} alt={`Foto ${idx + 2}`} />
                       </div>
                     ))}

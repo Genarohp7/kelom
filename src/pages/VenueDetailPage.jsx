@@ -1,6 +1,6 @@
 // src/pages/VenueDetailPage.jsx
 import "../../Blocks/venues/VenueDetailPage.css";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useLocation } from "react-router-dom";
 
 const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
@@ -354,13 +354,17 @@ function mapProfileToVenue(profileData, basicData, photoPreviews = []) {
     ? profileData.eventTypes
     : [];
 
+  const latRaw = profileData.locationLat ?? profileData.lat ?? null;
+  const lngRaw = profileData.locationLng ?? profileData.lng ?? null;
+  const lat = latRaw !== null && latRaw !== "" ? Number(latRaw) : null;
+  const lng = lngRaw !== null && lngRaw !== "" ? Number(lngRaw) : null;
+
   return {
     id: "mi-perfil",
     name: profileData.venueName || "Mi proveedor",
     location: profileData.venueLocation || "Ubicación por definir",
     rating: 0,
     reviews: 0,
-    // 👇 ya NO generamos ranking/badge en perfil proveedor
     ranking: "",
     mainImage,
     gallery,
@@ -380,6 +384,8 @@ function mapProfileToVenue(profileData, basicData, photoPreviews = []) {
     opinions: [],
     _basicData: basicData || null,
     _rawProfile: profileData || null,
+    _coords:
+      Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
   };
 }
 
@@ -387,7 +393,13 @@ function VenueDetailPage() {
   const { id } = useParams();
   const location = useLocation();
 
-  const params = new URLSearchParams(location.search);
+  const mapRef = useRef(null);
+  const [mapErrorState, setMapErrorState] = useState(null); // { sig, msg }
+
+  const params = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search]
+  );
   const forceProviderView = params.get("mode") === "provider";
 
   const stateProfileData = location.state?.profileData || null;
@@ -430,6 +442,85 @@ function VenueDetailPage() {
   } else {
     venue = venuesDetail.find((item) => String(item.id) === id) || null;
   }
+
+  const coords = venue?._coords || null;
+  const coordsLat = coords?.lat ?? null;
+  const coordsLng = coords?.lng ?? null;
+
+  const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+  const mapSig = coords ? `${coordsLat},${coordsLng}:${googleMapsKey ? "1" : "0"}` : "";
+  const missingKeyError =
+    coords && !googleMapsKey ? "Falta VITE_GOOGLE_MAPS_API_KEY para mostrar el mapa." : "";
+  const mapLoadError = mapErrorState?.sig === mapSig ? mapErrorState.msg : "";
+
+  useEffect(() => {
+    if (coordsLat === null || coordsLng === null) return;
+    if (!googleMapsKey) return;
+    if (!mapRef.current) return;
+
+    let cancelled = false;
+    const sig = `${coordsLat},${coordsLng}:1`;
+
+    const ensureLoaded = () => {
+      if (window.google?.maps) return Promise.resolve(window.google);
+      if (window.__kelomGoogleMapsPromise) return window.__kelomGoogleMapsPromise;
+
+      window.__kelomGoogleMapsPromise = new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-kelom="google-maps"]');
+        if (existing) {
+          existing.addEventListener("load", () => resolve(window.google));
+          existing.addEventListener("error", reject);
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.setAttribute("data-kelom", "google-maps");
+        script.async = true;
+        script.defer = true;
+
+        const qs = new URLSearchParams({
+          key: googleMapsKey,
+          libraries: "places",
+          language: "es",
+          region: "MX",
+        });
+
+        script.src = `https://maps.googleapis.com/maps/api/js?${qs.toString()}`;
+        script.onload = () => resolve(window.google);
+        script.onerror = () => reject(new Error("Failed to load Google Maps script"));
+        document.head.appendChild(script);
+      });
+
+      return window.__kelomGoogleMapsPromise;
+    };
+
+    ensureLoaded()
+      .then((g) => {
+        if (cancelled) return;
+        if (!mapRef.current) return;
+
+        const map = new g.maps.Map(mapRef.current, {
+          center: { lat: coordsLat, lng: coordsLng },
+          zoom: 15,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: true,
+        });
+
+        new g.maps.Marker({
+          position: { lat: coordsLat, lng: coordsLng },
+          map,
+        });
+      })
+      .catch((err) => {
+        console.error(err);
+        if (!cancelled) setMapErrorState({ sig, msg: "No se pudo cargar Google Maps." });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coordsLat, coordsLng, googleMapsKey]);
 
   if (!venue) {
     return (
@@ -477,10 +568,8 @@ function VenueDetailPage() {
             </span>
 
             <h1 className="venue-hero__name">{venue.name}</h1>
-
             <p className="venue-hero__location">{venue.location}</p>
 
-            {/* ✅ Rating y ranking SOLO para consumidor */}
             {!isProviderView && (
               <div className="venue-hero__rating">
                 <span className="venue-hero__stars">★★★★★</span>
@@ -535,7 +624,6 @@ function VenueDetailPage() {
                   >
                     Editar perfil
                   </Link>
-
                   <button
                     type="button"
                     className="btn btn--ghost"
@@ -558,7 +646,6 @@ function VenueDetailPage() {
               className="venue-hero__image"
             />
 
-            {/* ✅ Badge SOLO para consumidor */}
             {!isProviderView && venue.ranking && (
               <div className="venue-hero__badge">{venue.ranking}</div>
             )}
@@ -595,11 +682,6 @@ function VenueDetailPage() {
             <div className="venue-info__description">
               <h2 className="section-title">Sobre este lugar</h2>
               <p>{venue.shortDescription}</p>
-              <p>
-                Este texto será rellenado por el proveedor desde su panel:
-                estilo de boda, tipo de montajes, servicios incluidos y lo que
-                hace especial a {venue.name}.
-              </p>
 
               <div className="venue-info__tags">
                 <span className="chip">{venue.capacity}</span>
@@ -643,7 +725,6 @@ function VenueDetailPage() {
                   {venue.priceRange}
                 </li>
 
-                {/* ✅ Badge SOLO para consumidor */}
                 {!isProviderView && venue.ranking && (
                   <li>
                     <span className="venue-info__label">Badge: </span>
@@ -704,23 +785,37 @@ function VenueDetailPage() {
           <div className="venue-map__info">
             <h2 className="section-title">Ubicación y accesos</h2>
             <p>{venue.mapText}</p>
-            <p>
-              Más adelante aquí conectaremos el mapa real con Google Maps y las
-              indicaciones que el proveedor quiera destacar.
-            </p>
-            <ul className="venue-map__list">
-              <li>Zona: {venue.location}</li>
-              <li>Ideal para invitados que vienen de distintos puntos.</li>
-            </ul>
           </div>
 
           <div className="venue-map__frame">
-            <iframe
-              className="venue-map__iframe"
-              title={`Mapa de ${venue.name}`}
-              loading="lazy"
-              src="about:blank"
-            />
+            {coords ? (
+              missingKeyError || mapLoadError ? (
+                <div
+                  className="venue-map__iframe"
+                  style={{
+                    height: 360,
+                    display: "grid",
+                    placeItems: "center",
+                    background: "#fff",
+                  }}
+                >
+                  {missingKeyError || mapLoadError}
+                </div>
+              ) : (
+                <div
+                  ref={mapRef}
+                  className="venue-map__iframe"
+                  style={{ height: 360 }}
+                />
+              )
+            ) : (
+              <iframe
+                className="venue-map__iframe"
+                title={`Mapa de ${venue.name}`}
+                loading="lazy"
+                src="about:blank"
+              />
+            )}
           </div>
         </div>
       </section>
