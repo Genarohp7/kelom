@@ -1,13 +1,16 @@
 // src/pages/Business/Pages/BusinessRegisterPage.jsx
 import React, { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
 import { sendBusinessRegisterEmails } from "../../../services/emailService";
 
 const PROVIDER_BASIC_DRAFT_KEY = "kelom_provider_basic_draft";
+const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
 function BusinessRegisterPage() {
+  const navigate = useNavigate();
+
   const [basicData, setBasicData] = useState(() => {
     try {
       const draft = sessionStorage.getItem(PROVIDER_BASIC_DRAFT_KEY);
@@ -44,6 +47,9 @@ function BusinessRegisterPage() {
   const [isPrivacyChecked, setIsPrivacyChecked] = useState(false);
   const [showPrivacyPopup, setShowPrivacyPopup] = useState(false);
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+
   // ========== VALIDACIONES ==========
   const isValidPhone = (phone) => {
     const digitsOnly = phone.replace(/\D/g, "");
@@ -66,6 +72,7 @@ function BusinessRegisterPage() {
   // ========== HANDLERS ==========
   const handleBasicChange = (e) => {
     const { name, value } = e.target;
+    setFormError("");
     setBasicData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -77,57 +84,118 @@ function BusinessRegisterPage() {
     }
   };
 
+  const mapLeadErrorMessage = (status, apiMessage) => {
+    const msg = String(apiMessage || "").toLowerCase();
+
+    if (status === 403 && msg.includes("cors")) {
+      return "Bloqueado por CORS. Revisa allowedOrigins en el backend.";
+    }
+
+    if (msg.includes("teléfono")) {
+      return "Ingresa un teléfono válido de 10 dígitos (sin secuencias ni repeticiones).";
+    }
+
+    if (msg.includes("email")) {
+      return "Ingresa un correo electrónico válido.";
+    }
+
+    if (msg.includes("faltan") || msg.includes("obligatorios")) {
+      return "Por favor, completa todos los campos obligatorios.";
+    }
+
+    if (status >= 500) {
+      return "El servidor tuvo un problema. Intenta de nuevo en unos minutos.";
+    }
+
+    return apiMessage || "No se pudo guardar tu registro. Intenta de nuevo.";
+  };
+
   // ========== SUBMIT PASO 1 ==========
   const handleBasicSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
+    setFormError("");
 
     const companyName = basicData.companyName.trim();
     const ownerName = basicData.ownerName.trim();
-    const phone = basicData.phone.trim();
+    const phoneRaw = basicData.phone.trim();
     const email = basicData.email.trim();
 
-    if (!companyName || !ownerName || !phone || !email) {
-      alert("Por favor, completa todos los campos.");
+    if (!companyName || !ownerName || !phoneRaw || !email) {
+      setFormError("Por favor, completa todos los campos.");
       return;
     }
 
-    if (!isValidPhone(phone)) {
-      alert(
+    if (!isValidPhone(phoneRaw)) {
+      setFormError(
         "Ingresa un teléfono válido de 10 dígitos, sin secuencias ni repeticiones excesivas."
       );
       return;
     }
 
     if (!isValidEmail(email)) {
-      alert("Ingresa un correo electrónico válido.");
+      setFormError("Ingresa un correo electrónico válido.");
       return;
     }
 
     if (!isPrivacyChecked) {
-      alert("Para continuar debes aceptar nuestro aviso de privacidad.");
+      setFormError("Para continuar debes aceptar nuestro aviso de privacidad.");
       return;
     }
 
     const cleanPayload = {
       companyName,
       ownerName,
-      email,
-      phone: phone.replace(/\D/g, ""),
+      email: email.toLowerCase(),
+      phone: phoneRaw.replace(/\D/g, ""),
     };
 
-    // guardamos borrador para el paso 2
+    // guardamos borrador
     saveBasicDraft(cleanPayload);
     setBasicData(cleanPayload);
 
+    setIsSubmitting(true);
+
     try {
-      await sendBusinessRegisterEmails(cleanPayload);
+      // ✅ Backend (fuente de verdad)
+      const resp = await fetch(`${API_BASE}/providers/leads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cleanPayload),
+      });
+
+      let data = null;
+      try {
+        data = await resp.json();
+      } catch {
+        // ignore
+      }
+
+      if (!resp.ok) {
+        const apiMsg = data?.error || data?.message || "";
+        setFormError(mapLeadErrorMessage(resp.status, apiMsg));
+        return;
+      }
+
+      // (Opcional) EmailJS: notificación, pero no bloquea el flujo
+      try {
+        await sendBusinessRegisterEmails(cleanPayload);
+      } catch (err) {
+        console.warn(
+          "Lead guardado en backend, pero falló envío de correos (EmailJS):",
+          err
+        );
+      }
+
       setShowThanks(true);
     } catch (error) {
-      console.error("Error al enviar correos de registro de proveedor:", error);
-      alert(
-        "Tu registro se guardó en modo demo, pero hubo un problema al enviar los correos. Lo revisaremos más tarde."
+      console.error("Error de red al guardar lead de proveedor:", error);
+      setFormError(
+        "No se pudo conectar con el servidor. Revisa tu internet o inténtalo de nuevo."
       );
-      setShowThanks(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -268,13 +336,19 @@ function BusinessRegisterPage() {
                 </label>
               </div>
 
+              {formError && (
+                <div className="form__field form__field--full">
+                  <span className="form__error">{formError}</span>
+                </div>
+              )}
+
               <div className="register-card__actions">
                 <button
                   type="submit"
                   className="btn btn--primary"
-                  disabled={!isPrivacyChecked}
+                  disabled={!isPrivacyChecked || isSubmitting}
                 >
-                  Registrar mi negocio
+                  {isSubmitting ? "Guardando..." : "Registrar mi negocio"}
                 </button>
               </div>
             </form>
@@ -343,6 +417,8 @@ function BusinessRegisterPage() {
                   to="/empresas/registro/completar"
                   className="btn btn--primary"
                   state={{
+                    authMode: "register",
+                    loginEmail: basicData.email,
                     basicData: {
                       companyName: basicData.companyName,
                       ownerName: basicData.ownerName,
@@ -353,6 +429,28 @@ function BusinessRegisterPage() {
                 >
                   Continuar con registro
                 </NavLink>
+
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => {
+                    setShowThanks(false);
+                    navigate("/empresas/registro/completar", {
+                      state: {
+                        authMode: "register",
+                        loginEmail: basicData.email,
+                        basicData: {
+                          companyName: basicData.companyName,
+                          ownerName: basicData.ownerName,
+                          email: basicData.email,
+                          phone: basicData.phone,
+                        },
+                      },
+                    });
+                  }}
+                >
+                  Continuar ahora
+                </button>
               </div>
             </div>
           </div>
