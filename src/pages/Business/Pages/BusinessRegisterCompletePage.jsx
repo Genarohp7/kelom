@@ -4,9 +4,12 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
 
+const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
+
 const PROVIDER_BASIC_DRAFT_KEY = "kelom_provider_basic_draft";
 const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
-const PROVIDER_DEMO_PASS_PREFIX = "kelom_provider_demo_password:";
+const PROVIDER_TOKEN_KEY = "kelom_provider_token";
+const PROVIDER_USER_KEY = "kelom_provider_user";
 
 const EVENT_TYPE_OPTIONS = [
   "Boda civil",
@@ -27,29 +30,127 @@ function safeParse(json) {
   }
 }
 
+function normalizePhoneDigits(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
+function getProviderToken() {
+  try {
+    return localStorage.getItem(PROVIDER_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function setProviderSession({ token, provider }) {
+  try {
+    if (token) localStorage.setItem(PROVIDER_TOKEN_KEY, token);
+    if (provider)
+      localStorage.setItem(PROVIDER_USER_KEY, JSON.stringify(provider));
+  } catch {
+    // ignore
+  }
+}
+
+function clearProviderSession() {
+  try {
+    localStorage.removeItem(PROVIDER_TOKEN_KEY);
+    localStorage.removeItem(PROVIDER_USER_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function mapApiProfileToProfileData(profile) {
+  if (!profile) return null;
+
+  const sellingPointsArr = Array.isArray(profile.selling_points)
+    ? profile.selling_points
+    : Array.isArray(profile.sellingPoints)
+    ? profile.sellingPoints
+    : [];
+
+  return {
+    venueName: profile.venue_name || "",
+    venueLocation: profile.venue_location || "",
+
+    locationPlaceId: profile.location_place_id || "",
+    locationLat:
+      profile.location_lat === null || profile.location_lat === undefined
+        ? ""
+        : String(profile.location_lat),
+    locationLng:
+      profile.location_lng === null || profile.location_lng === undefined
+        ? ""
+        : String(profile.location_lng),
+
+    capacityMin:
+      profile.capacity_min === null || profile.capacity_min === undefined
+        ? ""
+        : String(profile.capacity_min),
+    capacityMax:
+      profile.capacity_max === null || profile.capacity_max === undefined
+        ? ""
+        : String(profile.capacity_max),
+
+    priceFrom:
+      profile.price_from === null || profile.price_from === undefined
+        ? ""
+        : String(profile.price_from),
+    priceTo:
+      profile.price_to === null || profile.price_to === undefined
+        ? ""
+        : String(profile.price_to),
+
+    shortDescription: profile.short_description || "",
+    description: profile.description || "",
+    spaces: profile.spaces || "",
+    services: profile.services || "",
+    rules: profile.rules || "",
+
+    website: profile.website || "",
+    instagram: profile.instagram || "",
+    facebook: profile.facebook || "",
+
+    mapText: profile.map_text || "",
+
+    eventTypes: Array.isArray(profile.event_types) ? profile.event_types : [],
+    sellingPointsText: sellingPointsArr.length ? sellingPointsArr.join("\n") : "",
+
+    photos: [], // fotos las conectamos en el siguiente paso (multipart / provider_photos)
+  };
+}
+
+function buildSellingPointsList(sellingPointsText) {
+  return String(sellingPointsText || "")
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
 function BusinessRegisterCompletePage() {
   const navigate = useNavigate();
   const location = useLocation();
 
   const stateBasicData = location.state?.basicData || null;
   const prefillProfileData = location.state?.prefillProfileData || null;
+
+  // Si llegas desde login (en el futuro), podría venir:
   const authModeFromState = location.state?.authMode || null; // "register" | "edit"
   const loginEmailFromState = location.state?.loginEmail || "";
 
-  const authMode = useMemo(() => {
-    if (authModeFromState) return authModeFromState;
-    if (prefillProfileData) return "edit";
-    return "register";
-  }, [authModeFromState, prefillProfileData]);
-
-  const basicData = useMemo(() => {
+  // Basic data (lead)
+  const [basicData, setBasicData] = useState(() => {
     if (stateBasicData) return stateBasicData;
 
-    const draft = sessionStorage.getItem(PROVIDER_BASIC_DRAFT_KEY);
-    const parsed = draft ? safeParse(draft) : null;
-
-    return parsed || null;
-  }, [stateBasicData]);
+    try {
+      const draft = sessionStorage.getItem(PROVIDER_BASIC_DRAFT_KEY);
+      const parsed = draft ? safeParse(draft) : null;
+      return parsed || null;
+    } catch {
+      return null;
+    }
+  });
 
   const providerEmail = useMemo(() => {
     const email = (loginEmailFromState || basicData?.email || "")
@@ -58,11 +159,16 @@ function BusinessRegisterCompletePage() {
     return email;
   }, [loginEmailFromState, basicData]);
 
-  const demoPasswordKey = useMemo(() => {
-    return providerEmail
-      ? `${PROVIDER_DEMO_PASS_PREFIX}${providerEmail}`
-      : `${PROVIDER_DEMO_PASS_PREFIX}unknown`;
-  }, [providerEmail]);
+  const tokenAtStart = useMemo(() => getProviderToken(), []);
+  const isLoggedIn = !!tokenAtStart;
+
+  const authMode = useMemo(() => {
+    // Regla pro: si ya hay token, estás en edición (aunque no lo digan).
+    if (isLoggedIn) return "edit";
+    if (authModeFromState) return authModeFromState;
+    if (prefillProfileData) return "edit";
+    return "register";
+  }, [isLoggedIn, authModeFromState, prefillProfileData]);
 
   const [profileData, setProfileData] = useState(() => {
     // 1) Prefill por navegación (editar)
@@ -70,7 +176,7 @@ function BusinessRegisterCompletePage() {
       return {
         venueName: prefillProfileData.venueName || "",
         venueLocation: prefillProfileData.venueLocation || "",
-        // ✅ Maps fields
+
         locationPlaceId: prefillProfileData.locationPlaceId || "",
         locationLat:
           prefillProfileData.locationLat ??
@@ -107,42 +213,44 @@ function BusinessRegisterCompletePage() {
     }
 
     // 2) Draft guardado (texto)
-    const draft = localStorage.getItem(PROVIDER_PROFILE_DRAFT_KEY);
-    const parsed = draft ? safeParse(draft) : null;
+    try {
+      const draft = localStorage.getItem(PROVIDER_PROFILE_DRAFT_KEY);
+      const parsed = draft ? safeParse(draft) : null;
 
-    if (parsed) {
-      return {
-        venueName: parsed.venueName || "",
-        venueLocation: parsed.venueLocation || "",
-        // ✅ Maps fields
-        locationPlaceId: parsed.locationPlaceId || "",
-        locationLat: parsed.locationLat ?? "",
-        locationLng: parsed.locationLng ?? "",
+      if (parsed) {
+        return {
+          venueName: parsed.venueName || "",
+          venueLocation: parsed.venueLocation || "",
+          locationPlaceId: parsed.locationPlaceId || "",
+          locationLat: parsed.locationLat ?? "",
+          locationLng: parsed.locationLng ?? "",
 
-        capacityMin: parsed.capacityMin || "",
-        capacityMax: parsed.capacityMax || "",
-        priceFrom: parsed.priceFrom || "",
-        priceTo: parsed.priceTo || "",
-        shortDescription: parsed.shortDescription || "",
-        eventTypes: Array.isArray(parsed.eventTypes) ? parsed.eventTypes : [],
-        sellingPointsText: parsed.sellingPointsText || "",
-        mapText: parsed.mapText || "",
-        description: parsed.description || "",
-        spaces: parsed.spaces || "",
-        services: parsed.services || "",
-        rules: parsed.rules || "",
-        website: parsed.website || "",
-        instagram: parsed.instagram || "",
-        facebook: parsed.facebook || "",
-        photos: [], // no persistimos File objects
-      };
+          capacityMin: parsed.capacityMin || "",
+          capacityMax: parsed.capacityMax || "",
+          priceFrom: parsed.priceFrom || "",
+          priceTo: parsed.priceTo || "",
+          shortDescription: parsed.shortDescription || "",
+          eventTypes: Array.isArray(parsed.eventTypes) ? parsed.eventTypes : [],
+          sellingPointsText: parsed.sellingPointsText || "",
+          mapText: parsed.mapText || "",
+          description: parsed.description || "",
+          spaces: parsed.spaces || "",
+          services: parsed.services || "",
+          rules: parsed.rules || "",
+          website: parsed.website || "",
+          instagram: parsed.instagram || "",
+          facebook: parsed.facebook || "",
+          photos: [], // no persistimos File objects
+        };
+      }
+    } catch {
+      // ignore
     }
 
     // 3) Default
     return {
       venueName: "",
       venueLocation: "",
-      // ✅ Maps fields
       locationPlaceId: "",
       locationLat: "",
       locationLng: "",
@@ -166,7 +274,12 @@ function BusinessRegisterCompletePage() {
     };
   });
 
-  // ✅ Seguridad (demo)
+  // ======= Estados UX / API =======
+  const [submitError, setSubmitError] = useState("");
+  const [submitSuccess, setSubmitSuccess] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ======= Seguridad (REAL) =======
   const [securityData, setSecurityData] = useState({
     password: "",
     confirmPassword: "",
@@ -183,21 +296,88 @@ function BusinessRegisterCompletePage() {
     confirmNewPassword: false,
   });
 
-  // ✅ Dropzone (nuevo)
+  // ======= Dropzone =======
   const fileInputRef = useRef(null);
   const [isDragActive, setIsDragActive] = useState(false);
 
-  // ✅ Google Places Autocomplete
+  // ======= Google Places Autocomplete =======
   const locationInputRef = useRef(null);
   const autocompleteListenerRef = useRef(null);
   const autocompleteRef = useRef(null);
 
-  const openFilePicker = () => {
-    fileInputRef.current?.click();
+  // ========= Helpers API =========
+  const apiJson = async (path, { method = "GET", body, token } = {}) => {
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data?.error || `Error HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return data;
   };
 
+  // ========= Cargar perfil real si ya hay token (edición) =========
+  useEffect(() => {
+    const token = getProviderToken();
+    if (!token) return;
+
+    // Si venimos con prefill (usuario ya estaba editando), NO lo pisamos.
+    if (prefillProfileData) return;
+
+    let cancelled = false;
+
+    apiJson("/providers/me", { token })
+      .then((data) => {
+        if (cancelled) return;
+
+        if (data?.provider?.email || data?.profile?.company_name) {
+          setBasicData((prev) => {
+            const next = {
+              companyName:
+                data?.profile?.company_name || prev?.companyName || "",
+              ownerName: data?.profile?.owner_name || prev?.ownerName || "",
+              phone: data?.profile?.phone || prev?.phone || "",
+              email: data?.provider?.email || prev?.email || "",
+            };
+            return next;
+          });
+        }
+
+        const mapped = mapApiProfileToProfileData(data?.profile);
+        if (mapped) {
+          setProfileData((prev) => ({
+            ...prev,
+            ...mapped,
+            // OJO: no pisamos fotos seleccionadas localmente
+            photos: prev.photos || [],
+          }));
+        }
+      })
+      .catch((err) => {
+        console.warn("No se pudo cargar /providers/me:", err);
+        clearProviderSession();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [prefillProfileData]);
+
+  // ========= Dropzone handlers =========
+  const openFilePicker = () => fileInputRef.current?.click();
+
   const addPhotos = (files) => {
-    const incoming = (files || []).filter((f) => f && f.type?.startsWith("image/"));
+    const incoming = (files || []).filter(
+      (f) => f && f.type?.startsWith("image/")
+    );
     if (incoming.length === 0) return;
 
     const keyOf = (f) => `${f.name}-${f.size}-${f.lastModified}`;
@@ -229,9 +409,7 @@ function BusinessRegisterCompletePage() {
     e.preventDefault();
     e.stopPropagation();
     setIsDragActive(false);
-
-    const files = Array.from(e.dataTransfer.files || []);
-    addPhotos(files);
+    addPhotos(Array.from(e.dataTransfer.files || []));
   };
 
   const handleDragOver = (e) => {
@@ -259,8 +437,11 @@ function BusinessRegisterCompletePage() {
     });
   };
 
+  // ========= Security handlers =========
   const handleSecurityChange = (e) => {
     const { name, value } = e.target;
+    setSubmitError("");
+    setSubmitSuccess("");
     setSecurityData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -268,11 +449,13 @@ function BusinessRegisterCompletePage() {
     setShowSecurity((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // ========= Profile handlers =========
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
+    setSubmitError("");
+    setSubmitSuccess("");
 
     setProfileData((prev) => {
-      // ✅ Si el usuario edita manualmente la ubicación, invalidamos coords/placeId
       if (name === "venueLocation") {
         return {
           ...prev,
@@ -282,7 +465,6 @@ function BusinessRegisterCompletePage() {
           locationLng: "",
         };
       }
-
       return { ...prev, [name]: value };
     });
   };
@@ -297,25 +479,25 @@ function BusinessRegisterCompletePage() {
     });
   };
 
-  // ✅ Init Google Places Autocomplete on venueLocation input
+  // ========= Google Places Autocomplete =========
   useEffect(() => {
     let cancelled = false;
 
     const ensureGooglePlaces = async () => {
       if (window.google?.maps?.places) return window.google;
 
-      // Si App.jsx ya disparó el loader, lo esperamos
       if (window.__kelomGoogleMapsPromise) {
         await window.__kelomGoogleMapsPromise;
         if (window.google?.maps?.places) return window.google;
       }
 
-      // Fallback: cargamos script aquí si por alguna razón no existe
       const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
       if (!key) throw new Error("Missing VITE_GOOGLE_MAPS_API_KEY");
 
       await new Promise((resolve, reject) => {
-        const existing = document.querySelector('script[data-kelom="google-maps"]');
+        const existing = document.querySelector(
+          'script[data-kelom="google-maps"]'
+        );
         if (existing) {
           existing.addEventListener("load", resolve);
           existing.addEventListener("error", reject);
@@ -355,7 +537,6 @@ function BusinessRegisterCompletePage() {
         const input = locationInputRef.current;
         if (!input) return;
 
-        // Evita re-inicializar
         if (autocompleteRef.current) return;
 
         const ac = new g.maps.places.Autocomplete(input, {
@@ -369,11 +550,7 @@ function BusinessRegisterCompletePage() {
         const listener = ac.addListener("place_changed", () => {
           const place = ac.getPlace();
 
-          const formatted =
-            place?.formatted_address ||
-            input.value ||
-            profileData.venueLocation ||
-            "";
+          const formatted = place?.formatted_address || input.value || "";
 
           const lat = place?.geometry?.location?.lat?.();
           const lng = place?.geometry?.location?.lng?.();
@@ -399,16 +576,14 @@ function BusinessRegisterCompletePage() {
 
     return () => {
       cancelled = true;
-      if (autocompleteListenerRef.current?.remove) {
+      if (autocompleteListenerRef.current?.remove)
         autocompleteListenerRef.current.remove();
-      }
       autocompleteListenerRef.current = null;
       autocompleteRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Previews (limpieza incluida)
+  // ========= Previews (fotos locales) =========
   const photoPreviews = useMemo(() => {
     return (profileData.photos || []).map((file) => URL.createObjectURL(file));
   }, [profileData.photos]);
@@ -425,27 +600,8 @@ function BusinessRegisterCompletePage() {
   }, [photoPreviews]);
 
   const sellingPointsList = useMemo(() => {
-    return (profileData.sellingPointsText || "")
-      .split("\n")
-      .map((x) => x.trim())
-      .filter(Boolean);
+    return buildSellingPointsList(profileData.sellingPointsText);
   }, [profileData.sellingPointsText]);
-
-  const formatMXN = (value) => {
-    if (!value) return "";
-    const n = Number(value);
-    if (Number.isNaN(n)) return String(value);
-    return n.toLocaleString("es-MX");
-  };
-
-  const buildSafeDraft = () => {
-    return {
-      ...profileData,
-      photos: [],
-    };
-  };
-
-  const validateNumber = (value) => /^\d+$/.test(String(value));
 
   const completion = useMemo(() => {
     const items = [
@@ -477,66 +633,100 @@ function BusinessRegisterCompletePage() {
     !!String(profileData.locationLat || "").trim() &&
     !!String(profileData.locationLng || "").trim();
 
+  const validateNumber = (value) => /^\d+$/.test(String(value));
+
   const validateCreatePassword = () => {
     const p = securityData.password.trim();
     const c = securityData.confirmPassword.trim();
 
     if (!p || !c) {
-      alert("Por favor, crea tu contraseña y confírmala.");
+      setSubmitError("Por favor, crea tu contraseña y confírmala.");
       return false;
     }
     if (p.length < 5) {
-      alert("La contraseña debe tener al menos 5 caracteres (modo demo).");
+      setSubmitError("La contraseña debe tener al menos 5 caracteres.");
       return false;
     }
     if (p !== c) {
-      alert("La confirmación no coincide con la contraseña.");
+      setSubmitError("La confirmación no coincide con la contraseña.");
       return false;
     }
     return true;
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
+    setSubmitError("");
+    setSubmitSuccess("");
+
+    const token = getProviderToken();
+    if (!token) {
+      setSubmitError(
+        "Tu sesión de proveedor no está activa. Inicia sesión primero."
+      );
+      return;
+    }
+
     const current = securityData.currentPassword.trim();
     const next = securityData.newPassword.trim();
     const confirm = securityData.confirmNewPassword.trim();
 
     if (!current || !next || !confirm) {
-      alert("Completa: contraseña actual, nueva y confirmación.");
+      setSubmitError("Completa: contraseña actual, nueva y confirmación.");
       return;
     }
     if (next.length < 5) {
-      alert("La nueva contraseña debe tener al menos 5 caracteres (modo demo).");
+      setSubmitError("La nueva contraseña debe tener al menos 5 caracteres.");
       return;
     }
     if (next !== confirm) {
-      alert("La confirmación no coincide con la nueva contraseña.");
+      setSubmitError("La confirmación no coincide con la nueva contraseña.");
       return;
     }
     if (current === next) {
-      alert("La nueva contraseña no puede ser igual a la actual.");
+      setSubmitError("La nueva contraseña no puede ser igual a la actual.");
       return;
     }
 
-    const stored = sessionStorage.getItem(demoPasswordKey);
-    if (stored && stored !== current) {
-      alert("La contraseña actual no coincide (modo demo).");
-      return;
+    try {
+      setIsSubmitting(true);
+      await apiJson("/auth/password", {
+        method: "PUT",
+        token,
+        body: { currentPassword: current, newPassword: next },
+      });
+
+      setSubmitSuccess("Contraseña actualizada correctamente.");
+      setSecurityData((prev) => ({
+        ...prev,
+        currentPassword: "",
+        newPassword: "",
+        confirmNewPassword: "",
+      }));
+    } catch (err) {
+      setSubmitError(String(err?.message || "No se pudo cambiar la contraseña."));
+    } finally {
+      setIsSubmitting(false);
     }
-
-    sessionStorage.setItem(demoPasswordKey, next);
-    alert("Contraseña actualizada (modo demo).");
-
-    setSecurityData((prev) => ({
-      ...prev,
-      currentPassword: "",
-      newPassword: "",
-      confirmNewPassword: "",
-    }));
   };
 
-  const handleSubmit = (e) => {
+  // ✅ Usamos SOLO persistDraft; eliminamos buildSafeDraft para evitar warnings de "unused".
+  const persistDraft = (nextProfileData) => {
+    try {
+      localStorage.setItem(
+        PROVIDER_PROFILE_DRAFT_KEY,
+        JSON.stringify({ ...nextProfileData, photos: [] })
+      );
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
+    setSubmitError("");
+    setSubmitSuccess("");
 
     const {
       venueName,
@@ -560,71 +750,180 @@ function BusinessRegisterCompletePage() {
       !description.trim() ||
       !services.trim()
     ) {
-      alert("Por favor, completa todos los campos obligatorios.");
+      setSubmitError("Por favor, completa todos los campos obligatorios.");
       return;
     }
 
     if (!validateNumber(priceFrom) || !validateNumber(priceTo)) {
-      alert("Los rangos de precio deben ser valores numéricos.");
+      setSubmitError("Los rangos de precio deben ser valores numéricos.");
       return;
     }
 
     if (Number(priceFrom) > Number(priceTo)) {
-      alert("El precio 'desde' no puede ser mayor que el 'hasta'.");
+      setSubmitError("El precio 'desde' no puede ser mayor que el 'hasta'.");
       return;
     }
 
     if (!validateNumber(capacityMin)) {
-      alert("La capacidad mínima debe ser un número.");
+      setSubmitError("La capacidad mínima debe ser un número.");
       return;
     }
 
     if (capacityMax && !validateNumber(capacityMax)) {
-      alert("La capacidad máxima debe ser un número.");
+      setSubmitError("La capacidad máxima debe ser un número.");
       return;
     }
 
     if (capacityMax && Number(capacityMin) > Number(capacityMax)) {
-      alert("La capacidad mínima no puede ser mayor que la máxima.");
+      setSubmitError("La capacidad mínima no puede ser mayor que la máxima.");
       return;
     }
 
-    if (authMode === "register") {
-      if (!providerEmail) {
-        alert(
-          "No encontramos un correo para asociar la contraseña (modo demo). Completa el registro inicial primero."
-        );
-        return;
-      }
-      if (!validateCreatePassword()) return;
-      sessionStorage.setItem(demoPasswordKey, securityData.password.trim());
-    }
+    const sellingPoints = sellingPointsList;
+
+    // Guardamos draft SIEMPRE (para preview local y resiliencia)
+    persistDraft(profileData);
 
     try {
-      localStorage.setItem(
-        PROVIDER_PROFILE_DRAFT_KEY,
-        JSON.stringify(buildSafeDraft())
-      );
+      setIsSubmitting(true);
+
+      if (authMode === "register") {
+        if (!basicData?.companyName || !basicData?.ownerName || !basicData?.email) {
+          setSubmitError("Primero completa el registro inicial (Paso 1).");
+          return;
+        }
+
+        if (!validateCreatePassword()) return;
+
+        const payload = {
+          email: String(basicData.email || "").trim().toLowerCase(),
+          password: securityData.password.trim(),
+
+          companyName: String(basicData.companyName || "").trim(),
+          ownerName: String(basicData.ownerName || "").trim(),
+          phone: normalizePhoneDigits(basicData.phone || ""),
+
+          venueName: profileData.venueName,
+          venueLocation: profileData.venueLocation,
+
+          locationPlaceId: profileData.locationPlaceId || null,
+          locationLat: profileData.locationLat || null,
+          locationLng: profileData.locationLng || null,
+
+          capacityMin: Number(profileData.capacityMin),
+          capacityMax: profileData.capacityMax ? Number(profileData.capacityMax) : null,
+
+          priceFrom: Number(profileData.priceFrom),
+          priceTo: Number(profileData.priceTo),
+
+          shortDescription: profileData.shortDescription,
+          description: profileData.description,
+          services: profileData.services,
+
+          spaces: profileData.spaces || null,
+          rules: profileData.rules || null,
+
+          website: profileData.website || null,
+          instagram: profileData.instagram || null,
+          facebook: profileData.facebook || null,
+
+          mapText: profileData.mapText || null,
+
+          eventTypes: Array.isArray(profileData.eventTypes) ? profileData.eventTypes : [],
+          sellingPoints,
+          sellingPointsText: profileData.sellingPointsText || "",
+        };
+
+        const data = await apiJson("/providers/register", {
+          method: "POST",
+          body: payload,
+        });
+
+        setProviderSession({ token: data?.token, provider: data?.provider });
+
+        const mapped = mapApiProfileToProfileData(data?.profile);
+        if (mapped) {
+          persistDraft(mapped);
+          setProfileData((prev) => ({ ...prev, ...mapped, photos: prev.photos || [] }));
+        }
+
+        setSubmitSuccess("Cuenta creada y ficha guardada correctamente.");
+
+        navigate("/proveedores/mi-perfil?mode=provider", {
+          state: {
+            basicData: basicData || null,
+            profileData,
+          },
+        });
+
+        return;
+      }
+
+      // ===== Edit mode (requiere token) =====
+      const token = getProviderToken();
+      if (!token) {
+        setSubmitError("No hay sesión activa. Inicia sesión como proveedor primero.");
+        return;
+      }
+
+      const payload = {
+        companyName: basicData?.companyName
+          ? String(basicData.companyName).trim()
+          : undefined,
+        ownerName: basicData?.ownerName
+          ? String(basicData.ownerName).trim()
+          : undefined,
+        phone: basicData?.phone ? normalizePhoneDigits(basicData.phone) : undefined,
+
+        venueName: profileData.venueName,
+        venueLocation: profileData.venueLocation,
+
+        locationPlaceId: profileData.locationPlaceId || null,
+        locationLat: profileData.locationLat || null,
+        locationLng: profileData.locationLng || null,
+
+        capacityMin: Number(profileData.capacityMin),
+        capacityMax: profileData.capacityMax ? Number(profileData.capacityMax) : null,
+
+        priceFrom: Number(profileData.priceFrom),
+        priceTo: Number(profileData.priceTo),
+
+        shortDescription: profileData.shortDescription,
+        description: profileData.description,
+        services: profileData.services,
+
+        spaces: profileData.spaces || null,
+        rules: profileData.rules || null,
+
+        website: profileData.website || null,
+        instagram: profileData.instagram || null,
+        facebook: profileData.facebook || null,
+
+        mapText: profileData.mapText || null,
+
+        eventTypes: Array.isArray(profileData.eventTypes) ? profileData.eventTypes : [],
+        sellingPoints,
+        sellingPointsText: profileData.sellingPointsText || "",
+      };
+
+      const data = await apiJson("/providers/me", {
+        method: "PUT",
+        token,
+        body: payload,
+      });
+
+      const mapped = mapApiProfileToProfileData(data?.profile);
+      if (mapped) {
+        persistDraft(mapped);
+        setProfileData((prev) => ({ ...prev, ...mapped, photos: prev.photos || [] }));
+      }
+
+      setSubmitSuccess("Cambios guardados correctamente.");
     } catch (err) {
-      console.warn("No se pudo guardar draft del perfil:", err);
+      setSubmitError(String(err?.message || "No se pudo guardar."));
+    } finally {
+      setIsSubmitting(false);
     }
-
-    console.log("Registro completo (demo):", {
-      basicData,
-      authMode,
-      providerEmail,
-      profileData: {
-        ...profileData,
-        sellingPoints: sellingPointsList,
-        photos: (profileData.photos || []).map((f) => f.name),
-      },
-    });
-
-    alert(
-      authMode === "register"
-        ? "Perfil + contraseña guardados (modo demo)."
-        : "Perfil guardado (modo demo)."
-    );
   };
 
   const handleGoPreview = () => {
@@ -649,10 +948,12 @@ function BusinessRegisterCompletePage() {
           </NavLink>
 
           <span className="business-profile__logo-text">
-            Kelom · Completar registro
+            Kelom · Perfil de proveedor
           </span>
 
-          <span className="business-profile__logo-pill">FICHA</span>
+          <span className="business-profile__logo-pill">
+            {authMode === "register" ? "REGISTRO" : "EDICIÓN"}
+          </span>
         </div>
       </header>
 
@@ -699,6 +1000,21 @@ function BusinessRegisterCompletePage() {
                 </p>
               </div>
 
+              {submitError && (
+                <div className="form__error" style={{ marginBottom: "0.8rem" }}>
+                  {submitError}
+                </div>
+              )}
+
+              {submitSuccess && (
+                <div
+                  className="form__error"
+                  style={{ marginBottom: "0.8rem", color: "green" }}
+                >
+                  {submitSuccess}
+                </div>
+              )}
+
               <form
                 className="form form--grid"
                 onSubmit={handleSubmit}
@@ -721,7 +1037,7 @@ function BusinessRegisterCompletePage() {
                   <span className="form__error" />
                 </div>
 
-                {/* ✅ Ubicación con Autocomplete */}
+                {/* Ubicación con Autocomplete */}
                 <div className="form__field form__field--full">
                   <label className="form__label" htmlFor="venueLocation">
                     Ubicación *
@@ -1006,12 +1322,14 @@ function BusinessRegisterCompletePage() {
                   <span className="form__error" />
                 </div>
 
-                {/* ✅ Dropzone */}
+                {/* Dropzone */}
                 <div className="form__field form__field--full">
                   <label className="form__label">Fotografías del lugar</label>
 
                   <div
-                    className={isDragActive ? "dropzone dropzone--active" : "dropzone"}
+                    className={
+                      isDragActive ? "dropzone dropzone--active" : "dropzone"
+                    }
                     onClick={openFilePicker}
                     onDragEnter={handleDragEnter}
                     onDragOver={handleDragOver}
@@ -1034,8 +1352,8 @@ function BusinessRegisterCompletePage() {
                       <button
                         type="button"
                         className="dropzone__button"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={(ev) => {
+                          ev.stopPropagation();
                           openFilePicker();
                         }}
                       >
@@ -1043,12 +1361,14 @@ function BusinessRegisterCompletePage() {
                       </button>
 
                       <p className="dropzone__hint">
-                        JPG, PNG o WebP · Puedes subir varias · La primera será la principal
+                        JPG/PNG/WebP · Puedes subir varias · La primera será la
+                        principal
                       </p>
 
                       {(profileData.photos || []).length > 0 && (
                         <p className="dropzone__count">
-                          {(profileData.photos || []).length} foto(s) seleccionada(s)
+                          {(profileData.photos || []).length} foto(s)
+                          seleccionada(s)
                         </p>
                       )}
                     </div>
@@ -1064,7 +1384,10 @@ function BusinessRegisterCompletePage() {
                   </div>
 
                   {photoPreviews.length > 0 && (
-                    <div className="dropzone__thumbs" aria-label="Fotos cargadas">
+                    <div
+                      className="dropzone__thumbs"
+                      aria-label="Fotos cargadas"
+                    >
                       {photoPreviews.map((src, idx) => (
                         <div className="thumb" key={`${src}-${idx}`}>
                           <img
@@ -1072,9 +1395,9 @@ function BusinessRegisterCompletePage() {
                             alt={`Foto seleccionada ${idx + 1}`}
                             className="thumb__img"
                           />
-
-                          {idx === 0 && <span className="thumb__badge">Principal</span>}
-
+                          {idx === 0 && (
+                            <span className="thumb__badge">Principal</span>
+                          )}
                           <button
                             type="button"
                             className="thumb__remove"
@@ -1088,79 +1411,105 @@ function BusinessRegisterCompletePage() {
                       ))}
                     </div>
                   )}
+
+                  <p className="form__hint" style={{ marginTop: "0.55rem" }}>
+                    Nota: en este paso ya guardamos tu perfil en backend. La
+                    carga de fotos al backend la conectamos en el siguiente paso
+                    (multipart + tabla provider_photos).
+                  </p>
                 </div>
 
                 {/* Seguridad */}
                 <div className="form__field form__field--full">
                   <div className="security-card">
                     <h3 className="security-card__title">Seguridad</h3>
-                    <p className="security-card__subtitle">
-                      {authMode === "register"
-                        ? "Crea tu contraseña para poder entrar a tu panel después."
-                        : "Aquí puedes cambiar tu contraseña (modo demo)."}
-                    </p>
 
                     {authMode === "register" ? (
-                      <div className="security-card__grid">
-                        <div className="form__field">
-                          <label className="form__label" htmlFor="password">
-                            Crear contraseña *
-                          </label>
-                          <input
-                            id="password"
-                            name="password"
-                            type={showSecurity.password ? "text" : "password"}
-                            className="form__input"
-                            placeholder="Mínimo 5 caracteres"
-                            value={securityData.password}
-                            onChange={handleSecurityChange}
-                            autoComplete="new-password"
-                          />
-                          <label className="form__toggle">
-                            <input
-                              type="checkbox"
-                              checked={showSecurity.password}
-                              onChange={() => toggleShow("password")}
-                            />
-                            Mostrar
-                          </label>
-                        </div>
-
-                        <div className="form__field">
-                          <label className="form__label" htmlFor="confirmPassword">
-                            Confirmar contraseña *
-                          </label>
-                          <input
-                            id="confirmPassword"
-                            name="confirmPassword"
-                            type={showSecurity.confirmPassword ? "text" : "password"}
-                            className="form__input"
-                            placeholder="Repite la contraseña"
-                            value={securityData.confirmPassword}
-                            onChange={handleSecurityChange}
-                            autoComplete="new-password"
-                          />
-                          <label className="form__toggle">
-                            <input
-                              type="checkbox"
-                              checked={showSecurity.confirmPassword}
-                              onChange={() => toggleShow("confirmPassword")}
-                            />
-                            Mostrar
-                          </label>
-                        </div>
-                      </div>
-                    ) : (
                       <>
+                        <p className="security-card__subtitle">
+                          Crea tu contraseña para poder entrar a tu panel
+                          después.
+                        </p>
+
                         <div className="security-card__grid">
                           <div className="form__field">
-                            <label className="form__label" htmlFor="currentPassword">
+                            <label className="form__label" htmlFor="password">
+                              Crear contraseña *
+                            </label>
+                            <input
+                              id="password"
+                              name="password"
+                              type={showSecurity.password ? "text" : "password"}
+                              className="form__input"
+                              placeholder="Mínimo 5 caracteres"
+                              value={securityData.password}
+                              onChange={handleSecurityChange}
+                              autoComplete="new-password"
+                            />
+                            <label className="form__toggle">
+                              <input
+                                type="checkbox"
+                                checked={showSecurity.password}
+                                onChange={() => toggleShow("password")}
+                              />
+                              Mostrar
+                            </label>
+                          </div>
+
+                          <div className="form__field">
+                            <label
+                              className="form__label"
+                              htmlFor="confirmPassword"
+                            >
+                              Confirmar contraseña *
+                            </label>
+                            <input
+                              id="confirmPassword"
+                              name="confirmPassword"
+                              type={
+                                showSecurity.confirmPassword
+                                  ? "text"
+                                  : "password"
+                              }
+                              className="form__input"
+                              placeholder="Repite la contraseña"
+                              value={securityData.confirmPassword}
+                              onChange={handleSecurityChange}
+                              autoComplete="new-password"
+                            />
+                            <label className="form__toggle">
+                              <input
+                                type="checkbox"
+                                checked={showSecurity.confirmPassword}
+                                onChange={() => toggleShow("confirmPassword")}
+                              />
+                              Mostrar
+                            </label>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="security-card__subtitle">
+                          Puedes cambiar tu contraseña cuando quieras.
+                        </p>
+
+                        <div className="security-card__grid">
+                          <div className="form__field">
+                            <label
+                              className="form__label"
+                              htmlFor="currentPassword"
+                            >
                               Contraseña actual
                             </label>
                             <input
                               id="currentPassword"
                               name="currentPassword"
-                              type={showSecurity.currentPassword ? "text" : "password"}
+                              type={
+                                showSecurity.currentPassword
+                                  ? "text"
+                                  : "password"
+                              }
                               className="form__input"
                               placeholder="Tu contraseña actual"
                               value={securityData.currentPassword}
@@ -1202,13 +1551,20 @@ function BusinessRegisterCompletePage() {
                           </div>
 
                           <div className="form__field form__field--full">
-                            <label className="form__label" htmlFor="confirmNewPassword">
+                            <label
+                              className="form__label"
+                              htmlFor="confirmNewPassword"
+                            >
                               Confirmar nueva contraseña
                             </label>
                             <input
                               id="confirmNewPassword"
                               name="confirmNewPassword"
-                              type={showSecurity.confirmNewPassword ? "text" : "password"}
+                              type={
+                                showSecurity.confirmNewPassword
+                                  ? "text"
+                                  : "password"
+                              }
                               className="form__input"
                               placeholder="Repite la nueva contraseña"
                               value={securityData.confirmNewPassword}
@@ -1231,8 +1587,9 @@ function BusinessRegisterCompletePage() {
                             type="button"
                             className="btn btn--ghost"
                             onClick={handleChangePassword}
+                            disabled={isSubmitting}
                           >
-                            Actualizar contraseña (modo demo)
+                            Actualizar contraseña
                           </button>
                         </div>
                       </>
@@ -1240,21 +1597,38 @@ function BusinessRegisterCompletePage() {
                   </div>
                 </div>
 
-                <div className="form__actions form__field--full" style={{ gap: "0.7rem" }}>
+                <div
+                  className="form__actions form__field--full"
+                  style={{ gap: "0.7rem" }}
+                >
                   <button
                     type="button"
                     className="btn btn--ghost"
                     onClick={() => navigate("/empresas/registro")}
+                    disabled={isSubmitting}
                   >
                     Volver al registro inicial
                   </button>
 
-                  <button type="button" className="btn btn--ghost" onClick={handleGoPreview}>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={handleGoPreview}
+                    disabled={isSubmitting}
+                  >
                     Ver mi perfil (vista proveedor)
                   </button>
 
-                  <button type="submit" className="btn btn--primary">
-                    Guardar ficha (modo demo)
+                  <button
+                    type="submit"
+                    className="btn btn--primary"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting
+                      ? "Guardando..."
+                      : authMode === "register"
+                      ? "Crear cuenta y guardar ficha"
+                      : "Guardar cambios"}
                   </button>
                 </div>
               </form>
@@ -1272,16 +1646,33 @@ function BusinessRegisterCompletePage() {
                   {profileData.venueLocation || "Ubicación del venue"}
                 </p>
 
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.8rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                    marginBottom: "0.8rem",
+                  }}
+                >
                   <span className="preview-card__chip">
                     Capacidad:{" "}
                     {profileData.capacityMin
-                      ? `${profileData.capacityMin}${profileData.capacityMax ? `–${profileData.capacityMax}` : ""}`
+                      ? `${profileData.capacityMin}${
+                          profileData.capacityMax
+                            ? `–${profileData.capacityMax}`
+                            : ""
+                        }`
                       : "N/D"}
                   </span>
                   <span className="preview-card__chip">
-                    Desde ${profileData.priceFrom ? formatMXN(profileData.priceFrom) : "—"} a $
-                    {profileData.priceTo ? formatMXN(profileData.priceTo) : "—"}
+                    Desde $
+                    {profileData.priceFrom
+                      ? Number(profileData.priceFrom).toLocaleString("es-MX")
+                      : "—"}{" "}
+                    a $
+                    {profileData.priceTo
+                      ? Number(profileData.priceTo).toLocaleString("es-MX")
+                      : "—"}
                   </span>
                 </div>
 
@@ -1292,14 +1683,20 @@ function BusinessRegisterCompletePage() {
                 {photoPreviews.length > 1 && (
                   <div className="preview-card__gallery" aria-label="Galería">
                     {photoPreviews.slice(1, 4).map((src, idx) => (
-                      <div className="preview-card__gallery-item" key={`${src}-${idx}`}>
+                      <div
+                        className="preview-card__gallery-item"
+                        key={`${src}-${idx}`}
+                      >
                         <img src={src} alt={`Foto ${idx + 2}`} />
                       </div>
                     ))}
                   </div>
                 )}
 
-                <p className="preview-card__text" style={{ marginTop: "0.8rem" }}>
+                <p
+                  className="preview-card__text"
+                  style={{ marginTop: "0.8rem" }}
+                >
                   Aquí aparecerá un resumen de tu lugar con fotos destacadas,
                   listo para que las parejas lo vean dentro de Kelom.
                 </p>
