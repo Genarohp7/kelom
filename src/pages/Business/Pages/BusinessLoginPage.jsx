@@ -4,13 +4,16 @@ import { NavLink, useNavigate } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
 
+const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
+
+// ✅ Deben coincidir con BusinessRegisterCompletePage.jsx
+const PROVIDER_TOKEN_KEY = "kelom_provider_token";
+const PROVIDER_USER_KEY = "kelom_provider_user";
+
 function BusinessLoginPage() {
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
+  const [formData, setFormData] = useState({ email: "", password: "" });
 
   const [errors, setErrors] = useState({
     email: "",
@@ -19,76 +22,109 @@ function BusinessLoginPage() {
   });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
   const validateForm = () => {
     const nextErrors = { email: "", password: "", general: "" };
 
-    if (!formData.email.trim()) {
-      nextErrors.email = "Ingresa tu correo electrónico.";
-    } else if (!validateEmail(formData.email.trim())) {
-      nextErrors.email = "El correo no tiene un formato válido.";
-    }
+    const email = formData.email.trim().toLowerCase();
+    const password = formData.password;
 
-    if (!formData.password.trim()) {
-      nextErrors.password = "Ingresa tu contraseña.";
-    } else if (formData.password.length < 5) {
+    if (!email) nextErrors.email = "Ingresa tu correo electrónico.";
+    else if (!validateEmail(email))
+      nextErrors.email = "El correo no tiene un formato válido.";
+
+    if (!password.trim()) nextErrors.password = "Ingresa tu contraseña.";
+    else if (password.length < 5)
       nextErrors.password = "La contraseña debe tener al menos 5 caracteres.";
-    }
 
     setErrors(nextErrors);
     return !nextErrors.email && !nextErrors.password;
+  };
+
+  const saveProviderSession = ({ token, provider }) => {
+    try {
+      if (token) localStorage.setItem(PROVIDER_TOKEN_KEY, token);
+      if (provider)
+        localStorage.setItem(PROVIDER_USER_KEY, JSON.stringify(provider));
+    } catch {
+      // ignore
+    }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
 
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    setErrors((prev) => ({
-      ...prev,
-      [name]: "",
-      general: "",
-    }));
+    setErrors((prev) => ({ ...prev, [name]: "", general: "" }));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    if (isSubmitting) return;
     if (!validateForm()) return;
 
     const email = formData.email.trim().toLowerCase();
+    const password = formData.password;
 
-    // Demo: “login ok” -> vamos a completar/editar perfil
-    console.log("Login demo OK:", {
-      email,
-      passwordLength: formData.password.length,
-    });
+    try {
+      setIsSubmitting(true);
 
-    navigate("/empresas/registro/completar", {
-      state: {
-        authMode: "edit", // 👈 al entrar desde login, mostramos "cambiar contraseña"
-        loginEmail: email,
-      },
-    });
+      const res = await fetch(`${API_BASE}/providers/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const msg =
+          data?.error ||
+          (res.status === 401
+            ? "Credenciales inválidas."
+            : `Error HTTP ${res.status}`);
+        setErrors((prev) => ({ ...prev, general: msg }));
+        return;
+      }
+
+      // ✅ Guardar sesión real (token + provider)
+      saveProviderSession({ token: data?.token, provider: data?.provider });
+
+      // ✅ Mandar a edición; BusinessRegisterCompletePage cargará /providers/me con el token
+      navigate("/empresas/registro/completar", {
+        state: {
+          authMode: "edit",
+          loginEmail: email,
+        },
+      });
+    } catch {
+      // ✅ sin "err" para que ESLint no se queje (y tampoco lo necesitamos)
+      setErrors((prev) => ({
+        ...prev,
+        general:
+          "No se pudo conectar con el servidor. Revisa tu conexión o intenta más tarde.",
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleForgotPassword = () => {
-    if (!formData.email.trim()) {
-      alert(
-        "Modo demo: escribe primero tu correo y luego usamos ese dato para recuperación."
-      );
+    const email = formData.email.trim().toLowerCase();
+
+    if (!email) {
+      alert("Escribe primero tu correo y luego hacemos recuperación (modo demo).");
       return;
     }
-
-    if (!validateEmail(formData.email.trim())) {
+    if (!validateEmail(email)) {
       alert("El correo no parece válido. Revísalo y vuelve a intentar.");
       return;
     }
 
-    alert(
-      `Recuperación de contraseña (modo demo) para: ${formData.email.trim()}`
-    );
+    alert(`Recuperación de contraseña (modo demo) para: ${email}`);
   };
 
   const handleGoToRegister = () => {
@@ -135,6 +171,7 @@ function BusinessLoginPage() {
                   onChange={handleChange}
                   autoComplete="email"
                   required
+                  disabled={isSubmitting}
                 />
                 <span className="form__error">{errors.email}</span>
               </div>
@@ -154,6 +191,7 @@ function BusinessLoginPage() {
                   minLength={5}
                   autoComplete="current-password"
                   required
+                  disabled={isSubmitting}
                 />
                 <span className="form__error">{errors.password}</span>
 
@@ -162,6 +200,7 @@ function BusinessLoginPage() {
                     type="checkbox"
                     checked={showPassword}
                     onChange={(e) => setShowPassword(e.target.checked)}
+                    disabled={isSubmitting}
                   />
                   Mostrar contraseña
                 </label>
@@ -174,8 +213,12 @@ function BusinessLoginPage() {
               )}
 
               <div className="auth-card__actions">
-                <button type="submit" className="btn btn--primary">
-                  Acceder
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Accediendo..." : "Acceder"}
                 </button>
               </div>
 
@@ -184,6 +227,7 @@ function BusinessLoginPage() {
                   type="button"
                   className="auth-card__link"
                   onClick={handleForgotPassword}
+                  disabled={isSubmitting}
                 >
                   Olvidé mi contraseña
                 </button>
@@ -192,6 +236,7 @@ function BusinessLoginPage() {
                   type="button"
                   className="auth-card__link auth-card__link--muted"
                   onClick={handleGoToRegister}
+                  disabled={isSubmitting}
                 >
                   Registrar mi empresa
                 </button>
