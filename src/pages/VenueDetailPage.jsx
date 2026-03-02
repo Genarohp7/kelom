@@ -110,7 +110,8 @@ function mapApiProviderToVenue(profile, photos = []) {
   return {
     id: profile?.user_id || "mi-perfil",
     name: profile?.venue_name || profile?.venueName || "Mi proveedor",
-    location: profile?.venue_location || profile?.venueLocation || "Ubicación por definir",
+    location:
+      profile?.venue_location || profile?.venueLocation || "Ubicación por definir",
     rating: 0,
     reviews: 0,
     ranking: "",
@@ -120,7 +121,9 @@ function mapApiProviderToVenue(profile, photos = []) {
     priceRange,
     eventTypes,
     shortDescription:
-      profile?.short_description || profile?.shortDescription || "Descripción por definir.",
+      profile?.short_description ||
+      profile?.shortDescription ||
+      "Descripción por definir.",
     sellingPoints: sellingPoints.length
       ? sellingPoints
       : ["Punto destacado 1", "Punto destacado 2", "Punto destacado 3"],
@@ -165,6 +168,7 @@ function VenueDetailPage() {
 
       if (isProviderView) {
         const token = getProviderToken();
+
         if (!token) {
           const raw = localStorage.getItem(PROVIDER_PROFILE_DRAFT_KEY);
           const draft = raw ? safeParse(raw) : null;
@@ -193,7 +197,6 @@ function VenueDetailPage() {
             setApiVenue(venue);
           }
 
-          // Sin token no hay “modo pro” → sugerimos login
           return;
         }
 
@@ -206,10 +209,13 @@ function VenueDetailPage() {
           setApiVenue(venue);
         } catch (err) {
           const msg = String(err?.message || "No se pudo cargar el perfil.");
-          // Si token murió, limpiamos sesión y mandamos al login
           if (msg.toLowerCase().includes("token")) {
             clearProviderSession();
-            navigate("/empresas/login", { replace: true, state: { from: location.pathname + location.search } });
+            // ✅ ruta real de login
+            navigate("/empresas/acceso", {
+              replace: true,
+              state: { from: location.pathname + location.search },
+            });
             return;
           }
           if (!cancelled) setApiError(msg);
@@ -229,7 +235,8 @@ function VenueDetailPage() {
           const venue = mapApiProviderToVenue(data?.profile, data?.photos || []);
           setApiVenue(venue);
         } catch (err) {
-          if (!cancelled) setApiError(String(err?.message || "No se pudo cargar el proveedor."));
+          if (!cancelled)
+            setApiError(String(err?.message || "No se pudo cargar el proveedor."));
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -252,7 +259,10 @@ function VenueDetailPage() {
   const handleGoEdit = () => {
     const token = getProviderToken();
     if (!token) {
-      navigate("/empresas/login", { state: { from: "/empresas/registro/completar" } });
+      // ✅ ruta real de login
+      navigate("/empresas/acceso", {
+        state: { from: "/empresas/registro/completar" },
+      });
       return;
     }
     navigate("/empresas/registro/completar", { state: { authMode: "edit" } });
@@ -260,7 +270,8 @@ function VenueDetailPage() {
 
   const handleLogout = () => {
     clearProviderSession();
-    navigate("/empresas/login", { replace: true });
+    // ✅ AQUÍ ESTÁ EL FIX: regresamos al BusinessAreaPage con header y todo
+    navigate("/empresas", { replace: true });
   };
 
   if (loading) {
@@ -446,12 +457,17 @@ function VenueDetailPage() {
           </div>
 
           <div className="venue-map__frame">
-            <iframe className="venue-map__iframe" title={`Mapa de ${venue.name}`} loading="lazy" src="about:blank" />
+            <iframe
+              className="venue-map__iframe"
+              title={`Mapa de ${venue.name}`}
+              loading="lazy"
+              src="about:blank"
+            />
           </div>
         </div>
       </section>
     </div>
   );
-} 
+}
 
 export default VenueDetailPage;
