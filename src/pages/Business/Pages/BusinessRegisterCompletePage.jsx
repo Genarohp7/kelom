@@ -3,13 +3,18 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
+import {
+  getProviderToken,
+  setProviderSession,
+  clearProviderSession,
+} from "../../../services/providerAuth";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
 const PROVIDER_BASIC_DRAFT_KEY = "kelom_provider_basic_draft";
 const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
-const PROVIDER_TOKEN_KEY = "kelom_provider_token";
-const PROVIDER_USER_KEY = "kelom_provider_user";
+
+const EDIT_ROUTE = "/empresas/registro/completar";
 
 const EVENT_TYPE_OPTIONS = [
   "Boda civil",
@@ -32,32 +37,6 @@ function safeParse(json) {
 
 function normalizePhoneDigits(phone) {
   return String(phone || "").replace(/\D/g, "");
-}
-
-function getProviderToken() {
-  try {
-    return localStorage.getItem(PROVIDER_TOKEN_KEY) || "";
-  } catch {
-    return "";
-  }
-}
-
-function setProviderSession({ token, provider }) {
-  try {
-    if (token) localStorage.setItem(PROVIDER_TOKEN_KEY, token);
-    if (provider) localStorage.setItem(PROVIDER_USER_KEY, JSON.stringify(provider));
-  } catch {
-    // ignore
-  }
-}
-
-function clearProviderSession() {
-  try {
-    localStorage.removeItem(PROVIDER_TOKEN_KEY);
-    localStorage.removeItem(PROVIDER_USER_KEY);
-  } catch {
-    // ignore
-  }
 }
 
 function toAbsoluteApiUrl(url) {
@@ -157,7 +136,9 @@ function BusinessRegisterCompletePage() {
   });
 
   const providerEmail = useMemo(() => {
-    const email = (loginEmailFromState || basicData?.email || "").trim().toLowerCase();
+    const email = (loginEmailFromState || basicData?.email || "")
+      .trim()
+      .toLowerCase();
     return email;
   }, [loginEmailFromState, basicData]);
 
@@ -170,6 +151,19 @@ function BusinessRegisterCompletePage() {
     if (prefillProfileData) return "edit";
     return "register";
   }, [isLoggedIn, authModeFromState, prefillProfileData]);
+
+  // ✅ GUARD: si estás en EDICIÓN pero NO hay token → login
+  useEffect(() => {
+    if (authMode !== "edit") return;
+
+    const token = getProviderToken();
+    if (!token) {
+      navigate("/empresas/login", {
+        replace: true,
+        state: { from: EDIT_ROUTE },
+      });
+    }
+  }, [authMode, navigate]);
 
   // ============ PROFILE DATA ============
   const [profileData, setProfileData] = useState(() => {
@@ -195,7 +189,9 @@ function BusinessRegisterCompletePage() {
         priceFrom: prefillProfileData.priceFrom || "",
         priceTo: prefillProfileData.priceTo || "",
         shortDescription: prefillProfileData.shortDescription || "",
-        eventTypes: Array.isArray(prefillProfileData.eventTypes) ? prefillProfileData.eventTypes : [],
+        eventTypes: Array.isArray(prefillProfileData.eventTypes)
+          ? prefillProfileData.eventTypes
+          : [],
         sellingPointsText: prefillProfileData.sellingPointsText || "",
         mapText: prefillProfileData.mapText || "",
         description: prefillProfileData.description || "",
@@ -205,7 +201,9 @@ function BusinessRegisterCompletePage() {
         website: prefillProfileData.website || "",
         instagram: prefillProfileData.instagram || "",
         facebook: prefillProfileData.facebook || "",
-        photos: Array.isArray(prefillProfileData.photos) ? prefillProfileData.photos : [],
+        photos: Array.isArray(prefillProfileData.photos)
+          ? prefillProfileData.photos
+          : [],
       };
     }
 
@@ -374,14 +372,22 @@ function BusinessRegisterCompletePage() {
         setServerPhotos(Array.isArray(data?.photos) ? data.photos : []);
       })
       .catch((err) => {
+        if (cancelled) return;
+
         console.warn("No se pudo cargar /providers/me:", err);
+
+        // ✅ Token murió / inválido → limpiamos y mandamos al login (modo pro)
         clearProviderSession();
+        navigate("/empresas/login", {
+          replace: true,
+          state: { from: EDIT_ROUTE },
+        });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [prefillProfileData]);
+  }, [prefillProfileData, navigate]);
 
   // ========= Dropzone handlers =========
   const openFilePicker = () => fileInputRef.current?.click();
@@ -480,6 +486,7 @@ function BusinessRegisterCompletePage() {
     const token = getProviderToken();
     if (!token) {
       setSubmitError("No hay sesión activa. Inicia sesión como proveedor.");
+      navigate("/empresas/login", { state: { from: EDIT_ROUTE } });
       return;
     }
 
@@ -537,7 +544,9 @@ function BusinessRegisterCompletePage() {
   const toggleEventType = (label) => {
     setProfileData((prev) => {
       const has = prev.eventTypes.includes(label);
-      const next = has ? prev.eventTypes.filter((t) => t !== label) : [...prev.eventTypes, label];
+      const next = has
+        ? prev.eventTypes.filter((t) => t !== label)
+        : [...prev.eventTypes, label];
       return { ...prev, eventTypes: next };
     });
   };
@@ -583,7 +592,9 @@ function BusinessRegisterCompletePage() {
         document.head.appendChild(script);
       });
 
-      if (!window.google?.maps?.places) throw new Error("Google Places not available after script load");
+      if (!window.google?.maps?.places) {
+        throw new Error("Google Places not available after script load");
+      }
       return window.google;
     };
 
@@ -617,8 +628,10 @@ function BusinessRegisterCompletePage() {
             ...prev,
             venueLocation: formatted,
             locationPlaceId: place?.place_id || "",
-            locationLat: typeof lat === "number" && Number.isFinite(lat) ? String(lat) : "",
-            locationLng: typeof lng === "number" && Number.isFinite(lng) ? String(lng) : "",
+            locationLat:
+              typeof lat === "number" && Number.isFinite(lat) ? String(lat) : "",
+            locationLng:
+              typeof lng === "number" && Number.isFinite(lng) ? String(lng) : "",
           }));
         });
 
@@ -632,14 +645,19 @@ function BusinessRegisterCompletePage() {
 
     return () => {
       cancelled = true;
-      if (autocompleteListenerRef.current?.remove) autocompleteListenerRef.current.remove();
+      if (autocompleteListenerRef.current?.remove) {
+        autocompleteListenerRef.current.remove();
+      }
       autocompleteListenerRef.current = null;
       autocompleteRef.current = null;
     };
   }, []);
 
   // ========= Local previews =========
-  const photoPreviews = useMemo(() => (profileData.photos || []).map((file) => URL.createObjectURL(file)), [profileData.photos]);
+  const photoPreviews = useMemo(
+    () => (profileData.photos || []).map((file) => URL.createObjectURL(file)),
+    [profileData.photos]
+  );
 
   useEffect(() => {
     return () => {
@@ -649,15 +667,21 @@ function BusinessRegisterCompletePage() {
 
   const mainPhoto = useMemo(() => {
     if (photoPreviews.length > 0) return photoPreviews[0];
-    const firstServer = serverPhotos?.[0]?.url ? toAbsoluteApiUrl(serverPhotos[0].url) : "";
+    const firstServer = serverPhotos?.[0]?.url
+      ? toAbsoluteApiUrl(serverPhotos[0].url)
+      : "";
     if (firstServer) return firstServer;
     return "https://images.pexels.com/photos/3951852/pexels-photo-3951852.jpeg?auto=compress&cs=tinysrgb&w=800";
   }, [photoPreviews, serverPhotos]);
 
-  const sellingPointsList = useMemo(() => buildSellingPointsList(profileData.sellingPointsText), [profileData.sellingPointsText]);
+  const sellingPointsList = useMemo(
+    () => buildSellingPointsList(profileData.sellingPointsText),
+    [profileData.sellingPointsText]
+  );
 
   const completion = useMemo(() => {
-    const hasAnyPhotos = (profileData.photos || []).length > 0 || (serverPhotos || []).length > 0;
+    const hasAnyPhotos =
+      (profileData.photos || []).length > 0 || (serverPhotos || []).length > 0;
 
     const items = [
       !!profileData.venueName.trim(),
@@ -668,7 +692,6 @@ function BusinessRegisterCompletePage() {
       !!profileData.shortDescription.trim(),
       !!profileData.description.trim(),
       !!profileData.services.trim(),
-
       (profileData.eventTypes || []).length > 0,
       !!profileData.sellingPointsText.trim(),
       !!profileData.mapText.trim(),
@@ -684,7 +707,10 @@ function BusinessRegisterCompletePage() {
     return { done, total, percent };
   }, [profileData, serverPhotos]);
 
-  const hasGeo = !!String(profileData.locationLat || "").trim() && !!String(profileData.locationLng || "").trim();
+  const hasGeo =
+    !!String(profileData.locationLat || "").trim() &&
+    !!String(profileData.locationLng || "").trim();
+
   const validateNumber = (value) => /^\d+$/.test(String(value));
 
   const validateCreatePassword = () => {
@@ -713,6 +739,7 @@ function BusinessRegisterCompletePage() {
     const token = getProviderToken();
     if (!token) {
       setSubmitError("Tu sesión de proveedor no está activa. Inicia sesión primero.");
+      navigate("/empresas/login", { state: { from: EDIT_ROUTE } });
       return;
     }
 
@@ -720,10 +747,14 @@ function BusinessRegisterCompletePage() {
     const next = securityData.newPassword.trim();
     const confirm = securityData.confirmNewPassword.trim();
 
-    if (!current || !next || !confirm) return setSubmitError("Completa: contraseña actual, nueva y confirmación.");
-    if (next.length < 5) return setSubmitError("La nueva contraseña debe tener al menos 5 caracteres.");
-    if (next !== confirm) return setSubmitError("La confirmación no coincide con la nueva contraseña.");
-    if (current === next) return setSubmitError("La nueva contraseña no puede ser igual a la actual.");
+    if (!current || !next || !confirm)
+      return setSubmitError("Completa: contraseña actual, nueva y confirmación.");
+    if (next.length < 5)
+      return setSubmitError("La nueva contraseña debe tener al menos 5 caracteres.");
+    if (next !== confirm)
+      return setSubmitError("La confirmación no coincide con la nueva contraseña.");
+    if (current === next)
+      return setSubmitError("La nueva contraseña no puede ser igual a la actual.");
 
     try {
       setIsSubmitting(true);
@@ -749,7 +780,10 @@ function BusinessRegisterCompletePage() {
 
   const persistDraft = (nextProfileData) => {
     try {
-      localStorage.setItem(PROVIDER_PROFILE_DRAFT_KEY, JSON.stringify({ ...nextProfileData, photos: [] }));
+      localStorage.setItem(
+        PROVIDER_PROFILE_DRAFT_KEY,
+        JSON.stringify({ ...nextProfileData, photos: [] })
+      );
     } catch {
       // ignore
     }
@@ -762,18 +796,42 @@ function BusinessRegisterCompletePage() {
     setSubmitError("");
     setSubmitSuccess("");
 
-    const { venueName, venueLocation, capacityMin, capacityMax, priceFrom, priceTo, shortDescription, description, services } = profileData;
+    const {
+      venueName,
+      venueLocation,
+      capacityMin,
+      capacityMax,
+      priceFrom,
+      priceTo,
+      shortDescription,
+      description,
+      services,
+    } = profileData;
 
-    if (!venueName.trim() || !venueLocation.trim() || !String(priceFrom).trim() || !String(priceTo).trim() || !String(capacityMin).trim() || !shortDescription.trim() || !description.trim() || !services.trim()) {
+    if (
+      !venueName.trim() ||
+      !venueLocation.trim() ||
+      !String(priceFrom).trim() ||
+      !String(priceTo).trim() ||
+      !String(capacityMin).trim() ||
+      !shortDescription.trim() ||
+      !description.trim() ||
+      !services.trim()
+    ) {
       setSubmitError("Por favor, completa todos los campos obligatorios.");
       return;
     }
 
-    if (!validateNumber(priceFrom) || !validateNumber(priceTo)) return setSubmitError("Los rangos de precio deben ser valores numéricos.");
-    if (Number(priceFrom) > Number(priceTo)) return setSubmitError("El precio 'desde' no puede ser mayor que el 'hasta'.");
-    if (!validateNumber(capacityMin)) return setSubmitError("La capacidad mínima debe ser un número.");
-    if (capacityMax && !validateNumber(capacityMax)) return setSubmitError("La capacidad máxima debe ser un número.");
-    if (capacityMax && Number(capacityMin) > Number(capacityMax)) return setSubmitError("La capacidad mínima no puede ser mayor que la máxima.");
+    if (!validateNumber(priceFrom) || !validateNumber(priceTo))
+      return setSubmitError("Los rangos de precio deben ser valores numéricos.");
+    if (Number(priceFrom) > Number(priceTo))
+      return setSubmitError("El precio 'desde' no puede ser mayor que el 'hasta'.");
+    if (!validateNumber(capacityMin))
+      return setSubmitError("La capacidad mínima debe ser un número.");
+    if (capacityMax && !validateNumber(capacityMax))
+      return setSubmitError("La capacidad máxima debe ser un número.");
+    if (capacityMax && Number(capacityMin) > Number(capacityMax))
+      return setSubmitError("La capacidad mínima no puede ser mayor que la máxima.");
 
     const sellingPoints = sellingPointsList;
     persistDraft(profileData);
@@ -840,12 +898,18 @@ function BusinessRegisterCompletePage() {
         if (data?.token) await uploadSelectedPhotosToBackend(data.token);
 
         setSubmitSuccess("Cuenta creada y ficha guardada correctamente.");
-        navigate("/proveedores/mi-perfil?mode=provider", { state: { basicData: basicData || null } });
+        navigate("/proveedores/mi-perfil?mode=provider", {
+          state: { basicData: basicData || null },
+        });
         return;
       }
 
       const token = getProviderToken();
-      if (!token) return setSubmitError("No hay sesión activa. Inicia sesión como proveedor primero.");
+      if (!token) {
+        setSubmitError("No hay sesión activa. Inicia sesión como proveedor primero.");
+        navigate("/empresas/login", { state: { from: EDIT_ROUTE } });
+        return;
+      }
 
       const payload = {
         companyName: basicData?.companyName ? String(basicData.companyName).trim() : undefined,
@@ -905,14 +969,20 @@ function BusinessRegisterCompletePage() {
   };
 
   const handleGoPreview = () => {
-    navigate("/proveedores/mi-perfil?mode=provider", { state: { basicData: basicData || null } });
+    navigate("/proveedores/mi-perfil?mode=provider", {
+      state: { basicData: basicData || null },
+    });
   };
 
   return (
     <div className="business-profile">
       <header className="business-profile__header">
         <div className="container business-profile__header-inner">
-          <NavLink to="/empresas" className="business-profile__logo-link" aria-label="Volver al área de empresas">
+          <NavLink
+            to="/empresas"
+            className="business-profile__logo-link"
+            aria-label="Volver al área de empresas"
+          >
             <img src={Kelom} alt="Logo Kelom" title="Kelom" />
           </NavLink>
 
@@ -947,17 +1017,41 @@ function BusinessRegisterCompletePage() {
                 </div>
               </div>
 
-              {submitError && <div className="form__error" style={{ marginBottom: "0.8rem" }}>{submitError}</div>}
-              {submitSuccess && <div className="form__error" style={{ marginBottom: "0.8rem", color: "green" }}>{submitSuccess}</div>}
+              {submitError && (
+                <div className="form__error" style={{ marginBottom: "0.8rem" }}>
+                  {submitError}
+                </div>
+              )}
+
+              {submitSuccess && (
+                <div
+                  className="form__error"
+                  style={{ marginBottom: "0.8rem", color: "green" }}
+                >
+                  {submitSuccess}
+                </div>
+              )}
 
               <form className="form form--grid" onSubmit={handleSubmit} noValidate>
                 <div className="form__field form__field--full">
-                  <label className="form__label" htmlFor="venueName">Nombre que verán las parejas *</label>
-                  <input id="venueName" name="venueName" type="text" className="form__input" value={profileData.venueName} onChange={handleProfileChange} required />
+                  <label className="form__label" htmlFor="venueName">
+                    Nombre que verán las parejas *
+                  </label>
+                  <input
+                    id="venueName"
+                    name="venueName"
+                    type="text"
+                    className="form__input"
+                    value={profileData.venueName}
+                    onChange={handleProfileChange}
+                    required
+                  />
                 </div>
 
                 <div className="form__field form__field--full">
-                  <label className="form__label" htmlFor="venueLocation">Ubicación *</label>
+                  <label className="form__label" htmlFor="venueLocation">
+                    Ubicación *
+                  </label>
                   <input
                     ref={locationInputRef}
                     id="venueLocation"
@@ -971,43 +1065,97 @@ function BusinessRegisterCompletePage() {
                     autoComplete="off"
                   />
                   <p className="form__hint" style={{ marginTop: "0.35rem" }}>
-                    {hasGeo ? "Ubicación verificada en Google Maps ✅" : "Tip: elige una sugerencia del autocompletado para activar el mapa."}
+                    {hasGeo
+                      ? "Ubicación verificada en Google Maps ✅"
+                      : "Tip: elige una sugerencia del autocompletado para activar el mapa."}
                   </p>
                 </div>
 
                 <div className="form__field">
-                  <label className="form__label" htmlFor="capacityMin">Capacidad mínima *</label>
-                  <input id="capacityMin" name="capacityMin" type="number" className="form__input" value={profileData.capacityMin} onChange={handleProfileChange} required />
+                  <label className="form__label" htmlFor="capacityMin">
+                    Capacidad mínima *
+                  </label>
+                  <input
+                    id="capacityMin"
+                    name="capacityMin"
+                    type="number"
+                    className="form__input"
+                    value={profileData.capacityMin}
+                    onChange={handleProfileChange}
+                    required
+                  />
                 </div>
 
                 <div className="form__field">
-                  <label className="form__label" htmlFor="capacityMax">Capacidad máxima (opcional)</label>
-                  <input id="capacityMax" name="capacityMax" type="number" className="form__input" value={profileData.capacityMax} onChange={handleProfileChange} />
+                  <label className="form__label" htmlFor="capacityMax">
+                    Capacidad máxima (opcional)
+                  </label>
+                  <input
+                    id="capacityMax"
+                    name="capacityMax"
+                    type="number"
+                    className="form__input"
+                    value={profileData.capacityMax}
+                    onChange={handleProfileChange}
+                  />
                 </div>
 
                 <div className="form__field">
-                  <label className="form__label" htmlFor="priceFrom">Precio desde (MXN) *</label>
-                  <input id="priceFrom" name="priceFrom" type="number" className="form__input" value={profileData.priceFrom} onChange={handleProfileChange} required />
+                  <label className="form__label" htmlFor="priceFrom">
+                    Precio desde (MXN) *
+                  </label>
+                  <input
+                    id="priceFrom"
+                    name="priceFrom"
+                    type="number"
+                    className="form__input"
+                    value={profileData.priceFrom}
+                    onChange={handleProfileChange}
+                    required
+                  />
                 </div>
 
                 <div className="form__field">
-                  <label className="form__label" htmlFor="priceTo">Precio hasta (MXN) *</label>
-                  <input id="priceTo" name="priceTo" type="number" className="form__input" value={profileData.priceTo} onChange={handleProfileChange} required />
+                  <label className="form__label" htmlFor="priceTo">
+                    Precio hasta (MXN) *
+                  </label>
+                  <input
+                    id="priceTo"
+                    name="priceTo"
+                    type="number"
+                    className="form__input"
+                    value={profileData.priceTo}
+                    onChange={handleProfileChange}
+                    required
+                  />
                 </div>
 
                 <div className="form__field form__field--full">
-                  <label className="form__label" htmlFor="shortDescription">Descripción corta *</label>
-                  <textarea id="shortDescription" name="shortDescription" className="form__textarea" rows={3} value={profileData.shortDescription} onChange={handleProfileChange} required />
+                  <label className="form__label" htmlFor="shortDescription">
+                    Descripción corta *
+                  </label>
+                  <textarea
+                    id="shortDescription"
+                    name="shortDescription"
+                    className="form__textarea"
+                    rows={3}
+                    value={profileData.shortDescription}
+                    onChange={handleProfileChange}
+                    required
+                  />
                 </div>
 
-                {/* ✅ Tipos de evento (para que toggleEventType NO quede unused) */}
                 <div className="form__field form__field--full">
                   <label className="form__label">Tipos de evento (chips)</label>
                   <div className="chip-grid">
                     {EVENT_TYPE_OPTIONS.map((label) => (
                       <label
                         key={label}
-                        className={profileData.eventTypes.includes(label) ? "chip-option chip-option--active" : "chip-option"}
+                        className={
+                          profileData.eventTypes.includes(label)
+                            ? "chip-option chip-option--active"
+                            : "chip-option"
+                        }
                       >
                         <input
                           type="checkbox"
@@ -1018,30 +1166,69 @@ function BusinessRegisterCompletePage() {
                       </label>
                     ))}
                   </div>
-                  <p className="form__hint" style={{ marginTop: "0.55rem" }}>Puedes elegir varios.</p>
+                  <p className="form__hint" style={{ marginTop: "0.55rem" }}>
+                    Puedes elegir varios.
+                  </p>
                 </div>
 
                 <div className="form__field form__field--full">
-                  <label className="form__label" htmlFor="sellingPointsText">Puntos destacados (uno por línea)</label>
-                  <textarea id="sellingPointsText" name="sellingPointsText" className="form__textarea" rows={4} value={profileData.sellingPointsText} onChange={handleProfileChange} />
+                  <label className="form__label" htmlFor="sellingPointsText">
+                    Puntos destacados (uno por línea)
+                  </label>
+                  <textarea
+                    id="sellingPointsText"
+                    name="sellingPointsText"
+                    className="form__textarea"
+                    rows={4}
+                    value={profileData.sellingPointsText}
+                    onChange={handleProfileChange}
+                  />
                 </div>
 
                 <div className="form__field form__field--full">
-                  <label className="form__label" htmlFor="description">Sobre este lugar (descripción completa) *</label>
-                  <textarea id="description" name="description" className="form__textarea" rows={5} value={profileData.description} onChange={handleProfileChange} required />
+                  <label className="form__label" htmlFor="description">
+                    Sobre este lugar (descripción completa) *
+                  </label>
+                  <textarea
+                    id="description"
+                    name="description"
+                    className="form__textarea"
+                    rows={5}
+                    value={profileData.description}
+                    onChange={handleProfileChange}
+                    required
+                  />
                 </div>
 
                 <div className="form__field form__field--full">
-                  <label className="form__label" htmlFor="services">Servicios que ofrecen *</label>
-                  <textarea id="services" name="services" className="form__textarea" rows={3} value={profileData.services} onChange={handleProfileChange} required />
+                  <label className="form__label" htmlFor="services">
+                    Servicios que ofrecen *
+                  </label>
+                  <textarea
+                    id="services"
+                    name="services"
+                    className="form__textarea"
+                    rows={3}
+                    value={profileData.services}
+                    onChange={handleProfileChange}
+                    required
+                  />
                 </div>
 
                 <div className="form__field form__field--full">
-                  <label className="form__label" htmlFor="mapText">Ubicación y accesos (texto)</label>
-                  <textarea id="mapText" name="mapText" className="form__textarea" rows={3} value={profileData.mapText} onChange={handleProfileChange} />
+                  <label className="form__label" htmlFor="mapText">
+                    Ubicación y accesos (texto)
+                  </label>
+                  <textarea
+                    id="mapText"
+                    name="mapText"
+                    className="form__textarea"
+                    rows={3}
+                    value={profileData.mapText}
+                    onChange={handleProfileChange}
+                  />
                 </div>
 
-                {/* ======= PHOTOS (server + local) ======= */}
                 <div className="form__field form__field--full">
                   <label className="form__label">Fotografías del lugar</label>
 
@@ -1049,7 +1236,11 @@ function BusinessRegisterCompletePage() {
                     <div className="dropzone__thumbs" aria-label="Fotos guardadas">
                       {serverPhotos.map((p, idx) => (
                         <div className="thumb" key={p.id}>
-                          <img src={toAbsoluteApiUrl(p.url)} alt={`Foto guardada ${idx + 1}`} className="thumb__img" />
+                          <img
+                            src={toAbsoluteApiUrl(p.url)}
+                            alt={`Foto guardada ${idx + 1}`}
+                            className="thumb__img"
+                          />
                           {idx === 0 && <span className="thumb__badge">Principal</span>}
                           <button
                             type="button"
@@ -1080,7 +1271,9 @@ function BusinessRegisterCompletePage() {
                     }}
                   >
                     <div className="dropzone__inner">
-                      <div className="dropzone__icon" aria-hidden="true">⬆️</div>
+                      <div className="dropzone__icon" aria-hidden="true">
+                        ⬆️
+                      </div>
                       <p className="dropzone__title">Arrastra tus fotos aquí</p>
                       <p className="dropzone__subtitle">o</p>
 
@@ -1097,7 +1290,9 @@ function BusinessRegisterCompletePage() {
                       </button>
 
                       {(profileData.photos || []).length > 0 && (
-                        <p className="dropzone__count">{profileData.photos.length} foto(s) lista(s) para subir</p>
+                        <p className="dropzone__count">
+                          {profileData.photos.length} foto(s) lista(s) para subir
+                        </p>
                       )}
                     </div>
 
@@ -1116,9 +1311,18 @@ function BusinessRegisterCompletePage() {
                     <div className="dropzone__thumbs" aria-label="Fotos nuevas">
                       {photoPreviews.map((src, idx) => (
                         <div className="thumb" key={`${src}-${idx}`}>
-                          <img src={src} alt={`Foto seleccionada ${idx + 1}`} className="thumb__img" />
+                          <img
+                            src={src}
+                            alt={`Foto seleccionada ${idx + 1}`}
+                            className="thumb__img"
+                          />
                           {idx === 0 && <span className="thumb__badge">Principal</span>}
-                          <button type="button" className="thumb__remove" onClick={() => removeLocalPhotoAt(idx)} disabled={isUploadingPhotos || isSubmitting}>
+                          <button
+                            type="button"
+                            className="thumb__remove"
+                            onClick={() => removeLocalPhotoAt(idx)}
+                            disabled={isUploadingPhotos || isSubmitting}
+                          >
                             ✕
                           </button>
                         </div>
@@ -1127,18 +1331,21 @@ function BusinessRegisterCompletePage() {
                   )}
                 </div>
 
-                {/* ✅ SEGURIDAD (para que showSecurity/toggleShow/handleSecurityChange/handleChangePassword NO queden unused) */}
                 <div className="form__field form__field--full">
                   <div className="security-card">
                     <h3 className="security-card__title">Seguridad</h3>
 
                     {authMode === "register" ? (
                       <>
-                        <p className="security-card__subtitle">Crea tu contraseña para poder entrar a tu panel después.</p>
+                        <p className="security-card__subtitle">
+                          Crea tu contraseña para poder entrar a tu panel después.
+                        </p>
 
                         <div className="security-card__grid">
                           <div className="form__field">
-                            <label className="form__label" htmlFor="password">Crear contraseña *</label>
+                            <label className="form__label" htmlFor="password">
+                              Crear contraseña *
+                            </label>
                             <input
                               id="password"
                               name="password"
@@ -1150,13 +1357,19 @@ function BusinessRegisterCompletePage() {
                               disabled={isSubmitting}
                             />
                             <label className="form__toggle">
-                              <input type="checkbox" checked={showSecurity.password} onChange={() => toggleShow("password")} />
+                              <input
+                                type="checkbox"
+                                checked={showSecurity.password}
+                                onChange={() => toggleShow("password")}
+                              />
                               Mostrar
                             </label>
                           </div>
 
                           <div className="form__field">
-                            <label className="form__label" htmlFor="confirmPassword">Confirmar contraseña *</label>
+                            <label className="form__label" htmlFor="confirmPassword">
+                              Confirmar contraseña *
+                            </label>
                             <input
                               id="confirmPassword"
                               name="confirmPassword"
@@ -1168,7 +1381,11 @@ function BusinessRegisterCompletePage() {
                               disabled={isSubmitting}
                             />
                             <label className="form__toggle">
-                              <input type="checkbox" checked={showSecurity.confirmPassword} onChange={() => toggleShow("confirmPassword")} />
+                              <input
+                                type="checkbox"
+                                checked={showSecurity.confirmPassword}
+                                onChange={() => toggleShow("confirmPassword")}
+                              />
                               Mostrar
                             </label>
                           </div>
@@ -1176,11 +1393,15 @@ function BusinessRegisterCompletePage() {
                       </>
                     ) : (
                       <>
-                        <p className="security-card__subtitle">Puedes cambiar tu contraseña cuando quieras.</p>
+                        <p className="security-card__subtitle">
+                          Puedes cambiar tu contraseña cuando quieras.
+                        </p>
 
                         <div className="security-card__grid">
                           <div className="form__field">
-                            <label className="form__label" htmlFor="currentPassword">Contraseña actual</label>
+                            <label className="form__label" htmlFor="currentPassword">
+                              Contraseña actual
+                            </label>
                             <input
                               id="currentPassword"
                               name="currentPassword"
@@ -1192,13 +1413,19 @@ function BusinessRegisterCompletePage() {
                               disabled={isSubmitting}
                             />
                             <label className="form__toggle">
-                              <input type="checkbox" checked={showSecurity.currentPassword} onChange={() => toggleShow("currentPassword")} />
+                              <input
+                                type="checkbox"
+                                checked={showSecurity.currentPassword}
+                                onChange={() => toggleShow("currentPassword")}
+                              />
                               Mostrar
                             </label>
                           </div>
 
                           <div className="form__field">
-                            <label className="form__label" htmlFor="newPassword">Nueva contraseña</label>
+                            <label className="form__label" htmlFor="newPassword">
+                              Nueva contraseña
+                            </label>
                             <input
                               id="newPassword"
                               name="newPassword"
@@ -1210,13 +1437,19 @@ function BusinessRegisterCompletePage() {
                               disabled={isSubmitting}
                             />
                             <label className="form__toggle">
-                              <input type="checkbox" checked={showSecurity.newPassword} onChange={() => toggleShow("newPassword")} />
+                              <input
+                                type="checkbox"
+                                checked={showSecurity.newPassword}
+                                onChange={() => toggleShow("newPassword")}
+                              />
                               Mostrar
                             </label>
                           </div>
 
                           <div className="form__field form__field--full">
-                            <label className="form__label" htmlFor="confirmNewPassword">Confirmar nueva contraseña</label>
+                            <label className="form__label" htmlFor="confirmNewPassword">
+                              Confirmar nueva contraseña
+                            </label>
                             <input
                               id="confirmNewPassword"
                               name="confirmNewPassword"
@@ -1228,14 +1461,23 @@ function BusinessRegisterCompletePage() {
                               disabled={isSubmitting}
                             />
                             <label className="form__toggle">
-                              <input type="checkbox" checked={showSecurity.confirmNewPassword} onChange={() => toggleShow("confirmNewPassword")} />
+                              <input
+                                type="checkbox"
+                                checked={showSecurity.confirmNewPassword}
+                                onChange={() => toggleShow("confirmNewPassword")}
+                              />
                               Mostrar
                             </label>
                           </div>
                         </div>
 
                         <div className="security-card__actions">
-                          <button type="button" className="btn btn--ghost" onClick={handleChangePassword} disabled={isSubmitting}>
+                          <button
+                            type="button"
+                            className="btn btn--ghost"
+                            onClick={handleChangePassword}
+                            disabled={isSubmitting}
+                          >
                             Actualizar contraseña
                           </button>
                         </div>
@@ -1245,16 +1487,30 @@ function BusinessRegisterCompletePage() {
                 </div>
 
                 <div className="form__actions form__field--full" style={{ gap: "0.7rem" }}>
-                  <button type="button" className="btn btn--ghost" onClick={() => navigate("/empresas/registro")} disabled={isSubmitting}>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => navigate("/empresas/registro")}
+                    disabled={isSubmitting}
+                  >
                     Volver al registro inicial
                   </button>
 
-                  <button type="button" className="btn btn--ghost" onClick={handleGoPreview} disabled={isSubmitting}>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={handleGoPreview}
+                    disabled={isSubmitting}
+                  >
                     Ver mi perfil (vista proveedor)
                   </button>
 
                   <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
-                    {isSubmitting ? "Guardando..." : authMode === "register" ? "Crear cuenta y guardar ficha" : "Guardar cambios"}
+                    {isSubmitting
+                      ? "Guardando..."
+                      : authMode === "register"
+                      ? "Crear cuenta y guardar ficha"
+                      : "Guardar cambios"}
                   </button>
                 </div>
               </form>
@@ -1263,8 +1519,12 @@ function BusinessRegisterCompletePage() {
             <aside className="profile-preview">
               <section className="preview-card">
                 <span className="preview-card__pill">Vista previa</span>
-                <h2 className="preview-card__title">{profileData.venueName || "Nombre del lugar"}</h2>
-                <p className="preview-card__subtitle">{profileData.venueLocation || "Ubicación del venue"}</p>
+                <h2 className="preview-card__title">
+                  {profileData.venueName || "Nombre del lugar"}
+                </h2>
+                <p className="preview-card__subtitle">
+                  {profileData.venueLocation || "Ubicación del venue"}
+                </p>
                 <div className="preview-card__photo-main">
                   <img src={mainPhoto} alt="Vista previa del venue" />
                 </div>
@@ -1274,7 +1534,9 @@ function BusinessRegisterCompletePage() {
         </div>
       </main>
 
-      <footer className="business-profile__footer">© {new Date().getFullYear()} Kelom · Área para proveedores.</footer>
+      <footer className="business-profile__footer">
+        © {new Date().getFullYear()} Kelom · Área para proveedores.
+      </footer>
     </div>
   );
 }

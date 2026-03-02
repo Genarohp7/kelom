@@ -1,48 +1,22 @@
 // src/pages/Business/Pages/BusinessLoginPage.jsx
 import React, { useEffect, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
+import {
+  getProviderToken,
+  setProviderSession,
+  clearProviderSession,
+  getProviderUser,
+} from "../../../services/providerAuth";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
-const PROVIDER_TOKEN_KEY = "kelom_provider_token";
-const PROVIDER_USER_KEY = "kelom_provider_user";
-
-function getProviderToken() {
-  try {
-    return localStorage.getItem(PROVIDER_TOKEN_KEY) || "";
-  } catch {
-    return "";
-  }
-}
-
-function setProviderSession({ token, provider }) {
-  try {
-    if (token) localStorage.setItem(PROVIDER_TOKEN_KEY, token);
-    if (provider) localStorage.setItem(PROVIDER_USER_KEY, JSON.stringify(provider));
-  } catch {
-    // ignore
-  }
-}
-
-function clearProviderSession() {
-  try {
-    localStorage.removeItem(PROVIDER_TOKEN_KEY);
-    localStorage.removeItem(PROVIDER_USER_KEY);
-  } catch {
-    // ignore
-  }
-}
 
 function BusinessLoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
-
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
+  const [formData, setFormData] = useState({ email: "", password: "" });
 
   const [errors, setErrors] = useState({
     email: "",
@@ -51,52 +25,22 @@ function BusinessLoginPage() {
   });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-  // ✅ Si ya hay token, no me hagas “volver a logearme”
+  // ✅ Si ya hay token, no tiene sentido pedir login: te mando directo a edición
   useEffect(() => {
-    let cancelled = false;
-
     const token = getProviderToken();
-    if (!token) {
-      setIsCheckingSession(false);
-      return;
-    }
+    if (!token) return;
 
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/providers/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          // Solo borramos si el token realmente ya no sirve
-          if (res.status === 401 || res.status === 403) {
-            clearProviderSession();
-          }
-          return;
-        }
-
-        if (cancelled) return;
-
-        // Refrescamos provider en localStorage (opcional, pero útil)
-        if (data?.provider) {
-          setProviderSession({ token, provider: data.provider });
-        }
-
-        // Redirige directo a edición
-        navigate("/empresas/registro/completar");
-      } finally {
-        if (!cancelled) setIsCheckingSession(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    navigate("/empresas/registro/completar", {
+      replace: true,
+      state: {
+        authMode: "edit",
+        loginEmail: getProviderUser()?.email || "",
+      },
+    });
   }, [navigate]);
 
   const validateForm = () => {
@@ -132,12 +76,17 @@ function BusinessLoginPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (isSubmitting) return;
     if (!validateForm()) return;
 
     const email = formData.email.trim().toLowerCase();
     const password = formData.password;
 
+    setErrors((prev) => ({ ...prev, general: "" }));
+
     try {
+      setIsSubmitting(true);
+
       const res = await fetch(`${API_BASE}/providers/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -147,65 +96,53 @@ function BusinessLoginPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setErrors((prev) => ({
-          ...prev,
-          general: data?.error || "No se pudo iniciar sesión.",
-        }));
+        const msg = data?.error || `Error HTTP ${res.status}`;
+        setErrors((prev) => ({ ...prev, general: msg }));
         return;
       }
 
       setProviderSession({ token: data?.token, provider: data?.provider });
 
-      navigate("/empresas/registro/completar");
-    } catch {
+      // Si venías rebotado desde una ruta protegida, regresamos ahí.
+      const from = location.state?.from;
+      if (typeof from === "string" && from.startsWith("/")) {
+        navigate(from, { replace: true });
+        return;
+      }
+
+      navigate("/empresas/registro/completar", {
+        replace: true,
+        state: { authMode: "edit", loginEmail: email },
+      });
+    } catch (err) {
       setErrors((prev) => ({
         ...prev,
-        general: "Error de red. Intenta otra vez.",
+        general: String(err?.message || "No se pudo iniciar sesión."),
       }));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleForgotPassword = () => {
-    alert("Aún no implementamos recuperación de contraseña (siguiente fase).");
+    setErrors((prev) => ({ ...prev, general: "" }));
+    alert(
+      "Recuperación de contraseña: pendiente (producto real lo hacemos con email). Por ahora, contáctanos y te ayudamos."
+    );
   };
 
   const handleGoToRegister = () => {
     navigate("/empresas/registro");
   };
 
-  if (isCheckingSession) {
-    return (
-      <div className="business-auth">
-        <header className="business-auth__header">
-          <div className="container business-auth__header-inner">
-            <NavLink
-              to="/"
-              className="business-auth__logo-link"
-              aria-label="Volver al inicio de Kelom"
-            >
-              <img src={Kelom} alt="Logo Kelom" title="Kelom" />
-            </NavLink>
-            <span className="business-auth__logo-text">Acceso de proveedores</span>
-          </div>
-        </header>
+  const handleLogout = () => {
+    clearProviderSession();
+    setFormData({ email: "", password: "" });
+    setErrors({ email: "", password: "", general: "" });
+    alert("Sesión cerrada.");
+  };
 
-        <main className="business-auth__content">
-          <div className="business-auth__container">
-            <section className="auth-card">
-              <h1 className="auth-card__title">Verificando sesión…</h1>
-              <p className="auth-card__subtitle">
-                Si ya estabas dentro, te regresamos a tu panel sin pedirte la contraseña.
-              </p>
-            </section>
-          </div>
-        </main>
-
-        <footer className="business-auth__footer">
-          © {new Date().getFullYear()} Kelom · Área para proveedores.
-        </footer>
-      </div>
-    );
-  }
+  const hasToken = !!getProviderToken();
 
   return (
     <div className="business-auth">
@@ -220,6 +157,17 @@ function BusinessLoginPage() {
           </NavLink>
 
           <span className="business-auth__logo-text">Acceso de proveedores</span>
+
+          {hasToken && (
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={handleLogout}
+              style={{ marginLeft: "auto" }}
+            >
+              Cerrar sesión
+            </button>
+          )}
         </div>
       </header>
 
@@ -246,6 +194,7 @@ function BusinessLoginPage() {
                   onChange={handleChange}
                   autoComplete="email"
                   required
+                  disabled={isSubmitting}
                 />
                 <span className="form__error">{errors.email}</span>
               </div>
@@ -265,6 +214,7 @@ function BusinessLoginPage() {
                   minLength={5}
                   autoComplete="current-password"
                   required
+                  disabled={isSubmitting}
                 />
                 <span className="form__error">{errors.password}</span>
 
@@ -273,6 +223,7 @@ function BusinessLoginPage() {
                     type="checkbox"
                     checked={showPassword}
                     onChange={(e) => setShowPassword(e.target.checked)}
+                    disabled={isSubmitting}
                   />
                   Mostrar contraseña
                 </label>
@@ -285,8 +236,8 @@ function BusinessLoginPage() {
               )}
 
               <div className="auth-card__actions">
-                <button type="submit" className="btn btn--primary">
-                  Acceder
+                <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
+                  {isSubmitting ? "Accediendo..." : "Acceder"}
                 </button>
               </div>
 
@@ -295,6 +246,7 @@ function BusinessLoginPage() {
                   type="button"
                   className="auth-card__link"
                   onClick={handleForgotPassword}
+                  disabled={isSubmitting}
                 >
                   Olvidé mi contraseña
                 </button>
@@ -303,6 +255,7 @@ function BusinessLoginPage() {
                   type="button"
                   className="auth-card__link auth-card__link--muted"
                   onClick={handleGoToRegister}
+                  disabled={isSubmitting}
                 >
                   Registrar mi empresa
                 </button>
