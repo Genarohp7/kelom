@@ -5,8 +5,6 @@ import "../../../../Blocks/Business/BusinessAuth.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
-
-// ✅ Deben coincidir con BusinessRegisterCompletePage.jsx
 const PROVIDER_TOKEN_KEY = "kelom_provider_token";
 const PROVIDER_USER_KEY = "kelom_provider_user";
 
@@ -14,44 +12,49 @@ function BusinessLoginPage() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({ email: "", password: "" });
-
-  const [errors, setErrors] = useState({
-    email: "",
-    password: "",
-    general: "",
-  });
-
+  const [errors, setErrors] = useState({ email: "", password: "", general: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-  const validateForm = () => {
-    const nextErrors = { email: "", password: "", general: "" };
+  const apiJson = async (path, { method = "GET", body } = {}) => {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
 
-    const email = formData.email.trim().toLowerCase();
-    const password = formData.password;
-
-    if (!email) nextErrors.email = "Ingresa tu correo electrónico.";
-    else if (!validateEmail(email))
-      nextErrors.email = "El correo no tiene un formato válido.";
-
-    if (!password.trim()) nextErrors.password = "Ingresa tu contraseña.";
-    else if (password.length < 5)
-      nextErrors.password = "La contraseña debe tener al menos 5 caracteres.";
-
-    setErrors(nextErrors);
-    return !nextErrors.email && !nextErrors.password;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error || `Error HTTP ${res.status}`);
+    }
+    return data;
   };
 
-  const saveProviderSession = ({ token, provider }) => {
+  const setProviderSession = ({ token, provider }) => {
     try {
       if (token) localStorage.setItem(PROVIDER_TOKEN_KEY, token);
-      if (provider)
-        localStorage.setItem(PROVIDER_USER_KEY, JSON.stringify(provider));
+      if (provider) localStorage.setItem(PROVIDER_USER_KEY, JSON.stringify(provider));
     } catch {
       // ignore
     }
+  };
+
+  const validateForm = () => {
+    const nextErrors = { email: "", password: "", general: "" };
+
+    const email = formData.email.trim();
+    const password = formData.password;
+
+    if (!email) nextErrors.email = "Ingresa tu correo electrónico.";
+    else if (!validateEmail(email)) nextErrors.email = "El correo no tiene un formato válido.";
+
+    if (!password.trim()) nextErrors.password = "Ingresa tu contraseña.";
+    else if (password.length < 5) nextErrors.password = "La contraseña debe tener al menos 5 caracteres.";
+
+    setErrors(nextErrors);
+    return !nextErrors.email && !nextErrors.password;
   };
 
   const handleChange = (e) => {
@@ -71,41 +74,25 @@ function BusinessLoginPage() {
 
     try {
       setIsSubmitting(true);
+      setErrors((prev) => ({ ...prev, general: "" }));
 
-      const res = await fetch(`${API_BASE}/providers/login`, {
+      const data = await apiJson("/providers/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: { email, password },
       });
 
-      const data = await res.json().catch(() => ({}));
+      setProviderSession({ token: data?.token, provider: data?.provider });
 
-      if (!res.ok) {
-        const msg =
-          data?.error ||
-          (res.status === 401
-            ? "Credenciales inválidas."
-            : `Error HTTP ${res.status}`);
-        setErrors((prev) => ({ ...prev, general: msg }));
-        return;
-      }
-
-      // ✅ Guardar sesión real (token + provider)
-      saveProviderSession({ token: data?.token, provider: data?.provider });
-
-      // ✅ Mandar a edición; BusinessRegisterCompletePage cargará /providers/me con el token
       navigate("/empresas/registro/completar", {
         state: {
           authMode: "edit",
           loginEmail: email,
         },
       });
-    } catch {
-      // ✅ sin "err" para que ESLint no se queje (y tampoco lo necesitamos)
+    } catch (err) {
       setErrors((prev) => ({
         ...prev,
-        general:
-          "No se pudo conectar con el servidor. Revisa tu conexión o intenta más tarde.",
+        general: String(err?.message || "No se pudo iniciar sesión."),
       }));
     } finally {
       setIsSubmitting(false);
@@ -113,18 +100,7 @@ function BusinessLoginPage() {
   };
 
   const handleForgotPassword = () => {
-    const email = formData.email.trim().toLowerCase();
-
-    if (!email) {
-      alert("Escribe primero tu correo y luego hacemos recuperación (modo demo).");
-      return;
-    }
-    if (!validateEmail(email)) {
-      alert("El correo no parece válido. Revísalo y vuelve a intentar.");
-      return;
-    }
-
-    alert(`Recuperación de contraseña (modo demo) para: ${email}`);
+    alert("Recuperación de contraseña: lo conectamos después (backend + email).");
   };
 
   const handleGoToRegister = () => {
@@ -135,11 +111,7 @@ function BusinessLoginPage() {
     <div className="business-auth">
       <header className="business-auth__header">
         <div className="container business-auth__header-inner">
-          <NavLink
-            to="/"
-            className="business-auth__logo-link"
-            aria-label="Volver al inicio de Kelom"
-          >
+          <NavLink to="/" className="business-auth__logo-link" aria-label="Volver al inicio de Kelom">
             <img src={Kelom} alt="Logo Kelom" title="Kelom" />
           </NavLink>
 
@@ -152,8 +124,7 @@ function BusinessLoginPage() {
           <section className="auth-card">
             <h1 className="auth-card__title">Acceso para proveedores</h1>
             <p className="auth-card__subtitle">
-              Ingresa con tu correo y contraseña para administrar tu perfil en
-              Kelom.
+              Ingresa con tu correo y contraseña para administrar tu perfil en Kelom.
             </p>
 
             <form className="form" onSubmit={handleSubmit} noValidate>
@@ -213,22 +184,13 @@ function BusinessLoginPage() {
               )}
 
               <div className="auth-card__actions">
-                <button
-                  type="submit"
-                  className="btn btn--primary"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Accediendo..." : "Acceder"}
+                <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
+                  {isSubmitting ? "Entrando..." : "Acceder"}
                 </button>
               </div>
 
               <div className="auth-card__links">
-                <button
-                  type="button"
-                  className="auth-card__link"
-                  onClick={handleForgotPassword}
-                  disabled={isSubmitting}
-                >
+                <button type="button" className="auth-card__link" onClick={handleForgotPassword}>
                   Olvidé mi contraseña
                 </button>
 
@@ -236,7 +198,6 @@ function BusinessLoginPage() {
                   type="button"
                   className="auth-card__link auth-card__link--muted"
                   onClick={handleGoToRegister}
-                  disabled={isSubmitting}
                 >
                   Registrar mi empresa
                 </button>

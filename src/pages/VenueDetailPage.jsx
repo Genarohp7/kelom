@@ -1,8 +1,12 @@
 // src/pages/VenueDetailPage.jsx
 import "../../Blocks/venues/VenueDetailPage.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useLocation } from "react-router-dom";
 
+const API_BASE_RAW = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
+const API_BASE = String(API_BASE_RAW).replace(/\/$/, ""); // sin slash al final
+
+const PROVIDER_TOKEN_KEY = "kelom_provider_token";
 const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
 
 function safeParse(json) {
@@ -11,6 +15,50 @@ function safeParse(json) {
   } catch {
     return null;
   }
+}
+
+function isUuid(v) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(v || "")
+  );
+}
+
+function toAbsoluteApiUrl(url) {
+  if (!url) return "";
+  const s = String(url);
+  if (s.startsWith("http")) return s;
+  // asegura slash
+  const path = s.startsWith("/") ? s : `/${s}`;
+  return `${API_BASE}${path}`;
+}
+
+function toNumberOrNull(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function buildMapEmbedSrc({ lat, lng, placeId, address }) {
+  // 1) coords (mejor)
+  if (typeof lat === "number" && typeof lng === "number") {
+    return `https://www.google.com/maps?q=${lat},${lng}&z=16&output=embed`;
+  }
+
+  // 2) place_id (si existe)
+  if (placeId) {
+    return `https://www.google.com/maps?q=place_id:${encodeURIComponent(
+      placeId
+    )}&output=embed`;
+  }
+
+  // 3) texto (fallback)
+  if (address) {
+    return `https://www.google.com/maps?q=${encodeURIComponent(
+      address
+    )}&output=embed`;
+  }
+
+  return "about:blank";
 }
 
 const formatMXN = (value) => {
@@ -26,7 +74,7 @@ const DEFAULT_GALLERY = [
   "https://images.pexels.com/photos/169190/pexels-photo-169190.jpeg?auto=compress&cs=tinysrgb&w=1200",
 ];
 
-// Datos estáticos por ahora
+// ===== Datos estáticos (demo) =====
 const venuesDetail = [
   {
     id: 1,
@@ -37,11 +85,7 @@ const venuesDetail = [
     ranking: "Top 10 jardines en CDMX",
     mainImage:
       "https://images.pexels.com/photos/3951852/pexels-photo-3951852.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    gallery: [
-      "https://images.pexels.com/photos/3951851/pexels-photo-3951851.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/169190/pexels-photo-169190.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    ],
+    gallery: DEFAULT_GALLERY,
     capacity: "120 – 250 invitados",
     priceRange: "$$ · Presupuesto medio",
     eventTypes: ["Boda civil", "Boda religiosa", "Recepción al aire libre"],
@@ -53,316 +97,69 @@ const venuesDetail = [
       "Área especial para fotos de pareja",
     ],
     mapText: "Zona sur de CDMX, a 10 minutos del centro de Tlalpan.",
-    opinions: [
-      {
-        id: 1,
-        couple: "Ana & Luis",
-        text:
-          "Nos encantó que pudimos hacer la ceremonia ahí mismo y luego pasar directo a la recepción sin mover a los invitados.",
-        rating: 4.5,
-      },
-      {
-        id: 2,
-        couple: "María & Jorge",
-        text:
-          "El jardín de noche con luces y bugambilias se ve increíble en las fotos.",
-        rating: 4.3,
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: "Casa Vintage",
-    location: "Coyoacán, Ciudad de México",
-    rating: 4.2,
-    reviews: 45,
-    ranking: "Lugar destacado en bodas íntimas",
-    mainImage:
-      "https://images.pexels.com/photos/3887985/pexels-photo-3887985.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    gallery: [
-      "https://images.pexels.com/photos/3951678/pexels-photo-3951678.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/3894274/pexels-photo-3894274.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/3888041/pexels-photo-3888041.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    ],
-    capacity: "60 – 120 invitados",
-    priceRange: "$$ · Boda íntima",
-    eventTypes: ["Boda civil", "Coctel", "Comida formal"],
-    shortDescription:
-      "Casa de estilo vintage en el corazón de Coyoacán, pensada para bodas íntimas con mucha personalidad.",
-    sellingPoints: [
-      "Ambientes interiores cálidos",
-      "Decoración vintage incluida",
-      "Zona muy fotogénica alrededor",
-    ],
-    mapText: "A unas cuadras del centro de Coyoacán.",
-    opinions: [
-      {
-        id: 1,
-        couple: "Sandra & Pablo",
-        text:
-          "La casa tiene tanto carácter que casi no tuvimos que decorar. Todo se sentía muy acogedor.",
-        rating: 4.4,
-      },
-    ],
-  },
-  {
-    id: 3,
-    name: "Terraza Aurora",
-    location: "Álvaro Obregón, Ciudad de México",
-    rating: 4.6,
-    reviews: 63,
-    ranking: "Muy recomendada para atardeceres",
-    mainImage:
-      "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    gallery: [
-      "https://images.pexels.com/photos/2306280/pexels-photo-2306280.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/2306281/pexels-photo-2306281.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/2306282/pexels-photo-2306282.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    ],
-    capacity: "80 – 200 invitados",
-    priceRange: "$$ – $$$",
-    eventTypes: ["Boda civil", "Recepción con vista", "Coctel al atardecer"],
-    shortDescription:
-      "Terraza con vista urbana, ideal para parejas que quieren una boda moderna con atardeceres espectaculares.",
-    sellingPoints: [
-      "Vistas panorámicas de la ciudad",
-      "Iluminación ambiental incluida",
-      "Ideal para bodas de tarde-noche",
-    ],
-    mapText: "Zona poniente de CDMX, con fácil acceso por vías principales.",
-    opinions: [
-      {
-        id: 1,
-        couple: "Carla & Fernando",
-        text:
-          "El atardecer desde la terraza hizo que las fotos parecieran de revista.",
-        rating: 4.7,
-      },
-    ],
-  },
-  {
-    id: 4,
-    name: "Hacienda La Noria",
-    location: "Estado de México",
-    rating: 4.8,
-    reviews: 102,
-    ranking: "De las favoritas en haciendas",
-    mainImage:
-      "https://images.pexels.com/photos/2306281/pexels-photo-2306281.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    gallery: [
-      "https://images.pexels.com/photos/2306279/pexels-photo-2306279.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/2306280/pexels-photo-2306280.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/2306282/pexels-photo-2306282.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    ],
-    capacity: "150 – 350 invitados",
-    priceRange: "$$$",
-    eventTypes: ["Boda religiosa", "Boda civil", "Recepción completa"],
-    shortDescription:
-      "Hacienda con arquitectura tradicional y amplios jardines, perfecta para bodas grandes con aire clásico.",
-    sellingPoints: [
-      "Capilla dentro de la hacienda",
-      "Amplios jardines y patios",
-      "Espacios para sesiones de fotos",
-    ],
-    mapText: "En las afueras del Estado de México, con estacionamiento amplio.",
-    opinions: [
-      {
-        id: 1,
-        couple: "Patricia & Miguel",
-        text:
-          "Tener la capilla en la misma hacienda nos simplificó toda la logística.",
-        rating: 4.9,
-      },
-    ],
-  },
-  {
-    id: 5,
-    name: "Jardín Encanto",
-    location: "Xochimilco, Ciudad de México",
-    rating: 4.5,
-    reviews: 54,
-    ranking: "Excelente opción en Xochimilco",
-    mainImage:
-      "https://images.pexels.com/photos/2291582/pexels-photo-2291582.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    gallery: [
-      "https://images.pexels.com/photos/2291593/pexels-photo-2291593.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/2291591/pexels-photo-2291591.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/2291590/pexels-photo-2291590.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    ],
-    capacity: "100 – 220 invitados",
-    priceRange: "$$",
-    eventTypes: ["Boda civil", "Recepción en jardín"],
-    shortDescription:
-      "Jardín acogedor con áreas verdes y toques florales, ideal para bodas relajadas pero bien cuidadas.",
-    sellingPoints: [
-      "Decoración floral incluida",
-      "Opciones de menú tradicional",
-      "Zona tranquila y con ambiente natural",
-    ],
-    mapText: "Ubicado en Xochimilco, alejado del ruido principal.",
-    opinions: [
-      {
-        id: 1,
-        couple: "Laura & Diego",
-        text:
-          "Buscar un jardín en la ciudad no fue fácil, pero aquí encontramos justo el ambiente que queríamos.",
-        rating: 4.6,
-      },
-    ],
-  },
-  {
-    id: 6,
-    name: "Salón Cielo Rosa",
-    location: "Benito Juárez, Ciudad de México",
-    rating: 4.1,
-    reviews: 37,
-    ranking: "Buena relación calidad-precio",
-    mainImage:
-      "https://images.pexels.com/photos/2306280/pexels-photo-2306280.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    gallery: [
-      "https://images.pexels.com/photos/2306278/pexels-photo-2306278.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/2306277/pexels-photo-2306277.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/2306276/pexels-photo-2306276.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    ],
-    capacity: "80 – 180 invitados",
-    priceRange: "$$",
-    eventTypes: ["Recepción en salón", "Bodas civiles"],
-    shortDescription:
-      "Salón versátil con iluminación adaptable y pista de baile amplia.",
-    sellingPoints: [
-      "Paquetes con música incluida",
-      "Ubicación céntrica",
-      "Opciones de decoración temática",
-    ],
-    mapText: "Zona central de CDMX con acceso en transporte público.",
-    opinions: [
-      {
-        id: 1,
-        couple: "Gaby & Tomás",
-        text:
-          "Nos gustó que los invitados no tuvieran que viajar tanto; la ubicación es muy cómoda.",
-        rating: 4.1,
-      },
-    ],
-  },
-  {
-    id: 7,
-    name: "Casa del Lago",
-    location: "Cuauhtémoc, Ciudad de México",
-    rating: 4.7,
-    reviews: 88,
-    ranking: "Muy popular en bodas elegantes",
-    mainImage:
-      "https://images.pexels.com/photos/60217/pexels-photo-60217.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    gallery: [
-      "https://images.pexels.com/photos/60218/pexels-photo-60218.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/60219/pexels-photo-60219.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/60220/pexels-photo-60220.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    ],
-    capacity: "120 – 260 invitados",
-    priceRange: "$$$",
-    eventTypes: ["Bodas elegantes", "Cocteles formales"],
-    shortDescription:
-      "Espacio frente al lago con ambientes interiores refinados, pensado para bodas con aire muy clásico.",
-    sellingPoints: [
-      "Ambiente elegante y sobrio",
-      "Opciones de menú gourmet",
-      "Escenarios muy fotogénicos",
-    ],
-    mapText:
-      "Zona céntrica, perfecta para invitados que vienen de distintos puntos.",
-    opinions: [
-      {
-        id: 1,
-        couple: "Mónica & Andrés",
-        text:
-          "El lugar se ve impresionante en persona, las fotos no le hacen justicia.",
-        rating: 4.8,
-      },
-    ],
-  },
-  {
-    id: 8,
-    name: "Terraza Lumen",
-    location: "Naucalpan, Estado de México",
-    rating: 4.4,
-    reviews: 51,
-    ranking: "Muy buena opción en terraza",
-    mainImage:
-      "https://images.pexels.com/photos/460672/pexels-photo-460672.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    gallery: [
-      "https://images.pexels.com/photos/169187/pexels-photo-169187.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/169186/pexels-photo-169186.jpeg?auto=compress&cs=tinysrgb&w=1200",
-      "https://images.pexels.com/photos/169185/pexels-photo-169185.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    ],
-    capacity: "90 – 200 invitados",
-    priceRange: "$$ – $$$",
-    eventTypes: ["Recepción en terraza", "Coctel nocturno"],
-    shortDescription:
-      "Terraza moderna con iluminación y vista urbana, perfecta para bodas relajadas pero con estilo.",
-    sellingPoints: [
-      "Instalaciones modernas",
-      "Iluminación decorativa incluida",
-      "Ideal para bodas de noche",
-    ],
-    mapText: "Ubicada en Naucalpan, con acceso por vías principales.",
-    opinions: [
-      {
-        id: 1,
-        couple: "Rocío & Daniel",
-        text:
-          "Queríamos algo moderno pero sin salirnos del presupuesto, y aquí lo encontramos.",
-        rating: 4.4,
-      },
-    ],
+    opinions: [],
   },
 ];
 
-function mapProfileToVenue(profileData, basicData, photoPreviews = []) {
-  const capMin = profileData.capacityMin ? String(profileData.capacityMin) : "";
-  const capMax = profileData.capacityMax ? String(profileData.capacityMax) : "";
-
-  const capacity =
-    capMin && capMax
-      ? `${capMin} – ${capMax} invitados`
-      : capMin
-      ? `${capMin} invitados`
-      : "Capacidad por definir";
-
-  const priceFrom = profileData.priceFrom ? String(profileData.priceFrom) : "";
-  const priceTo = profileData.priceTo ? String(profileData.priceTo) : "";
-
-  const priceRange =
-    priceFrom && priceTo
-      ? `$${formatMXN(priceFrom)} – $${formatMXN(priceTo)}`
-      : priceFrom
-      ? `Desde $${formatMXN(priceFrom)}`
-      : "Precio por definir";
-
-  const gallery = photoPreviews.length
-    ? photoPreviews.slice(0, 3)
-    : DEFAULT_GALLERY;
-
-  const mainImage = photoPreviews.length ? photoPreviews[0] : DEFAULT_GALLERY[0];
-
-  const sellingPoints = (profileData.sellingPointsText || "")
-    .split("\n")
-    .map((x) => x.trim())
-    .filter(Boolean);
-
-  const eventTypes = Array.isArray(profileData.eventTypes)
-    ? profileData.eventTypes
+function mapApiProviderToVenue(profile, photos = []) {
+  const photoUrls = Array.isArray(photos)
+    ? photos.map((p) => toAbsoluteApiUrl(p?.url)).filter(Boolean)
     : [];
 
-  const latRaw = profileData.locationLat ?? profileData.lat ?? null;
-  const lngRaw = profileData.locationLng ?? profileData.lng ?? null;
-  const lat = latRaw !== null && latRaw !== "" ? Number(latRaw) : null;
-  const lng = lngRaw !== null && lngRaw !== "" ? Number(lngRaw) : null;
+  const mainImage = photoUrls.length ? photoUrls[0] : DEFAULT_GALLERY[0];
+  const gallery = photoUrls.length ? photoUrls : DEFAULT_GALLERY;
+
+  const capMin = profile?.capacity_min ?? profile?.capacityMin;
+  const capMax = profile?.capacity_max ?? profile?.capacityMax;
+
+  const capacity =
+    capMin !== null && capMin !== undefined && capMin !== ""
+      ? capMax !== null && capMax !== undefined && capMax !== ""
+        ? `${capMin} – ${capMax} invitados`
+        : `${capMin} invitados`
+      : "Capacidad por definir";
+
+  const priceFrom = profile?.price_from ?? profile?.priceFrom;
+  const priceTo = profile?.price_to ?? profile?.priceTo;
+
+  const priceRange =
+    priceFrom !== null && priceFrom !== undefined && priceFrom !== ""
+      ? priceTo !== null && priceTo !== undefined && priceTo !== ""
+        ? `$${formatMXN(priceFrom)} – $${formatMXN(priceTo)}`
+        : `Desde $${formatMXN(priceFrom)}`
+      : "Precio por definir";
+
+  const eventTypes = Array.isArray(profile?.event_types)
+    ? profile.event_types
+    : Array.isArray(profile?.eventTypes)
+    ? profile.eventTypes
+    : [];
+
+  const sellingPoints = Array.isArray(profile?.selling_points)
+    ? profile.selling_points
+    : Array.isArray(profile?.sellingPoints)
+    ? profile.sellingPoints
+    : [];
+
+  const lat = toNumberOrNull(profile?.location_lat ?? profile?.locationLat);
+  const lng = toNumberOrNull(profile?.location_lng ?? profile?.locationLng);
+  const placeId = profile?.location_place_id ?? profile?.locationPlaceId ?? "";
+
+  const address =
+    profile?.venue_location ||
+    profile?.venueLocation ||
+    profile?.location ||
+    "";
+
+  const mapEmbedSrc = buildMapEmbedSrc({ lat, lng, placeId, address });
 
   return {
-    id: "mi-perfil",
-    name: profileData.venueName || "Mi proveedor",
-    location: profileData.venueLocation || "Ubicación por definir",
+    id: profile?.user_id || "mi-perfil",
+    name: profile?.venue_name || profile?.venueName || "Mi proveedor",
+    location:
+      profile?.venue_location ||
+      profile?.venueLocation ||
+      "Ubicación por definir",
     rating: 0,
     reviews: 0,
     ranking: "",
@@ -372,20 +169,18 @@ function mapProfileToVenue(profileData, basicData, photoPreviews = []) {
     priceRange,
     eventTypes,
     shortDescription:
-      profileData.shortDescription ||
-      profileData.description ||
+      profile?.short_description ||
+      profile?.shortDescription ||
       "Descripción por definir.",
     sellingPoints: sellingPoints.length
       ? sellingPoints
       : ["Punto destacado 1", "Punto destacado 2", "Punto destacado 3"],
     mapText:
-      profileData.mapText ||
-      "Ubicación por definir. Más adelante aquí conectaremos Google Maps.",
-    opinions: [],
-    _basicData: basicData || null,
-    _rawProfile: profileData || null,
-    _coords:
-      Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
+      profile?.map_text ||
+      profile?.mapText ||
+      "Ubicación por definir.",
+    mapEmbedSrc,
+    _photoCount: photoUrls.length,
   };
 }
 
@@ -393,134 +188,159 @@ function VenueDetailPage() {
   const { id } = useParams();
   const location = useLocation();
 
-  const mapRef = useRef(null);
-  const [mapErrorState, setMapErrorState] = useState(null); // { sig, msg }
-
-  const params = useMemo(
-    () => new URLSearchParams(location.search),
-    [location.search]
-  );
+  const params = new URLSearchParams(location.search);
   const forceProviderView = params.get("mode") === "provider";
-
-  const stateProfileData = location.state?.profileData || null;
-  const stateBasicData = location.state?.basicData || null;
-
-  const draftProfile = useMemo(() => {
-    const raw = localStorage.getItem(PROVIDER_PROFILE_DRAFT_KEY);
-    return raw ? safeParse(raw) : null;
-  }, []);
 
   const isMyProfile = id === "mi-perfil";
   const isProviderView = forceProviderView || isMyProfile;
 
-  const statePhotoPreviews = useMemo(() => {
-    const photos = stateProfileData?.photos;
-    if (!Array.isArray(photos) || photos.length === 0) return [];
-    return photos.map((file) => URL.createObjectURL(file));
-  }, [stateProfileData]);
+  const [loading, setLoading] = useState(false);
+  const [apiVenue, setApiVenue] = useState(null);
+  const [apiError, setApiError] = useState("");
 
   useEffect(() => {
-    return () => {
-      statePhotoPreviews.forEach((url) => URL.revokeObjectURL(url));
-    };
-  }, [statePhotoPreviews]);
-
-  let venue = null;
-
-  if (isMyProfile) {
-    if (stateProfileData) {
-      venue = mapProfileToVenue(
-        stateProfileData,
-        stateBasicData,
-        statePhotoPreviews
-      );
-    } else if (draftProfile) {
-      venue = mapProfileToVenue(draftProfile, null, []);
-    } else {
-      venue = mapProfileToVenue({}, null, []);
-    }
-  } else {
-    venue = venuesDetail.find((item) => String(item.id) === id) || null;
-  }
-
-  const coords = venue?._coords || null;
-  const coordsLat = coords?.lat ?? null;
-  const coordsLng = coords?.lng ?? null;
-
-  const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
-  const mapSig = coords ? `${coordsLat},${coordsLng}:${googleMapsKey ? "1" : "0"}` : "";
-  const missingKeyError =
-    coords && !googleMapsKey ? "Falta VITE_GOOGLE_MAPS_API_KEY para mostrar el mapa." : "";
-  const mapLoadError = mapErrorState?.sig === mapSig ? mapErrorState.msg : "";
-
-  useEffect(() => {
-    if (coordsLat === null || coordsLng === null) return;
-    if (!googleMapsKey) return;
-    if (!mapRef.current) return;
-
     let cancelled = false;
-    const sig = `${coordsLat},${coordsLng}:1`;
 
-    const ensureLoaded = () => {
-      if (window.google?.maps) return Promise.resolve(window.google);
-      if (window.__kelomGoogleMapsPromise) return window.__kelomGoogleMapsPromise;
+    const fetchJson = async (url, { token } = {}) => {
+      const headers = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
 
-      window.__kelomGoogleMapsPromise = new Promise((resolve, reject) => {
-        const existing = document.querySelector('script[data-kelom="google-maps"]');
-        if (existing) {
-          existing.addEventListener("load", () => resolve(window.google));
-          existing.addEventListener("error", reject);
+      const res = await fetch(url, { headers });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Error HTTP ${res.status}`);
+      return data;
+    };
+
+    const run = async () => {
+      setApiError("");
+
+      // Caso 1: mi-perfil (privado) → /providers/me con token
+      if (isProviderView) {
+        const token = localStorage.getItem(PROVIDER_TOKEN_KEY) || "";
+
+        if (!token) {
+          // fallback draft local (si no hay sesión)
+          const raw = localStorage.getItem(PROVIDER_PROFILE_DRAFT_KEY);
+          const draft = raw ? safeParse(raw) : null;
+
+          if (draft && !cancelled) {
+            const venue = mapApiProviderToVenue(
+              {
+                venueName: draft.venueName,
+                venueLocation: draft.venueLocation,
+                shortDescription: draft.shortDescription,
+                description: draft.description,
+                services: draft.services,
+                eventTypes: draft.eventTypes,
+                sellingPoints: String(draft.sellingPointsText || "")
+                  .split("\n")
+                  .map((x) => x.trim())
+                  .filter(Boolean),
+                mapText: draft.mapText,
+                capacityMin: draft.capacityMin,
+                capacityMax: draft.capacityMax,
+                priceFrom: draft.priceFrom,
+                priceTo: draft.priceTo,
+                locationPlaceId: draft.locationPlaceId,
+                locationLat: draft.locationLat,
+                locationLng: draft.locationLng,
+              },
+              []
+            );
+            setApiVenue(venue);
+          }
           return;
         }
 
-        const script = document.createElement("script");
-        script.setAttribute("data-kelom", "google-maps");
-        script.async = true;
-        script.defer = true;
+        setLoading(true);
+        try {
+          const data = await fetchJson(`${API_BASE}/providers/me`, { token });
+          if (cancelled) return;
 
-        const qs = new URLSearchParams({
-          key: googleMapsKey,
-          libraries: "places",
-          language: "es",
-          region: "MX",
-        });
+          const venue = mapApiProviderToVenue(
+            data?.profile,
+            data?.photos || []
+          );
+          setApiVenue(venue);
+        } catch (err) {
+          if (!cancelled)
+            setApiError(
+              String(err?.message || "No se pudo cargar el perfil.")
+            );
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
 
-        script.src = `https://maps.googleapis.com/maps/api/js?${qs.toString()}`;
-        script.onload = () => resolve(window.google);
-        script.onerror = () => reject(new Error("Failed to load Google Maps script"));
-        document.head.appendChild(script);
-      });
+        return;
+      }
 
-      return window.__kelomGoogleMapsPromise;
+      // Caso 2: UUID → perfil público real
+      if (isUuid(id)) {
+        setLoading(true);
+        try {
+          const data = await fetchJson(`${API_BASE}/providers/${id}`);
+          if (cancelled) return;
+
+          const venue = mapApiProviderToVenue(
+            data?.profile,
+            data?.photos || []
+          );
+          setApiVenue(venue);
+        } catch (err) {
+          if (!cancelled)
+            setApiError(
+              String(err?.message || "No se pudo cargar el proveedor.")
+            );
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      }
     };
 
-    ensureLoaded()
-      .then((g) => {
-        if (cancelled) return;
-        if (!mapRef.current) return;
-
-        const map = new g.maps.Map(mapRef.current, {
-          center: { lat: coordsLat, lng: coordsLng },
-          zoom: 15,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: true,
-        });
-
-        new g.maps.Marker({
-          position: { lat: coordsLat, lng: coordsLng },
-          map,
-        });
-      })
-      .catch((err) => {
-        console.error(err);
-        if (!cancelled) setMapErrorState({ sig, msg: "No se pudo cargar Google Maps." });
-      });
+    run();
 
     return () => {
       cancelled = true;
     };
-  }, [coordsLat, coordsLng, googleMapsKey]);
+  }, [id, isProviderView]);
+
+  const venue = useMemo(() => {
+    if (apiVenue) return apiVenue;
+
+    const foundDemo = venuesDetail.find(
+      (item) => String(item.id) === String(id)
+    );
+    return foundDemo || null;
+  }, [apiVenue, id]);
+
+  if (loading) {
+    return (
+      <div className="venue-page">
+        <section className="venue-not-found">
+          <div className="container">
+            <h1>Cargando perfil…</h1>
+            <p>Trayendo tu info desde el backend.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <div className="venue-page">
+        <section className="venue-not-found">
+          <div className="container">
+            <h1>No se pudo cargar el proveedor</h1>
+            <p>{apiError}</p>
+            <Link to="/" className="venue-not-found__back-link">
+              ← Volver al inicio
+            </Link>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   if (!venue) {
     return (
@@ -528,10 +348,7 @@ function VenueDetailPage() {
         <section className="venue-not-found">
           <div className="container">
             <h1>Proveedor no encontrado</h1>
-            <p>
-              Es posible que este venue ya no esté disponible o que el enlace
-              sea incorrecto.
-            </p>
+            <p>Es posible que el enlace sea incorrecto o que el proveedor no exista.</p>
             <Link to="/" className="venue-not-found__back-link">
               ← Volver a la lista de lugares
             </Link>
@@ -541,15 +358,10 @@ function VenueDetailPage() {
     );
   }
 
-  const opinionsAverage =
-    venue.opinions && venue.opinions.length
-      ? venue.opinions.reduce((sum, op) => sum + op.rating, 0) /
-        venue.opinions.length
-      : venue.rating;
+  const showRating = !isProviderView && !isUuid(id);
 
   return (
     <div className="venue-page">
-      {/* HERO DEL LUGAR */}
       <section className="venue-hero">
         <div className="container venue-hero__grid">
           <div className="venue-hero__info">
@@ -564,13 +376,13 @@ function VenueDetailPage() {
             </Link>
 
             <span className="venue-hero__pill">
-              {isProviderView ? "Vista proveedor" : "Lugar para boda"}
+              {isProviderView || isUuid(id) ? "Proveedor" : "Lugar para boda"}
             </span>
 
             <h1 className="venue-hero__name">{venue.name}</h1>
             <p className="venue-hero__location">{venue.location}</p>
 
-            {!isProviderView && (
+            {showRating && (
               <div className="venue-hero__rating">
                 <span className="venue-hero__stars">★★★★★</span>
                 <span className="venue-hero__rating-score">
@@ -596,46 +408,16 @@ function VenueDetailPage() {
             </ul>
 
             <div className="venue-hero__ctas">
-              {!isProviderView ? (
-                <>
-                  <button type="button" className="btn btn--primary" disabled>
-                    Pedir cotización (próximamente)
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    onClick={() => {
-                      const el = document.getElementById("venue-map");
-                      if (el) el.scrollIntoView({ behavior: "smooth" });
-                    }}
-                  >
-                    Ver ubicación
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    to="/empresas/registro/completar"
-                    className="btn btn--primary"
-                    state={{
-                      basicData: venue._basicData || null,
-                      prefillProfileData: venue._rawProfile || null,
-                    }}
-                  >
-                    Editar perfil
-                  </Link>
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    onClick={() => {
-                      const el = document.getElementById("venue-map");
-                      if (el) el.scrollIntoView({ behavior: "smooth" });
-                    }}
-                  >
-                    Ver ubicación
-                  </button>
-                </>
-              )}
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => {
+                  const el = document.getElementById("venue-map");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                Ver ubicación
+              </button>
             </div>
           </div>
 
@@ -645,37 +427,39 @@ function VenueDetailPage() {
               alt={venue.name}
               className="venue-hero__image"
             />
-
-            {!isProviderView && venue.ranking && (
-              <div className="venue-hero__badge">{venue.ranking}</div>
-            )}
           </div>
         </div>
       </section>
 
-      {/* GALERÍA */}
       <section className="venue-gallery">
         <div className="container">
           <h2 className="section-title">Fotos del lugar</h2>
           <p className="section-subtitle">
-            Una vista rápida de cómo se vive una boda en {venue.name}.
+            {venue._photoCount
+              ? `Galería real desde tu backend (${venue._photoCount} foto(s)).`
+              : "Todavía no hay fotos en el backend para este proveedor."}
           </p>
 
-          <div className="venue-gallery__grid">
-            {(venue.gallery || []).map((photo, index) => (
-              <figure key={index} className="venue-gallery__item">
-                <img
-                  src={photo}
-                  alt={`${venue.name} foto ${index + 1}`}
-                  loading="lazy"
-                />
-              </figure>
-            ))}
-          </div>
+          {(venue.gallery || []).length === 0 ? (
+            <div className="venue-gallery__empty">
+              Aún no hay fotos cargadas.
+            </div>
+          ) : (
+            <div className="venue-gallery__grid">
+              {(venue.gallery || []).map((photo, index) => (
+                <figure key={`${photo}-${index}`} className="venue-gallery__item">
+                  <img
+                    src={photo}
+                    alt={`${venue.name} foto ${index + 1}`}
+                    loading="lazy"
+                  />
+                </figure>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
-      {/* INFO + DETALLES RÁPIDOS */}
       <section className="venue-info">
         <div className="container">
           <div className="venue-info__grid">
@@ -724,98 +508,30 @@ function VenueDetailPage() {
                   <span className="venue-info__label">Rango de precio: </span>
                   {venue.priceRange}
                 </li>
-
-                {!isProviderView && venue.ranking && (
-                  <li>
-                    <span className="venue-info__label">Badge: </span>
-                    {venue.ranking}
-                  </li>
-                )}
               </ul>
             </aside>
           </div>
         </div>
       </section>
 
-      {/* OPINIONES (solo consumidor) */}
-      {!isProviderView && (
-        <section className="venue-reviews">
-          <div className="container">
-            <div className="venue-reviews__header">
-              <div>
-                <h2 className="section-title">Opiniones de parejas</h2>
-                <p className="section-subtitle">
-                  Lo que otras parejas han dicho después de casarse en{" "}
-                  {venue.name}.
-                </p>
-              </div>
-              <div className="venue-reviews__overall">
-                <span className="venue-reviews__score">
-                  {opinionsAverage.toFixed(1)}
-                </span>
-                <div>
-                  <div className="venue-reviews__stars">★★★★★</div>
-                  <div className="venue-reviews__count">
-                    Basado en {venue.reviews} opiniones totales.
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="venue-reviews__grid">
-              {(venue.opinions || []).map((opinion) => (
-                <article key={opinion.id} className="venue-review">
-                  <div className="venue-review__rating">
-                    ★★★★★ ({opinion.rating.toFixed(1)})
-                  </div>
-                  <p className="venue-review__text">“{opinion.text}”</p>
-                  <div className="venue-review__meta">
-                    <span>{opinion.couple}</span>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* MAPA */}
       <section className="venue-map" id="venue-map">
         <div className="container venue-map__inner">
           <div className="venue-map__info">
             <h2 className="section-title">Ubicación y accesos</h2>
             <p>{venue.mapText}</p>
+            <ul className="venue-map__list">
+              <li>Zona: {venue.location}</li>
+              <li>Ideal para invitados que vienen de distintos puntos.</li>
+            </ul>
           </div>
 
           <div className="venue-map__frame">
-            {coords ? (
-              missingKeyError || mapLoadError ? (
-                <div
-                  className="venue-map__iframe"
-                  style={{
-                    height: 360,
-                    display: "grid",
-                    placeItems: "center",
-                    background: "#fff",
-                  }}
-                >
-                  {missingKeyError || mapLoadError}
-                </div>
-              ) : (
-                <div
-                  ref={mapRef}
-                  className="venue-map__iframe"
-                  style={{ height: 360 }}
-                />
-              )
-            ) : (
-              <iframe
-                className="venue-map__iframe"
-                title={`Mapa de ${venue.name}`}
-                loading="lazy"
-                src="about:blank"
-              />
-            )}
+            <iframe
+              className="venue-map__iframe"
+              title={`Mapa de ${venue.name}`}
+              loading="lazy"
+              src={venue.mapEmbedSrc || "about:blank"}
+            />
           </div>
         </div>
       </section>

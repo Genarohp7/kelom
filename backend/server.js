@@ -10,10 +10,18 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
 import { pool } from "./db.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
@@ -24,6 +32,8 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
+
+// ===================== RATE LIMIT =====================
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -49,7 +59,6 @@ const registerLimiter = rateLimit({
   message: { error: "Demasiados registros desde esta IP. Intenta más tarde." },
 });
 
-// Cambiar contraseña (logueado): más estricto que global, pero no tan agresivo
 const changePasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
@@ -85,11 +94,13 @@ const providerLoginLimiter = rateLimit({
 
 app.use(globalLimiter);
 
+// ===================== CORS =====================
+
 const allowedOrigins = [
   "http://localhost:5173",
   "https://kelom.com.mx",
   "https://www.kelom.com.mx",
-  "https://genarohp7.github.io", // ✅ staging GH Pages
+  "https://genarohp7.github.io", // staging GH Pages
 ];
 
 app.use(
@@ -105,8 +116,10 @@ app.use(
 
 app.use(express.json({ limit: "500kb" }));
 
-// (Opcional pero útil) servir uploads si luego guardas fotos/avatars aquí
+// Servir uploads
 app.use("/uploads", express.static("uploads"));
+
+// ===================== HELPERS =====================
 
 function requireEnv(name) {
   if (!process.env[name]) {
@@ -184,10 +197,8 @@ function normalizePhoneDigits(phone) {
 function isValidMXPhone(phone) {
   const digits = normalizePhoneDigits(phone);
   if (digits.length !== 10) return false;
-  // no más de 5 iguales seguidos
   if (/(.)\1{4,}/.test(digits)) return false;
 
-  // evitar secuencias largas tipo 012345 / 987654
   const ascSeq = "0123456789";
   const descSeq = "9876543210";
   for (let i = 0; i <= digits.length - 6; i++) {
@@ -223,7 +234,63 @@ function isUuid(v) {
   );
 }
 
-// Health + DB check
+// ===================== UPLOADS (PROVIDERS PHOTOS) =====================
+
+const PROVIDER_UPLOAD_ROOT = path.join(__dirname, "uploads", "providers");
+const ALLOWED_PROVIDER_IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+try {
+  fs.mkdirSync(PROVIDER_UPLOAD_ROOT, { recursive: true });
+} catch {
+  // ignore
+}
+
+function safeImageExt(originalName, mime) {
+  const ext = (path.extname(originalName || "") || "").toLowerCase();
+  if ([".jpg", ".jpeg", ".png", ".webp"].includes(ext)) return ext;
+  if (mime === "image/png") return ".png";
+  if (mime === "image/webp") return ".webp";
+  return ".jpg";
+}
+
+const providerUpload = multer({
+  storage: multer.diskStorage({
+    destination(req, file, cb) {
+      try {
+        const userId = req.user?.id;
+        if (!userId) return cb(new Error("No autorizado"), null);
+
+        const dir = path.join(PROVIDER_UPLOAD_ROOT, userId);
+        fs.mkdirSync(dir, { recursive: true });
+        return cb(null, dir);
+      } catch (err) {
+        return cb(err, null);
+      }
+    },
+    filename(req, file, cb) {
+      const ext = safeImageExt(file.originalname, file.mimetype);
+      const name = `${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`;
+      cb(null, name);
+    },
+  }),
+  fileFilter(req, file, cb) {
+    if (!ALLOWED_PROVIDER_IMAGE_TYPES.has(file.mimetype)) {
+      return cb(new Error("Tipo de archivo no permitido. Usa JPG/PNG/WebP."));
+    }
+    return cb(null, true);
+  },
+  limits: {
+    fileSize: 6 * 1024 * 1024, // 6MB por imagen
+    files: 12,
+  },
+});
+
+// ===================== HEALTH =====================
+
 app.get("/health", async (req, res) => {
   try {
     await pool.query("SELECT 1");
@@ -335,10 +402,6 @@ app.get("/auth/me", authMiddleware, async (req, res) => {
   }
 });
 
-/**
- * Cambiar contraseña (usuario logueado)
- * Body: { currentPassword, newPassword }
- */
 app.put("/auth/password", changePasswordLimiter, authMiddleware, async (req, res) => {
   try {
     const { id: userId } = req.user;
@@ -490,12 +553,14 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
     return res.json({ profile: upsert.rows[0] });
   } catch (err) {
     try {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
     } catch {
       // ignore
     }
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
+  } finally {
+    client.release();
   }
 });
 
@@ -547,15 +612,6 @@ app.post("/providers/leads", providerLeadsLimiter, async (req, res) => {
 
 /**
  * Paso 2: crear cuenta proveedor + perfil
- * Body: {
- *  email, password,
- *  companyName?, ownerName?, phone?,
- *  venueName, venueLocation, locationPlaceId?, locationLat?, locationLng?,
- *  capacityMin, capacityMax?, priceFrom, priceTo,
- *  shortDescription, description, services,
- *  spaces?, rules?, website?, instagram?, facebook?, mapText?,
- *  eventTypes?, sellingPoints?, sellingPointsText?
- * }
  */
 app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
   const client = await pool.connect();
@@ -575,7 +631,9 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
       return res.status(400).json({ error: "password mínimo 5 caracteres" });
     }
 
-    // Traer lead si existe (para completar company/owner/phone si no vienen)
+    await client.query("BEGIN");
+
+    // Lead si existe
     const leadFound = await client.query(
       `SELECT company_name, owner_name, phone, status
        FROM provider_leads
@@ -590,12 +648,25 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     const phoneDigits = normalizePhoneDigits(body.phone || lead?.phone || "");
 
     if (!companyName || !ownerName) {
+      await client.query("ROLLBACK");
       return res.status(400).json({
-        error: "Falta companyName/ownerName. Completa el registro inicial (lead) primero.",
+        error:
+          "Falta companyName/ownerName. Completa el registro inicial (lead) primero.",
       });
     }
     if (phoneDigits && phoneDigits.length !== 10) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "Teléfono inválido (10 dígitos)" });
+    }
+
+    // Evita duplicado en users
+    const exists = await client.query(
+      `SELECT id, role FROM users WHERE email = $1 LIMIT 1`,
+      [emailNorm]
+    );
+    if (exists.rowCount > 0) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "Ese email ya existe" });
     }
 
     // Perfil requerido
@@ -620,74 +691,64 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
       !description ||
       !services
     ) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "Faltan campos obligatorios del perfil" });
     }
 
     if (capacityMax !== null && capacityMax < capacityMin) {
-      return res.status(400).json({ error: "capacityMax no puede ser menor a capacityMin" });
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "capacityMax no puede ser menor que capacityMin" });
     }
     if (priceTo < priceFrom) {
-      return res.status(400).json({ error: "priceTo no puede ser menor a priceFrom" });
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "priceTo no puede ser menor que priceFrom" });
     }
 
     const locationPlaceId = toNullIfEmpty(body.locationPlaceId);
     const locationLat = toFloatOrNull(body.locationLat);
     const locationLng = toFloatOrNull(body.locationLng);
 
-    const eventTypes = toTextArray(body.eventTypes);
+    const spaces = toNullIfEmpty(body.spaces);
+    const rules = toNullIfEmpty(body.rules);
+    const website = toNullIfEmpty(body.website);
+    const instagram = toNullIfEmpty(body.instagram);
+    const facebook = toNullIfEmpty(body.facebook);
+    const mapText = toNullIfEmpty(body.mapText);
+
+    const eventTypes = Array.isArray(body.eventTypes) ? toTextArray(body.eventTypes) : [];
+    const sellingPointsFromBody = toTextArray(body.sellingPoints);
+    const sellingPointsTextFromBody = toTextArray(body.sellingPointsText, {
+      maxItems: 20,
+      maxLen: 160,
+    });
     const sellingPoints =
-      toTextArray(body.sellingPoints).length > 0
-        ? toTextArray(body.sellingPoints)
-        : toTextArray(body.sellingPointsText, { maxItems: 20, maxLen: 160 });
+      sellingPointsFromBody.length > 0
+        ? sellingPointsFromBody
+        : sellingPointsTextFromBody.length > 0
+        ? sellingPointsTextFromBody
+        : [];
 
-    const profilePayload = {
-      company_name: companyName,
-      owner_name: ownerName,
-      phone: phoneDigits || null,
-
-      venue_name: venueName,
-      venue_location: venueLocation,
-      location_place_id: locationPlaceId,
-      location_lat: locationLat,
-      location_lng: locationLng,
-
-      capacity_min: capacityMin,
-      capacity_max: capacityMax,
-
-      price_from: priceFrom,
-      price_to: priceTo,
-
-      short_description: shortDescription,
-      description,
-      spaces: toNullIfEmpty(body.spaces),
-      services,
-      rules: toNullIfEmpty(body.rules),
-
-      website: toNullIfEmpty(body.website),
-      instagram: toNullIfEmpty(body.instagram),
-      facebook: toNullIfEmpty(body.facebook),
-
-      map_text: toNullIfEmpty(body.mapText),
-      event_types: eventTypes,
-      selling_points: sellingPoints,
-    };
-
-    await client.query("BEGIN");
-
-    // Crear user proveedor
     const password_hash = await bcrypt.hash(password, 10);
 
-    const createdUser = await client.query(
+    const userIns = await client.query(
       `INSERT INTO users (email, password_hash, name, role)
        VALUES ($1, $2, $3, 'provider')
        RETURNING id, email, name, role, created_at`,
       [emailNorm, password_hash, ownerName || null]
     );
 
-    const providerUser = createdUser.rows[0];
+    const provider = userIns.rows[0];
+    const userId = provider.id;
 
-    // Insert perfil proveedor
-    const insertedProfile = await client.query(
+    // Marcar lead como convertido si existe
+    if (lead && lead.status === "lead") {
+      await client.query(
+        `UPDATE provider_leads SET status = 'converted', updated_at = now() WHERE email = $1`,
+        [emailNorm]
+      );
+    }
+
+    const profileIns = await client.query(
       `INSERT INTO provider_profiles (
         user_id, company_name, owner_name, phone,
         venue_name, venue_location, location_place_id, location_lat, location_lng,
@@ -704,69 +765,52 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
       )
       RETURNING *`,
       [
-        providerUser.id,
-        profilePayload.company_name,
-        profilePayload.owner_name,
-        profilePayload.phone,
+        userId,
+        companyName,
+        ownerName,
+        phoneDigits || null,
 
-        profilePayload.venue_name,
-        profilePayload.venue_location,
-        profilePayload.location_place_id,
-        profilePayload.location_lat,
-        profilePayload.location_lng,
+        venueName,
+        venueLocation,
+        locationPlaceId,
+        locationLat,
+        locationLng,
 
-        profilePayload.capacity_min,
-        profilePayload.capacity_max,
-        profilePayload.price_from,
-        profilePayload.price_to,
+        capacityMin,
+        capacityMax,
+        priceFrom,
+        priceTo,
 
-        profilePayload.short_description,
-        profilePayload.description,
-        profilePayload.spaces,
-        profilePayload.services,
-        profilePayload.rules,
+        shortDescription,
+        description,
+        spaces,
+        services,
+        rules,
 
-        profilePayload.website,
-        profilePayload.instagram,
-        profilePayload.facebook,
-        profilePayload.map_text,
-        profilePayload.event_types,
-        profilePayload.selling_points,
+        website,
+        instagram,
+        facebook,
+        mapText,
+        eventTypes,
+        sellingPoints,
       ]
-    );
-
-    // Marcar lead como convertido si existe
-    await client.query(
-      `UPDATE provider_leads
-       SET status = 'converted'
-       WHERE email = $1`,
-      [emailNorm]
     );
 
     await client.query("COMMIT");
 
-    const token = signToken({
-      id: providerUser.id,
-      email: providerUser.email,
-      role: providerUser.role,
-    });
+    const token = signToken({ id: provider.id, email: provider.email, role: provider.role });
 
-    return res.status(201).json({
+    return res.json({
       token,
-      provider: providerUser,
-      profile: insertedProfile.rows[0],
+      provider,
+      profile: profileIns.rows[0],
     });
   } catch (err) {
     try {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
     } catch {
       // ignore
     }
-
-    if (err?.code === "23505") {
-      return res.status(409).json({ error: "Ese email ya existe" });
-    }
-
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
   } finally {
@@ -797,8 +841,9 @@ app.post("/providers/login", providerLoginLimiter, async (req, res) => {
 
     const user = found.rows[0];
     if (!user) return res.status(401).json({ error: "Credenciales inválidas" });
+
     if (user.role !== "provider" && user.role !== "admin") {
-      return res.status(403).json({ error: "Este acceso es solo para proveedores" });
+      return res.status(403).json({ error: "Acceso solo para proveedores" });
     }
 
     const ok = await bcrypt.compare(String(password), user.password_hash);
@@ -806,7 +851,7 @@ app.post("/providers/login", providerLoginLimiter, async (req, res) => {
 
     const token = signToken({ id: user.id, email: user.email, role: user.role });
 
-    const safeUser = {
+    const provider = {
       id: user.id,
       email: user.email,
       name: user.name,
@@ -814,7 +859,7 @@ app.post("/providers/login", providerLoginLimiter, async (req, res) => {
       created_at: user.created_at,
     };
 
-    return res.json({ token, provider: safeUser });
+    return res.json({ token, provider });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
@@ -822,71 +867,43 @@ app.post("/providers/login", providerLoginLimiter, async (req, res) => {
 });
 
 /**
- * Obtener mi perfil proveedor
+ * Perfil proveedor actual (privado)
+ * GET /providers/me
  */
 app.get("/providers/me", providerAuthMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const found = await pool.query(
-      `SELECT
-        u.id, u.email, u.name, u.role, u.created_at,
-        p.company_name, p.owner_name, p.phone,
-        p.venue_name, p.venue_location, p.location_place_id, p.location_lat, p.location_lng,
-        p.capacity_min, p.capacity_max, p.price_from, p.price_to,
-        p.short_description, p.description, p.spaces, p.services, p.rules,
-        p.website, p.instagram, p.facebook, p.map_text, p.event_types, p.selling_points,
-        p.created_at AS profile_created_at, p.updated_at AS profile_updated_at
-       FROM users u
-       LEFT JOIN provider_profiles p ON p.user_id = u.id
-       WHERE u.id = $1
+    const u = await pool.query(
+      `SELECT id, email, name, role, created_at
+       FROM users
+       WHERE id = $1
        LIMIT 1`,
       [userId]
     );
 
-    const row = found.rows[0];
-    if (!row) return res.status(404).json({ error: "Proveedor no encontrado" });
+    const provider = u.rows[0] || null;
+    if (!provider) return res.status(404).json({ error: "Proveedor no encontrado" });
 
-    const provider = {
-      id: row.id,
-      email: row.email,
-      name: row.name,
-      role: row.role,
-      created_at: row.created_at,
-    };
+    const p = await pool.query(
+      `SELECT *
+       FROM provider_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
 
-    const profile = row.company_name
-      ? {
-          user_id: row.id,
-          company_name: row.company_name,
-          owner_name: row.owner_name,
-          phone: row.phone,
-          venue_name: row.venue_name,
-          venue_location: row.venue_location,
-          location_place_id: row.location_place_id,
-          location_lat: row.location_lat,
-          location_lng: row.location_lng,
-          capacity_min: row.capacity_min,
-          capacity_max: row.capacity_max,
-          price_from: row.price_from,
-          price_to: row.price_to,
-          short_description: row.short_description,
-          description: row.description,
-          spaces: row.spaces,
-          services: row.services,
-          rules: row.rules,
-          website: row.website,
-          instagram: row.instagram,
-          facebook: row.facebook,
-          map_text: row.map_text,
-          event_types: row.event_types || [],
-          selling_points: row.selling_points || [],
-          created_at: row.profile_created_at,
-          updated_at: row.profile_updated_at,
-        }
-      : null;
+    const profile = p.rows[0] || null;
 
-    return res.json({ provider, profile });
+    const photos = await pool.query(
+      `SELECT id, url, sort_order, created_at
+       FROM provider_photos
+       WHERE user_id = $1
+       ORDER BY sort_order ASC, created_at ASC`,
+      [userId]
+    );
+
+    return res.json({ provider, profile, photos: photos.rows || [] });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
@@ -894,8 +911,8 @@ app.get("/providers/me", providerAuthMiddleware, async (req, res) => {
 });
 
 /**
- * Actualizar mi perfil proveedor (upsert)
- * Body: puede traer campos; se mezcla con lo existente.
+ * Actualizar perfil proveedor (privado)
+ * PUT /providers/me
  */
 app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
   const client = await pool.connect();
@@ -903,42 +920,24 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     const userId = req.user.id;
     const body = req.body || {};
 
-    await client.query("BEGIN");
+    // Datos base opcionales
+    const companyName = toNullIfEmpty(body.companyName);
+    const ownerName = toNullIfEmpty(body.ownerName);
+    const phoneDigits = body.phone ? normalizePhoneDigits(body.phone) : null;
 
-    const existing = await client.query(
-      `SELECT * FROM provider_profiles WHERE user_id = $1 LIMIT 1`,
-      [userId]
-    );
-    const current = existing.rows[0] || null;
+    // Perfil requerido
+    const venueName = String(body.venueName || "").trim();
+    const venueLocation = String(body.venueLocation || "").trim();
+    const capacityMin = toIntOrNull(body.capacityMin);
+    const capacityMax = toIntOrNull(body.capacityMax);
+    const priceFrom = toIntOrNull(body.priceFrom);
+    const priceTo = toIntOrNull(body.priceTo);
 
-    // Si no existe, requerimos básicos (o que vengan por body)
-    const companyName = String(body.companyName ?? current?.company_name ?? "").trim();
-    const ownerName = String(body.ownerName ?? current?.owner_name ?? "").trim();
-    const phoneDigits = normalizePhoneDigits(body.phone ?? current?.phone ?? "");
-
-    const venueName = String(body.venueName ?? current?.venue_name ?? "").trim();
-    const venueLocation = String(body.venueLocation ?? current?.venue_location ?? "").trim();
-
-    const capacityMin =
-      toIntOrNull(body.capacityMin) ?? (current ? current.capacity_min : null);
-    const capacityMax =
-      toIntOrNull(body.capacityMax) ?? (current ? current.capacity_max : null);
-
-    const priceFrom =
-      toIntOrNull(body.priceFrom) ?? (current ? current.price_from : null);
-    const priceTo =
-      toIntOrNull(body.priceTo) ?? (current ? current.price_to : null);
-
-    const shortDescription = String(
-      body.shortDescription ?? current?.short_description ?? ""
-    ).trim();
-
-    const description = String(body.description ?? current?.description ?? "").trim();
-    const services = String(body.services ?? current?.services ?? "").trim();
+    const shortDescription = String(body.shortDescription || "").trim();
+    const description = String(body.description || "").trim();
+    const services = String(body.services || "").trim();
 
     if (
-      !companyName ||
-      !ownerName ||
       !venueName ||
       !venueLocation ||
       capacityMin === null ||
@@ -948,37 +947,42 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
       !description ||
       !services
     ) {
-      await client.query("ROLLBACK");
       return res.status(400).json({ error: "Faltan campos obligatorios del perfil" });
     }
 
     if (capacityMax !== null && capacityMax < capacityMin) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "capacityMax no puede ser menor a capacityMin" });
+      return res.status(400).json({ error: "capacityMax no puede ser menor que capacityMin" });
     }
     if (priceTo < priceFrom) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "priceTo no puede ser menor a priceFrom" });
+      return res.status(400).json({ error: "priceTo no puede ser menor que priceFrom" });
     }
 
-    const locationPlaceId = toNullIfEmpty(body.locationPlaceId ?? current?.location_place_id);
-    const locationLat =
-      toFloatOrNull(body.locationLat) ?? (current ? current.location_lat : null);
-    const locationLng =
-      toFloatOrNull(body.locationLng) ?? (current ? current.location_lng : null);
+    const locationPlaceId = toNullIfEmpty(body.locationPlaceId);
+    const locationLat = toFloatOrNull(body.locationLat);
+    const locationLng = toFloatOrNull(body.locationLng);
 
-    const mapText = toNullIfEmpty(body.mapText ?? current?.map_text);
-    const spaces = toNullIfEmpty(body.spaces ?? current?.spaces);
-    const rules = toNullIfEmpty(body.rules ?? current?.rules);
+    const spaces = toNullIfEmpty(body.spaces);
+    const rules = toNullIfEmpty(body.rules);
+    const website = toNullIfEmpty(body.website);
+    const instagram = toNullIfEmpty(body.instagram);
+    const facebook = toNullIfEmpty(body.facebook);
+    const mapText = toNullIfEmpty(body.mapText);
 
-    const website = toNullIfEmpty(body.website ?? current?.website);
-    const instagram = toNullIfEmpty(body.instagram ?? current?.instagram);
-    const facebook = toNullIfEmpty(body.facebook ?? current?.facebook);
+    await client.query("BEGIN");
+
+    const currentRes = await client.query(
+      `SELECT event_types, selling_points
+       FROM provider_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const current = currentRes.rows[0] || null;
 
     const eventTypes =
-      toTextArray(body.eventTypes).length > 0
+      Array.isArray(body.eventTypes) && body.eventTypes.length
         ? toTextArray(body.eventTypes)
-        : (current?.event_types || []);
+        : current?.event_types || [];
 
     const sellingPointsFromBody = toTextArray(body.sellingPoints);
     const sellingPointsTextFromBody = toTextArray(body.sellingPointsText, {
@@ -991,10 +995,22 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
         ? sellingPointsFromBody
         : sellingPointsTextFromBody.length > 0
         ? sellingPointsTextFromBody
-        : (current?.selling_points || []);
+        : current?.selling_points || [];
 
-    // Actualizar name del usuario para mantener coherencia (opcional pero útil)
-    await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [ownerName, userId]);
+    // Actualizar name del usuario si viene ownerName (opcional)
+    if (ownerName) {
+      await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [ownerName, userId]);
+    }
+
+    // Traemos el perfil actual para rellenar company/owner/phone si no vienen
+    const baseRes = await client.query(
+      `SELECT company_name, owner_name, phone
+       FROM provider_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const base = baseRes.rows[0] || {};
 
     const upsert = await client.query(
       `INSERT INTO provider_profiles (
@@ -1038,9 +1054,9 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
       RETURNING *`,
       [
         userId,
-        companyName,
-        ownerName,
-        phoneDigits || null,
+        (companyName ?? base.company_name ?? "").trim(),
+        (ownerName ?? base.owner_name ?? "").trim(),
+        phoneDigits || base.phone || null,
 
         venueName,
         venueLocation,
@@ -1072,7 +1088,7 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     return res.json({ profile: upsert.rows[0] });
   } catch (err) {
     try {
-      await pool.query("ROLLBACK");
+      await client.query("ROLLBACK");
     } catch {
       // ignore
     }
@@ -1080,6 +1096,107 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     return res.status(500).json({ error: "Error interno" });
   } finally {
     client.release();
+  }
+});
+
+/**
+ * Subir fotos del proveedor (multipart)
+ * POST /providers/photos
+ * FormData: photos (multiple)
+ */
+app.post(
+  "/providers/photos",
+  providerAuthMiddleware,
+  providerUpload.array("photos", 12),
+  async (req, res) => {
+    try {
+      const userId = req.user.id;
+
+      const files = Array.isArray(req.files) ? req.files : [];
+      if (!files.length) {
+        return res.status(400).json({ error: "No se enviaron fotos" });
+      }
+
+      const hasProfile = await pool.query(
+        `SELECT 1 FROM provider_profiles WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      if (hasProfile.rowCount === 0) {
+        return res
+          .status(400)
+          .json({ error: "Primero guarda tu ficha antes de subir fotos." });
+      }
+
+      const maxRes = await pool.query(
+        `SELECT COALESCE(MAX(sort_order), -1) AS max
+         FROM provider_photos
+         WHERE user_id = $1`,
+        [userId]
+      );
+
+      let sort = Number(maxRes.rows?.[0]?.max ?? -1);
+      if (!Number.isFinite(sort)) sort = -1;
+
+      const inserted = [];
+
+      for (const f of files) {
+        sort += 1;
+        const url = `/uploads/providers/${userId}/${f.filename}`;
+
+        const ins = await pool.query(
+          `INSERT INTO provider_photos (user_id, url, sort_order)
+           VALUES ($1, $2, $3)
+           RETURNING id, url, sort_order, created_at`,
+          [userId, url, sort]
+        );
+
+        inserted.push(ins.rows[0]);
+      }
+
+      return res.status(201).json({ photos: inserted });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+/**
+ * Borrar una foto del proveedor
+ * DELETE /providers/photos/:photoId
+ */
+app.delete("/providers/photos/:photoId", providerAuthMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { photoId } = req.params;
+
+    if (!isUuid(photoId)) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+
+    const del = await pool.query(
+      `DELETE FROM provider_photos
+       WHERE id = $1 AND user_id = $2
+       RETURNING id, url`,
+      [photoId, userId]
+    );
+
+    if (!del.rowCount) {
+      return res.status(404).json({ error: "Foto no encontrada" });
+    }
+
+    const url = del.rows[0].url;
+
+    // borrar archivo físico (best-effort)
+    if (url && typeof url === "string" && url.startsWith("/uploads/")) {
+      const abs = path.join(__dirname, url.replace(/^\//, ""));
+      fs.promises.unlink(abs).catch(() => {});
+    }
+
+    return res.json({ ok: true, id: del.rows[0].id });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
   }
 });
 
@@ -1141,6 +1258,21 @@ app.use((err, req, res, next) => {
 
   if (err?.message === "Origen no permitido por CORS") {
     return res.status(403).json({ error: "Origen no permitido por CORS" });
+  }
+
+  // Multer
+  if (err?.name === "MulterError") {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "Imagen demasiado grande (máx 6MB)." });
+    }
+    if (err.code === "LIMIT_FILE_COUNT") {
+      return res.status(400).json({ error: "Demasiadas fotos (máx 12)." });
+    }
+    return res.status(400).json({ error: "Error al subir archivos." });
+  }
+
+  if (String(err?.message || "").includes("Tipo de archivo no permitido")) {
+    return res.status(400).json({ error: "Tipo de archivo no permitido. Usa JPG/PNG/WebP." });
   }
 
   if (err?.type === "entity.too.large") {
