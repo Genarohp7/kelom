@@ -1,12 +1,11 @@
 // src/pages/VenueDetailPage.jsx
 import "../../Blocks/venues/VenueDetailPage.css";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link, useLocation } from "react-router-dom";
+import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 
-const API_BASE_RAW = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
-const API_BASE = String(API_BASE_RAW).replace(/\/$/, ""); // sin slash al final
-
+const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 const PROVIDER_TOKEN_KEY = "kelom_provider_token";
+const PROVIDER_USER_KEY = "kelom_provider_user";
 const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
 
 function safeParse(json) {
@@ -25,40 +24,17 @@ function isUuid(v) {
 
 function toAbsoluteApiUrl(url) {
   if (!url) return "";
-  const s = String(url);
-  if (s.startsWith("http")) return s;
-  // asegura slash
-  const path = s.startsWith("/") ? s : `/${s}`;
-  return `${API_BASE}${path}`;
+  if (String(url).startsWith("http")) return url;
+  return `${API_BASE}${url}`;
 }
 
-function toNumberOrNull(v) {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
-function buildMapEmbedSrc({ lat, lng, placeId, address }) {
-  // 1) coords (mejor)
-  if (typeof lat === "number" && typeof lng === "number") {
-    return `https://www.google.com/maps?q=${lat},${lng}&z=16&output=embed`;
+function clearProviderSession() {
+  try {
+    localStorage.removeItem(PROVIDER_TOKEN_KEY);
+    localStorage.removeItem(PROVIDER_USER_KEY);
+  } catch {
+    // ignore
   }
-
-  // 2) place_id (si existe)
-  if (placeId) {
-    return `https://www.google.com/maps?q=place_id:${encodeURIComponent(
-      placeId
-    )}&output=embed`;
-  }
-
-  // 3) texto (fallback)
-  if (address) {
-    return `https://www.google.com/maps?q=${encodeURIComponent(
-      address
-    )}&output=embed`;
-  }
-
-  return "about:blank";
 }
 
 const formatMXN = (value) => {
@@ -103,17 +79,17 @@ const venuesDetail = [
 
 function mapApiProviderToVenue(profile, photos = []) {
   const photoUrls = Array.isArray(photos)
-    ? photos.map((p) => toAbsoluteApiUrl(p?.url)).filter(Boolean)
+    ? photos.map((p) => toAbsoluteApiUrl(p.url)).filter(Boolean)
     : [];
 
+  const gallery = photoUrls.length ? photoUrls.slice(0, 3) : DEFAULT_GALLERY;
   const mainImage = photoUrls.length ? photoUrls[0] : DEFAULT_GALLERY[0];
-  const gallery = photoUrls.length ? photoUrls : DEFAULT_GALLERY;
 
   const capMin = profile?.capacity_min ?? profile?.capacityMin;
   const capMax = profile?.capacity_max ?? profile?.capacityMax;
 
   const capacity =
-    capMin !== null && capMin !== undefined && capMin !== ""
+    capMin !== null && capMin !== undefined
       ? capMax !== null && capMax !== undefined && capMax !== ""
         ? `${capMin} – ${capMax} invitados`
         : `${capMin} invitados`
@@ -123,8 +99,8 @@ function mapApiProviderToVenue(profile, photos = []) {
   const priceTo = profile?.price_to ?? profile?.priceTo;
 
   const priceRange =
-    priceFrom !== null && priceFrom !== undefined && priceFrom !== ""
-      ? priceTo !== null && priceTo !== undefined && priceTo !== ""
+    priceFrom !== null && priceFrom !== undefined
+      ? priceTo !== null && priceTo !== undefined
         ? `$${formatMXN(priceFrom)} – $${formatMXN(priceTo)}`
         : `Desde $${formatMXN(priceFrom)}`
       : "Precio por definir";
@@ -141,25 +117,11 @@ function mapApiProviderToVenue(profile, photos = []) {
     ? profile.sellingPoints
     : [];
 
-  const lat = toNumberOrNull(profile?.location_lat ?? profile?.locationLat);
-  const lng = toNumberOrNull(profile?.location_lng ?? profile?.locationLng);
-  const placeId = profile?.location_place_id ?? profile?.locationPlaceId ?? "";
-
-  const address =
-    profile?.venue_location ||
-    profile?.venueLocation ||
-    profile?.location ||
-    "";
-
-  const mapEmbedSrc = buildMapEmbedSrc({ lat, lng, placeId, address });
-
   return {
     id: profile?.user_id || "mi-perfil",
     name: profile?.venue_name || profile?.venueName || "Mi proveedor",
     location:
-      profile?.venue_location ||
-      profile?.venueLocation ||
-      "Ubicación por definir",
+      profile?.venue_location || profile?.venueLocation || "Ubicación por definir",
     rating: 0,
     reviews: 0,
     ranking: "",
@@ -178,15 +140,15 @@ function mapApiProviderToVenue(profile, photos = []) {
     mapText:
       profile?.map_text ||
       profile?.mapText ||
-      "Ubicación por definir.",
-    mapEmbedSrc,
-    _photoCount: photoUrls.length,
+      "Ubicación por definir. (Google Maps ya está listo para usarse aquí).",
+    opinions: [],
   };
 }
 
 function VenueDetailPage() {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
 
   const params = new URLSearchParams(location.search);
   const forceProviderView = params.get("mode") === "provider";
@@ -197,6 +159,14 @@ function VenueDetailPage() {
   const [loading, setLoading] = useState(false);
   const [apiVenue, setApiVenue] = useState(null);
   const [apiError, setApiError] = useState("");
+
+  const providerToken = useMemo(() => {
+    try {
+      return localStorage.getItem(PROVIDER_TOKEN_KEY) || "";
+    } catch {
+      return "";
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,13 +186,18 @@ function VenueDetailPage() {
 
       // Caso 1: mi-perfil (privado) → /providers/me con token
       if (isProviderView) {
-        const token = localStorage.getItem(PROVIDER_TOKEN_KEY) || "";
+        const tokenNow = (() => {
+          try {
+            return localStorage.getItem(PROVIDER_TOKEN_KEY) || "";
+          } catch {
+            return "";
+          }
+        })();
 
-        if (!token) {
-          // fallback draft local (si no hay sesión)
+        if (!tokenNow) {
+          // fallback draft local
           const raw = localStorage.getItem(PROVIDER_PROFILE_DRAFT_KEY);
           const draft = raw ? safeParse(raw) : null;
-
           if (draft && !cancelled) {
             const venue = mapApiProviderToVenue(
               {
@@ -241,9 +216,6 @@ function VenueDetailPage() {
                 capacityMax: draft.capacityMax,
                 priceFrom: draft.priceFrom,
                 priceTo: draft.priceTo,
-                locationPlaceId: draft.locationPlaceId,
-                locationLat: draft.locationLat,
-                locationLng: draft.locationLng,
               },
               []
             );
@@ -254,19 +226,13 @@ function VenueDetailPage() {
 
         setLoading(true);
         try {
-          const data = await fetchJson(`${API_BASE}/providers/me`, { token });
+          const data = await fetchJson(`${API_BASE}/providers/me`, { token: tokenNow });
           if (cancelled) return;
 
-          const venue = mapApiProviderToVenue(
-            data?.profile,
-            data?.photos || []
-          );
+          const venue = mapApiProviderToVenue(data?.profile, data?.photos || []);
           setApiVenue(venue);
         } catch (err) {
-          if (!cancelled)
-            setApiError(
-              String(err?.message || "No se pudo cargar el perfil.")
-            );
+          if (!cancelled) setApiError(String(err?.message || "No se pudo cargar el perfil."));
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -281,16 +247,10 @@ function VenueDetailPage() {
           const data = await fetchJson(`${API_BASE}/providers/${id}`);
           if (cancelled) return;
 
-          const venue = mapApiProviderToVenue(
-            data?.profile,
-            data?.photos || []
-          );
+          const venue = mapApiProviderToVenue(data?.profile, data?.photos || []);
           setApiVenue(venue);
         } catch (err) {
-          if (!cancelled)
-            setApiError(
-              String(err?.message || "No se pudo cargar el proveedor.")
-            );
+          if (!cancelled) setApiError(String(err?.message || "No se pudo cargar el proveedor."));
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -306,10 +266,7 @@ function VenueDetailPage() {
 
   const venue = useMemo(() => {
     if (apiVenue) return apiVenue;
-
-    const foundDemo = venuesDetail.find(
-      (item) => String(item.id) === String(id)
-    );
+    const foundDemo = venuesDetail.find((item) => String(item.id) === String(id));
     return foundDemo || null;
   }, [apiVenue, id]);
 
@@ -319,7 +276,7 @@ function VenueDetailPage() {
         <section className="venue-not-found">
           <div className="container">
             <h1>Cargando perfil…</h1>
-            <p>Trayendo tu info desde el backend.</p>
+            <p>Estamos trayendo tu información desde el backend.</p>
           </div>
         </section>
       </div>
@@ -358,8 +315,6 @@ function VenueDetailPage() {
     );
   }
 
-  const showRating = !isProviderView && !isUuid(id);
-
   return (
     <div className="venue-page">
       <section className="venue-hero">
@@ -369,10 +324,7 @@ function VenueDetailPage() {
               to={isProviderView ? "/empresas" : "/"}
               className="venue-hero__back-link"
             >
-              ←{" "}
-              {isProviderView
-                ? "Volver al área de empresas"
-                : "Volver a la lista de lugares"}
+              ← {isProviderView ? "Volver al área de empresas" : "Volver a la lista de lugares"}
             </Link>
 
             <span className="venue-hero__pill">
@@ -382,18 +334,12 @@ function VenueDetailPage() {
             <h1 className="venue-hero__name">{venue.name}</h1>
             <p className="venue-hero__location">{venue.location}</p>
 
-            {showRating && (
+            {!isProviderView && !isUuid(id) && (
               <div className="venue-hero__rating">
                 <span className="venue-hero__stars">★★★★★</span>
-                <span className="venue-hero__rating-score">
-                  {venue.rating.toFixed(1)}
-                </span>
-                <span className="venue-hero__rating-count">
-                  ({venue.reviews} opiniones)
-                </span>
-                {venue.ranking && (
-                  <span className="venue-hero__ranking">{venue.ranking}</span>
-                )}
+                <span className="venue-hero__rating-score">{venue.rating.toFixed(1)}</span>
+                <span className="venue-hero__rating-count">({venue.reviews} opiniones)</span>
+                {venue.ranking && <span className="venue-hero__ranking">{venue.ranking}</span>}
               </div>
             )}
 
@@ -418,15 +364,34 @@ function VenueDetailPage() {
               >
                 Ver ubicación
               </button>
+
+              {isProviderView && providerToken && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={() => navigate("/empresas/registro/completar")}
+                  >
+                    Editar mi ficha
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => {
+                      clearProviderSession();
+                      navigate("/empresas");
+                    }}
+                  >
+                    Cerrar sesión
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           <div className="venue-hero__media">
-            <img
-              src={venue.mainImage}
-              alt={venue.name}
-              className="venue-hero__image"
-            />
+            <img src={venue.mainImage} alt={venue.name} className="venue-hero__image" />
           </div>
         </div>
       </section>
@@ -434,29 +399,15 @@ function VenueDetailPage() {
       <section className="venue-gallery">
         <div className="container">
           <h2 className="section-title">Fotos del lugar</h2>
-          <p className="section-subtitle">
-            {venue._photoCount
-              ? `Galería real desde tu backend (${venue._photoCount} foto(s)).`
-              : "Todavía no hay fotos en el backend para este proveedor."}
-          </p>
+          <p className="section-subtitle">Galería real (ya conectada a tu backend).</p>
 
-          {(venue.gallery || []).length === 0 ? (
-            <div className="venue-gallery__empty">
-              Aún no hay fotos cargadas.
-            </div>
-          ) : (
-            <div className="venue-gallery__grid">
-              {(venue.gallery || []).map((photo, index) => (
-                <figure key={`${photo}-${index}`} className="venue-gallery__item">
-                  <img
-                    src={photo}
-                    alt={`${venue.name} foto ${index + 1}`}
-                    loading="lazy"
-                  />
-                </figure>
-              ))}
-            </div>
-          )}
+          <div className="venue-gallery__grid">
+            {(venue.gallery || []).map((photo, index) => (
+              <figure key={index} className="venue-gallery__item">
+                <img src={photo} alt={`${venue.name} foto ${index + 1}`} loading="lazy" />
+              </figure>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -530,7 +481,7 @@ function VenueDetailPage() {
               className="venue-map__iframe"
               title={`Mapa de ${venue.name}`}
               loading="lazy"
-              src={venue.mapEmbedSrc || "about:blank"}
+              src="about:blank"
             />
           </div>
         </div>
