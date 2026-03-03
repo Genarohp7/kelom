@@ -16,6 +16,18 @@ const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
 
 const EDIT_ROUTE = "/empresas/registro/completar";
 
+const BUSINESS_CATEGORY_OPTIONS = [
+  "Jardín",
+  "Hacienda",
+  "Salón",
+  "Catering",
+  "Organizador para Bodas",
+  "Pasteles",
+  "DJ",
+  "Florería",
+  "Fotógrafo",
+];
+
 const EVENT_TYPE_OPTIONS = [
   "Boda civil",
   "Boda religiosa",
@@ -57,6 +69,9 @@ function mapApiProfileToProfileData(profile) {
   return {
     venueName: profile.venue_name || "",
     venueLocation: profile.venue_location || "",
+
+    businessCategory:
+      profile.business_category || profile.businessCategory || profile.category || "",
 
     locationPlaceId: profile.location_place_id || "",
     locationLat:
@@ -172,6 +187,12 @@ function BusinessRegisterCompletePage() {
         venueName: prefillProfileData.venueName || "",
         venueLocation: prefillProfileData.venueLocation || "",
 
+        businessCategory:
+          prefillProfileData.businessCategory ||
+          prefillProfileData.business_category ||
+          prefillProfileData.category ||
+          "",
+
         locationPlaceId: prefillProfileData.locationPlaceId || "",
         locationLat:
           prefillProfileData.locationLat ??
@@ -215,6 +236,9 @@ function BusinessRegisterCompletePage() {
         return {
           venueName: parsed.venueName || "",
           venueLocation: parsed.venueLocation || "",
+
+          businessCategory: parsed.businessCategory || "",
+
           locationPlaceId: parsed.locationPlaceId || "",
           locationLat: parsed.locationLat ?? "",
           locationLng: parsed.locationLng ?? "",
@@ -244,6 +268,9 @@ function BusinessRegisterCompletePage() {
     return {
       venueName: "",
       venueLocation: "",
+
+      businessCategory: "",
+
       locationPlaceId: "",
       locationLat: "",
       locationLng: "",
@@ -686,6 +713,7 @@ function BusinessRegisterCompletePage() {
     const items = [
       !!profileData.venueName.trim(),
       !!profileData.venueLocation.trim(),
+      !!profileData.businessCategory.trim(),
       !!String(profileData.capacityMin).trim(),
       !!String(profileData.priceFrom).trim(),
       !!String(profileData.priceTo).trim(),
@@ -799,6 +827,7 @@ function BusinessRegisterCompletePage() {
     const {
       venueName,
       venueLocation,
+      businessCategory,
       capacityMin,
       capacityMax,
       priceFrom,
@@ -811,6 +840,7 @@ function BusinessRegisterCompletePage() {
     if (
       !venueName.trim() ||
       !venueLocation.trim() ||
+      !businessCategory.trim() ||
       !String(priceFrom).trim() ||
       !String(priceTo).trim() ||
       !String(capacityMin).trim() ||
@@ -856,6 +886,7 @@ function BusinessRegisterCompletePage() {
 
           venueName: profileData.venueName,
           venueLocation: profileData.venueLocation,
+          businessCategory: profileData.businessCategory,
 
           locationPlaceId: profileData.locationPlaceId || null,
           locationLat: profileData.locationLat || null,
@@ -918,6 +949,7 @@ function BusinessRegisterCompletePage() {
 
         venueName: profileData.venueName,
         venueLocation: profileData.venueLocation,
+        businessCategory: profileData.businessCategory,
 
         locationPlaceId: profileData.locationPlaceId || null,
         locationLat: profileData.locationLat || null,
@@ -1046,6 +1078,33 @@ function BusinessRegisterCompletePage() {
                     onChange={handleProfileChange}
                     required
                   />
+                </div>
+
+                {/* ✅ NUEVO: CATEGORÍA OBLIGATORIA */}
+                <div className="form__field form__field--full">
+                  <label className="form__label" htmlFor="businessCategory">
+                    Categoría del negocio *
+                  </label>
+                  <select
+                    id="businessCategory"
+                    name="businessCategory"
+                    className="form__input"
+                    value={profileData.businessCategory}
+                    onChange={handleProfileChange}
+                    required
+                  >
+                    <option value="" disabled>
+                      Selecciona una categoría
+                    </option>
+                    {BUSINESS_CATEGORY_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="form__hint" style={{ marginTop: "0.35rem" }}>
+                    Esto se usa para que las parejas te encuentren en el buscador.
+                  </p>
                 </div>
 
                 <div className="form__field form__field--full">
@@ -1229,6 +1288,9 @@ function BusinessRegisterCompletePage() {
                   />
                 </div>
 
+                {/* (resto del archivo igual — fotos, seguridad, botones) */}
+                {/* Para no romper nada, el resto va exactamente como lo tenías. */}
+
                 <div className="form__field form__field--full">
                   <label className="form__label">Fotografías del lugar</label>
 
@@ -1331,6 +1393,7 @@ function BusinessRegisterCompletePage() {
                   )}
                 </div>
 
+                {/* Seguridad (igual) */}
                 <div className="form__field form__field--full">
                   <div className="security-card">
                     <h3 className="security-card__title">Seguridad</h3>
@@ -1522,6 +1585,13 @@ function BusinessRegisterCompletePage() {
                 <h2 className="preview-card__title">
                   {profileData.venueName || "Nombre del lugar"}
                 </h2>
+
+                {profileData.businessCategory && (
+                  <p className="preview-card__subtitle" style={{ marginTop: "-0.25rem" }}>
+                    <strong>{profileData.businessCategory}</strong>
+                  </p>
+                )}
+
                 <p className="preview-card__subtitle">
                   {profileData.venueLocation || "Ubicación del venue"}
                 </p>

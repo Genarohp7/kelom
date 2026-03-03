@@ -64,6 +64,7 @@ const venuesDetail = [
     ],
     mapText: "Zona sur de CDMX, a 10 minutos del centro de Tlalpan.",
     opinions: [],
+    category: "Jardín",
   },
 ];
 
@@ -107,6 +108,9 @@ function mapApiProviderToVenue(profile, photos = []) {
     ? profile.sellingPoints
     : [];
 
+  const category =
+    profile?.business_category || profile?.businessCategory || profile?.category || "";
+
   return {
     id: profile?.user_id || "mi-perfil",
     name: profile?.venue_name || profile?.venueName || "Mi proveedor",
@@ -120,6 +124,7 @@ function mapApiProviderToVenue(profile, photos = []) {
     capacity,
     priceRange,
     eventTypes,
+    category,
     shortDescription:
       profile?.short_description ||
       profile?.shortDescription ||
@@ -178,6 +183,7 @@ function VenueDetailPage() {
               {
                 venueName: draft.venueName,
                 venueLocation: draft.venueLocation,
+                businessCategory: draft.businessCategory,
                 shortDescription: draft.shortDescription,
                 description: draft.description,
                 services: draft.services,
@@ -270,7 +276,7 @@ function VenueDetailPage() {
 
   const handleLogout = () => {
     clearProviderSession();
-    // ✅ AQUÍ ESTÁ EL FIX: regresamos al BusinessAreaPage con header y todo
+    // ✅ regresamos al BusinessAreaPage
     navigate("/empresas", { replace: true });
   };
 
@@ -338,6 +344,7 @@ function VenueDetailPage() {
             <p className="venue-hero__lead">{venue.shortDescription}</p>
 
             <ul className="venue-hero__highlights">
+              {venue.category ? <li>{venue.category}</li> : null}
               <li>{venue.capacity}</li>
               <li>{venue.priceRange}</li>
               {(venue.eventTypes || []).slice(0, 2).map((type) => (
@@ -399,6 +406,7 @@ function VenueDetailPage() {
               <p>{venue.shortDescription}</p>
 
               <div className="venue-info__tags">
+                {venue.category ? <span className="chip">{venue.category}</span> : null}
                 <span className="chip">{venue.capacity}</span>
                 <span className="chip">{venue.priceRange}</span>
                 {(venue.eventTypes || []).map((type) => (
@@ -423,6 +431,12 @@ function VenueDetailPage() {
             <aside className="venue-info__sidebar">
               <h3 className="venue-info__sidebar-title">Información rápida</h3>
               <ul className="venue-info__list">
+                {venue.category ? (
+                  <li>
+                    <span className="venue-info__label">Categoría: </span>
+                    {venue.category}
+                  </li>
+                ) : null}
                 <li>
                   <span className="venue-info__label">Ubicación: </span>
                   {venue.location}
