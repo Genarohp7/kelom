@@ -1,87 +1,50 @@
 // src/pages/HomePage.jsx
 import "../../src/styles/HomePage.css";
 import { Link } from "react-router-dom";
-// 👉 Aquí colocarás la ruta de tu imagen local
+import { useEffect, useState } from "react";
 import tipsImage from "../assets/web/pages/home/home-tips.jpg.png";
 
-const SHOW_DEMO_SECTIONS = true; // ahora SÍ mostramos hero/venues/featured
+const SHOW_DEMO_SECTIONS = true; // hero/venues/featured siguen visibles
+const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
+
+function toAbsoluteApiUrl(url) {
+  if (!url) return "";
+  if (String(url).startsWith("http")) return url;
+  return `${API_BASE}${url}`;
+}
 
 function HomePage() {
-  // ==== Datos de demo para futuros proveedores ====
-  const venues = [
-    {
-      id: 1,
-      name: "Jardín Las Bugambilias",
-      location: "Tlalpan, Ciudad de México",
-      rating: 4.3,
-      reviews: 80,
-      image:
-        "https://images.pexels.com/photos/3951852/pexels-photo-3951852.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 2,
-      name: "Casa Vintage",
-      location: "Coyoacán, Ciudad de México",
-      rating: 4.2,
-      reviews: 45,
-      image:
-        "https://images.pexels.com/photos/3887985/pexels-photo-3887985.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 3,
-      name: "Terraza Aurora",
-      location: "Álvaro Obregón, Ciudad de México",
-      rating: 4.6,
-      reviews: 63,
-      image:
-        "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 4,
-      name: "Hacienda La Noria",
-      location: "Estado de México",
-      rating: 4.8,
-      reviews: 102,
-      image:
-        "https://images.pexels.com/photos/2306281/pexels-photo-2306281.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 5,
-      name: "Jardín Encanto",
-      location: "Xochimilco, Ciudad de México",
-      rating: 4.5,
-      reviews: 54,
-      image:
-        "https://images.pexels.com/photos/2291582/pexels-photo-2291582.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 6,
-      name: "Salón Cielo Rosa",
-      location: "Benito Juárez, Ciudad de México",
-      rating: 4.1,
-      reviews: 37,
-      image:
-        "https://images.pexels.com/photos/2306280/pexels-photo-2306280.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 7,
-      name: "Casa del Lago",
-      location: "Cuauhtémoc, Ciudad de México",
-      rating: 4.7,
-      reviews: 88,
-      image:
-        "https://images.pexels.com/photos/60217/pexels-photo-60217.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-    {
-      id: 8,
-      name: "Terraza Lumen",
-      location: "Naucalpan, Estado de México",
-      rating: 4.4,
-      reviews: 51,
-      image:
-        "https://images.pexels.com/photos/460672/pexels-photo-460672.jpeg?auto=compress&cs=tinysrgb&w=800",
-    },
-  ];
+  const [providers, setProviders] = useState([]);
+  const [providersLoading, setProvidersLoading] = useState(true);
+  const [providersError, setProvidersError] = useState("");
+
+  // Solo trae publicados (approved + listed) porque el backend ya filtra
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setProvidersError("");
+      setProvidersLoading(true);
+
+      try {
+        const res = await fetch(`${API_BASE}/providers?limit=8`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+        const list = Array.isArray(data?.providers) ? data.providers : [];
+        if (!cancelled) setProviders(list);
+      } catch (err) {
+        if (!cancelled) setProvidersError(String(err?.message || "No se pudo cargar proveedores."));
+      } finally {
+        if (!cancelled) setProvidersLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const featuredCompanies = [
     {
@@ -127,7 +90,6 @@ function HomePage() {
 
   return (
     <div className="home">
-      {/* HERO + BUSCADOR + PASARELA DE VENUES */}
       {SHOW_DEMO_SECTIONS && (
         <>
           {/* HERO + BUSCADOR */}
@@ -135,26 +97,18 @@ function HomePage() {
             <div className="container hero__inner">
               <div className="hero__eyebrow">Planea tu boda con calma</div>
               <h1 className="hero__title">
-                Encuentra el{" "}
-                <span className="hero__title-highlight">lugar perfecto</span>{" "}
+                Encuentra el <span className="hero__title-highlight">lugar perfecto</span>{" "}
                 para decir “sí”.
               </h1>
               <p className="hero__subtitle">
-                Jardines, salones, haciendas, banquetes y más. Kelom te ayuda a
-                descubrir opciones pensadas para ti, sin perderte entre miles de
-                resultados.
+                Jardines, salones, haciendas, banquetes y más. Kelom te ayuda a descubrir
+                opciones pensadas para ti, sin perderte entre miles de resultados.
               </p>
 
               <div className="search-panel">
-                <form
-                  className="search-panel__form"
-                  onSubmit={handleFakeSubmit}
-                >
+                <form className="search-panel__form" onSubmit={handleFakeSubmit}>
                   <div className="search-panel__field">
-                    <label
-                      className="search-panel__label"
-                      htmlFor="search-what"
-                    >
+                    <label className="search-panel__label" htmlFor="search-what">
                       ¿Qué buscas?
                     </label>
                     <input
@@ -166,10 +120,7 @@ function HomePage() {
                   </div>
 
                   <div className="search-panel__field">
-                    <label
-                      className="search-panel__label"
-                      htmlFor="search-where"
-                    >
+                    <label className="search-panel__label" htmlFor="search-where">
                       ¿Qué localidad?
                     </label>
                     <input
@@ -186,74 +137,78 @@ function HomePage() {
                 </form>
 
                 <p className="search-panel__hint">
-                  Esta búsqueda es una vista previa. Más adelante conectaremos
-                  estos datos con nuestra base de venues.
+                  Esta búsqueda es una vista previa. Más adelante conectaremos estos datos con nuestra base de venues.
                 </p>
               </div>
             </div>
           </section>
 
-          {/* LUGARES / VENUES */}
+          {/* LUGARES / VENUES (REAL DESDE BACKEND) */}
           <section className="venues">
             <div className="container">
               <header className="venues__header">
                 <div>
-                  <h2 className="venues__title">
-                    Lugares para realizar tu sueño
-                  </h2>
+                  <h2 className="venues__title">Lugares para realizar tu sueño</h2>
                   <p className="venues__subtitle">
-                    Explora algunos venues destacados en la ciudad y
-                    alrededores.
+                    Aquí solo aparecen proveedores aprobados y publicados por Kelom.
                   </p>
                 </div>
               </header>
 
-              <div className="venues__grid">
-                {venues.map((venue) => (
-                  <article key={venue.id} className="venue-card">
-                    <div className="venue-card__image-wrap">
-                      <img
-                        className="venue-card__image"
-                        src={venue.image}
-                        alt={venue.name}
-                      />
-                    </div>
+              {providersError && (
+                <p style={{ marginTop: "0.8rem" }}>
+                  {providersError}
+                </p>
+              )}
 
-                    <div className="venue-card__body">
-                      <h3 className="venue-card__name">{venue.name}</h3>
+              {providersLoading ? (
+                <p style={{ marginTop: "0.8rem" }}>Cargando proveedores…</p>
+              ) : providers.length === 0 ? (
+                <p style={{ marginTop: "0.8rem" }}>
+                  Aún no hay proveedores publicados. Vuelve pronto.
+                </p>
+              ) : (
+                <div className="venues__grid">
+                  {providers.map((p) => {
+                    const id = p.user_id;
+                    const name = p.venue_name || p.company_name || "Proveedor";
+                    const location = p.venue_location || "Ubicación por definir";
+                    const image = toAbsoluteApiUrl(p.main_photo_url) ||
+                      "https://images.pexels.com/photos/3951852/pexels-photo-3951852.jpeg?auto=compress&cs=tinysrgb&w=800";
 
-                      <div className="venue-card__rating">
-                        <span className="venue-card__rating-stars">
-                          ★★★★★
-                        </span>
-                        {venue.rating.toFixed(1)} · {venue.reviews} reseñas
-                      </div>
+                    return (
+                      <article key={id} className="venue-card">
+                        <div className="venue-card__image-wrap">
+                          <img className="venue-card__image" src={image} alt={name} />
+                        </div>
 
-                      <div className="venue-card__location">
-                        {venue.location}
-                      </div>
+                        <div className="venue-card__body">
+                          <h3 className="venue-card__name">{name}</h3>
 
-                      <Link
-                        to={`/proveedores/${venue.id}`}
-                        className="venue-card__link"
-                      >
-                        Ver más detalles
-                      </Link>
-                    </div>
-                  </article>
-                ))}
-              </div>
+                          <div className="venue-card__rating">
+                            <span className="venue-card__rating-stars">★</span> Publicado en Kelom
+                          </div>
+
+                          <div className="venue-card__location">{location}</div>
+
+                          <Link to={`/proveedores/${id}`} className="venue-card__link">
+                            Ver más detalles
+                          </Link>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </section>
 
-          {/* EMPRESAS DESTACADAS */}
+          {/* EMPRESAS DESTACADAS (lo dejas igual por ahora) */}
           <section className="featured">
             <div className="container">
               <header className="featured__header">
                 <h2 className="featured__title">Empresas destacadas</h2>
-                <p className="featured__subtitle">
-                  Proveedores clave para completar tu boda ideal.
-                </p>
+                <p className="featured__subtitle">Proveedores clave para completar tu boda ideal.</p>
               </header>
 
               <div className="featured__grid">
@@ -264,12 +219,8 @@ function HomePage() {
                       alt={company.name}
                       className="featured-card__image"
                     />
-                    <div className="featured-card__name">
-                      {company.name}
-                    </div>
-                    <div className="featured-card__category">
-                      {company.category}
-                    </div>
+                    <div className="featured-card__name">{company.name}</div>
+                    <div className="featured-card__category">{company.category}</div>
                   </article>
                 ))}
               </div>
@@ -284,29 +235,23 @@ function HomePage() {
           <header className="tips__header">
             <h2 className="tips__title">Tips para tu boda</h2>
             <p className="tips__subtitle">
-              Consejos cortos para que disfrutes el proceso, no solo el gran
-              día.
+              Consejos cortos para que disfrutes el proceso, no solo el gran día.
             </p>
           </header>
 
-          {/* texto + imagen */}
           <div className="tips__content">
             <div className="tips__list">
               <article className="tips-card">
                 <h3 className="tips-card__title">Empieza por el presupuesto</h3>
                 <p className="tips-card__text">
-                  Definir un rango claro desde el inicio te ayudará a elegir
-                  opciones realistas sin renunciar al estilo que quieres.
+                  Definir un rango claro desde el inicio te ayudará a elegir opciones realistas sin renunciar al estilo que quieres.
                 </p>
               </article>
 
               <article className="tips-card">
-                <h3 className="tips-card__title">
-                  Haz una lista de prioridades
-                </h3>
+                <h3 className="tips-card__title">Haz una lista de prioridades</h3>
                 <p className="tips-card__text">
-                  ¿Es más importante el lugar, la comida o la música? Ponerlo en
-                  papel facilita las decisiones cuando tengas que elegir.
+                  ¿Es más importante el lugar, la comida o la música? Ponerlo en papel facilita las decisiones cuando tengas que elegir.
                 </p>
               </article>
             </div>
