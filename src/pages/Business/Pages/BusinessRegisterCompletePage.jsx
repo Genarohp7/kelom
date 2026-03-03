@@ -28,6 +28,39 @@ const BUSINESS_CATEGORY_OPTIONS = [
   "Fotógrafo",
 ];
 
+// ✅ NUEVO: Alcaldías CDMX + Municipios EdoMex (campo obligatorio)
+const LOCALITY_AREA_OPTIONS = [
+  // CDMX
+  "Álvaro Obregón",
+  "Azcapotzalco",
+  "Benito Juárez",
+  "Coyoacán",
+  "Cuajimalpa de Morelos",
+  "Cuauhtémoc",
+  "Gustavo A. Madero",
+  "Iztacalco",
+  "Iztapalapa",
+  "La Magdalena Contreras",
+  "Miguel Hidalgo",
+  "Milpa Alta",
+  "Tláhuac",
+  "Tlalpan",
+  "Venustiano Carranza",
+  "Xochimilco",
+  // EdoMex
+  "Ecatepec",
+  "Naucalpan",
+  "Tlalnepantla",
+  "Nezahualcóyotl",
+  "Coacalco",
+  "Cuautitlán",
+  "Huixquilucan",
+  "Chalco",
+  "Texcoco",
+  "Atizapán de Zaragoza",
+  "San Pedro Tepotzotlán",
+];
+
 const EVENT_TYPE_OPTIONS = [
   "Boda civil",
   "Boda religiosa",
@@ -72,6 +105,9 @@ function mapApiProfileToProfileData(profile) {
 
     businessCategory:
       profile.business_category || profile.businessCategory || profile.category || "",
+
+    // ✅ NUEVO
+    localityArea: profile.locality_area || profile.localityArea || "",
 
     locationPlaceId: profile.location_place_id || "",
     locationLat:
@@ -193,6 +229,13 @@ function BusinessRegisterCompletePage() {
           prefillProfileData.category ||
           "",
 
+        // ✅ NUEVO
+        localityArea:
+          prefillProfileData.localityArea ||
+          prefillProfileData.locality_area ||
+          prefillProfileData.area ||
+          "",
+
         locationPlaceId: prefillProfileData.locationPlaceId || "",
         locationLat:
           prefillProfileData.locationLat ??
@@ -239,6 +282,9 @@ function BusinessRegisterCompletePage() {
 
           businessCategory: parsed.businessCategory || "",
 
+          // ✅ NUEVO
+          localityArea: parsed.localityArea || "",
+
           locationPlaceId: parsed.locationPlaceId || "",
           locationLat: parsed.locationLat ?? "",
           locationLng: parsed.locationLng ?? "",
@@ -270,6 +316,8 @@ function BusinessRegisterCompletePage() {
       venueLocation: "",
 
       businessCategory: "",
+      // ✅ NUEVO
+      localityArea: "",
 
       locationPlaceId: "",
       locationLat: "",
@@ -714,6 +762,7 @@ function BusinessRegisterCompletePage() {
       !!profileData.venueName.trim(),
       !!profileData.venueLocation.trim(),
       !!profileData.businessCategory.trim(),
+      !!profileData.localityArea.trim(), // ✅ NUEVO
       !!String(profileData.capacityMin).trim(),
       !!String(profileData.priceFrom).trim(),
       !!String(profileData.priceTo).trim(),
@@ -828,6 +877,7 @@ function BusinessRegisterCompletePage() {
       venueName,
       venueLocation,
       businessCategory,
+      localityArea, // ✅ NUEVO
       capacityMin,
       capacityMax,
       priceFrom,
@@ -841,6 +891,7 @@ function BusinessRegisterCompletePage() {
       !venueName.trim() ||
       !venueLocation.trim() ||
       !businessCategory.trim() ||
+      !localityArea.trim() || // ✅ NUEVO
       !String(priceFrom).trim() ||
       !String(priceTo).trim() ||
       !String(capacityMin).trim() ||
@@ -887,6 +938,9 @@ function BusinessRegisterCompletePage() {
           venueName: profileData.venueName,
           venueLocation: profileData.venueLocation,
           businessCategory: profileData.businessCategory,
+
+          // ✅ NUEVO
+          localityArea: profileData.localityArea,
 
           locationPlaceId: profileData.locationPlaceId || null,
           locationLat: profileData.locationLat || null,
@@ -950,6 +1004,9 @@ function BusinessRegisterCompletePage() {
         venueName: profileData.venueName,
         venueLocation: profileData.venueLocation,
         businessCategory: profileData.businessCategory,
+
+        // ✅ NUEVO
+        localityArea: profileData.localityArea,
 
         locationPlaceId: profileData.locationPlaceId || null,
         locationLat: profileData.locationLat || null,
@@ -1045,7 +1102,10 @@ function BusinessRegisterCompletePage() {
                   <span className="profile-progress__value">{completion.percent}%</span>
                 </div>
                 <div className="profile-progress__bar" aria-hidden="true">
-                  <div className="profile-progress__fill" style={{ width: `${completion.percent}%` }} />
+                  <div
+                    className="profile-progress__fill"
+                    style={{ width: `${completion.percent}%` }}
+                  />
                 </div>
               </div>
 
@@ -1080,7 +1140,7 @@ function BusinessRegisterCompletePage() {
                   />
                 </div>
 
-                {/* ✅ NUEVO: CATEGORÍA OBLIGATORIA */}
+                {/* ✅ CATEGORÍA OBLIGATORIA */}
                 <div className="form__field form__field--full">
                   <label className="form__label" htmlFor="businessCategory">
                     Categoría del negocio *
@@ -1104,6 +1164,33 @@ function BusinessRegisterCompletePage() {
                   </select>
                   <p className="form__hint" style={{ marginTop: "0.35rem" }}>
                     Esto se usa para que las parejas te encuentren en el buscador.
+                  </p>
+                </div>
+
+                {/* ✅ NUEVO: ALCALDÍA/MUNICIPIO OBLIGATORIO */}
+                <div className="form__field form__field--full">
+                  <label className="form__label" htmlFor="localityArea">
+                    Alcaldía o municipio *
+                  </label>
+                  <select
+                    id="localityArea"
+                    name="localityArea"
+                    className="form__input"
+                    value={profileData.localityArea}
+                    onChange={handleProfileChange}
+                    required
+                  >
+                    <option value="" disabled>
+                      Selecciona tu alcaldía o municipio
+                    </option>
+                    {LOCALITY_AREA_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="form__hint" style={{ marginTop: "0.35rem" }}>
+                    Esto hace que tu negocio aparezca por zona aunque la dirección no lo incluya.
                   </p>
                 </div>
 
@@ -1288,9 +1375,6 @@ function BusinessRegisterCompletePage() {
                   />
                 </div>
 
-                {/* (resto del archivo igual — fotos, seguridad, botones) */}
-                {/* Para no romper nada, el resto va exactamente como lo tenías. */}
-
                 <div className="form__field form__field--full">
                   <label className="form__label">Fotografías del lugar</label>
 
@@ -1393,7 +1477,6 @@ function BusinessRegisterCompletePage() {
                   )}
                 </div>
 
-                {/* Seguridad (igual) */}
                 <div className="form__field form__field--full">
                   <div className="security-card">
                     <h3 className="security-card__title">Seguridad</h3>
@@ -1586,15 +1669,19 @@ function BusinessRegisterCompletePage() {
                   {profileData.venueName || "Nombre del lugar"}
                 </h2>
 
-                {profileData.businessCategory && (
+                {(profileData.businessCategory || profileData.localityArea) && (
                   <p className="preview-card__subtitle" style={{ marginTop: "-0.25rem" }}>
-                    <strong>{profileData.businessCategory}</strong>
+                    <strong>
+                      {profileData.businessCategory || "Categoría"}
+                      {profileData.localityArea ? ` · ${profileData.localityArea}` : ""}
+                    </strong>
                   </p>
                 )}
 
                 <p className="preview-card__subtitle">
                   {profileData.venueLocation || "Ubicación del venue"}
                 </p>
+
                 <div className="preview-card__photo-main">
                   <img src={mainPhoto} alt="Vista previa del venue" />
                 </div>
