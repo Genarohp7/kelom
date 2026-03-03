@@ -4,6 +4,7 @@
 @import url("../../Blocks/User/UserAuth.css");
 @import url("../../Blocks/User/UserProfilePage.css");
 @import url("../../Blocks/User/UserRegisterCompletePage.css");
+@import url("../../Blocks/Admin/AdminPanel.css");
 
 /* Fuentes de Google: títulos (Poppins) y cuerpo (Nunito) */
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Nunito:wght@300;400;500;600&display=swap");

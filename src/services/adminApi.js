@@ -1,14 +1,27 @@
-// src/services/api.js
+// src/services/adminApi.js
 const BASE_URL = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
-export async function apiFetch(path, options = {}) {
-  const token = window.localStorage.getItem("kelom_token");
+const ADMIN_TOKEN_KEY = "kelom_admin_token";
+
+export function getAdminToken() {
+  return window.localStorage.getItem(ADMIN_TOKEN_KEY);
+}
+
+export function setAdminToken(token) {
+  window.localStorage.setItem(ADMIN_TOKEN_KEY, token);
+}
+
+export function clearAdminToken() {
+  window.localStorage.removeItem(ADMIN_TOKEN_KEY);
+}
+
+export async function adminApiFetch(path, options = {}) {
+  const token = getAdminToken();
 
   const headers = {
     ...(options.headers || {}),
   };
 
-  // ✅ Solo setear JSON header cuando NO es FormData
   const isFormData = options.body instanceof FormData;
   if (!isFormData && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
@@ -36,15 +49,3 @@ export async function apiFetch(path, options = {}) {
 
   return data;
 }
-
-// Mantengo tus helpers existentes para compatibilidad
-export const checkHealth = async () => {
-  return apiFetch("/health", { method: "GET" });
-};
-
-export const createUser = async (data) => {
-  return apiFetch("/users", {
-    method: "POST",
-    body: JSON.stringify(data),
-  });
-};

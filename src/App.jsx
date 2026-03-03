@@ -24,6 +24,10 @@ import UserRegisterPage from "./pages/UserRegisterPage.jsx";
 import UserRegisterCompletePage from "./pages/Business/Pages/UserRegisterCompletePage.jsx";
 import UserProfilePage from "./pages/UserProfilePage.jsx";
 
+// ✅ Admin
+import AdminLoginPage from "./pages/AdminLoginPage.jsx";
+import AdminDashboardPage from "./pages/AdminDashboardPage.jsx";
+
 // Scroll al cambiar de ruta
 import ScrollToTop from "./Components/ScrollToTop.jsx";
 
@@ -62,8 +66,7 @@ function loadGoogleMaps(apiKey) {
     script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
 
     script.onload = () => resolve(window.google);
-    script.onerror = () =>
-      reject(new Error("Failed to load Google Maps script"));
+    script.onerror = () => reject(new Error("Failed to load Google Maps script"));
 
     document.head.appendChild(script);
   });
@@ -74,6 +77,7 @@ function loadGoogleMaps(apiKey) {
 function App() {
   const location = useLocation();
   const isBusinessArea = location.pathname.startsWith("/empresas");
+  const isAdminArea = location.pathname.startsWith("/admin");
 
   // Health check (opcional)
   useEffect(() => {
@@ -105,7 +109,7 @@ function App() {
       <ScrollToTop />
 
       {/* Header global solo en el sitio "normal" */}
-      {!isBusinessArea && <Header />}
+      {!isBusinessArea && !isAdminArea && <Header />}
 
       <main className="page__content">
         <Routes>
@@ -116,21 +120,19 @@ function App() {
           <Route path="/nosotros" element={<NosotrosPage />} />
           <Route path="/blog" element={<BlogPage />} />
 
+          {/* ✅ Admin */}
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/admin" element={<AdminDashboardPage />} />
+
           {/* Flujo parejas (usuarios finales) */}
           <Route path="/acceso" element={<UserLoginPage />} />
           <Route path="/registro" element={<UserRegisterPage />} />
-          <Route
-            path="/registro/completar"
-            element={<UserRegisterCompletePage />}
-          />
+          <Route path="/registro/completar" element={<UserRegisterCompletePage />} />
           <Route path="/perfil" element={<UserProfilePage />} />
 
           {/* Área de empresas */}
           <Route path="/empresas" element={<BusinessAreaPage />} />
-          <Route
-            path="/empresas/beneficios"
-            element={<BusinessBenefitsPage />}
-          />
+          <Route path="/empresas/beneficios" element={<BusinessBenefitsPage />} />
           <Route path="/empresas/acceso" element={<BusinessLoginPage />} />
 
           {/* Registro corto (lead) */}
@@ -151,7 +153,7 @@ function App() {
       </main>
 
       {/* Footer global solo en el sitio "normal" */}
-      {!isBusinessArea && <Footer />}
+      {!isBusinessArea && !isAdminArea && <Footer />}
     </div>
   );
 }

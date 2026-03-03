@@ -132,56 +132,6 @@ function signToken(payload) {
   return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "7d" });
 }
 
-function authMiddleware(req, res, next) {
-  try {
-    const header = req.headers.authorization || "";
-    const [type, token] = header.split(" ");
-
-    if (type !== "Bearer" || !token) {
-      return res.status(401).json({ error: "No autorizado" });
-    }
-
-    requireEnv("JWT_SECRET");
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // { id, email, role }
-    return next();
-  } catch {
-    return res.status(401).json({ error: "Token inválido o expirado" });
-  }
-}
-
-function providerAuthMiddleware(req, res, next) {
-  return authMiddleware(req, res, () => {
-    const role = req.user?.role;
-    if (role !== "provider" && role !== "admin") {
-      return res.status(403).json({ error: "Acceso solo para proveedores" });
-    }
-    return next();
-  });
-}
-
-function toNullIfEmpty(v) {
-  if (v === undefined || v === null) return null;
-  const s = String(v).trim();
-  return s ? s : null;
-}
-
-function toIntOrNull(v) {
-  if (v === undefined || v === null || v === "") return null;
-  const n = Number(v);
-  if (!Number.isFinite(n)) return null;
-  const i = Math.trunc(n);
-  if (i < 0) return null;
-  return i;
-}
-
-function toFloatOrNull(v) {
-  if (v === undefined || v === null || v === "") return null;
-  const n = Number(v);
-  if (!Number.isFinite(n)) return null;
-  return n;
-}
-
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -206,6 +156,28 @@ function isValidMXPhone(phone) {
     if (ascSeq.includes(slice) || descSeq.includes(slice)) return false;
   }
   return true;
+}
+
+function toNullIfEmpty(v) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
+function toIntOrNull(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const i = Math.trunc(n);
+  if (i < 0) return null;
+  return i;
+}
+
+function toFloatOrNull(v) {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n;
 }
 
 function toTextArray(value, { maxItems = 30, maxLen = 140 } = {}) {
@@ -234,14 +206,192 @@ function isUuid(v) {
   );
 }
 
+// ===================== RBAC (ADMIN TIERS + PERMISSIONS) =====================
+
+const ADMIN_TIERS = new Set(["super", "moderator", "content", "support"]);
+
+function normalizeAdminTier(tier) {
+  const t = String(tier || "").trim().toLowerCase();
+  return ADMIN_TIERS.has(t) ? t : null;
+}
+
+function hasPermission(user, perm) {
+  // Superadmin = dios con checklist
+  if (user?.role === "admin" && user?.admin_tier === "super") return true;
+
+  const tier = user?.admin_tier;
+
+  const tierPerms = {
+    moderator: new Set(["admin:providers:read", "admin:providers:review"]),
+    support: new Set(["admin:users:read", "admin:users:block", "admin:users:unblock"]),
+    content: new Set(["admin:content:write", "admin:content:read"]),
+  };
+
+  const set = tierPerms[tier];
+  return set ? set.has(perm) : false;
+}
+
+function requirePermission(perm) {
+  return (req, res, next) => {
+    const u = req.authUser;
+    if (!u) return res.status(401).json({ error: "No autorizado" });
+    if (u.role !== "admin") return res.status(403).json({ error: "Acceso solo para admin" });
+    if (!hasPermission(u, perm)) {
+      return res.status(403).json({ error: "No tienes permisos para esta acción" });
+    }
+    return next();
+  };
+}
+
+// ===================== AUTH MIDDLEWARES =====================
+
+async function loadUserFromDbById(id) {
+  // Intentamos leer columnas nuevas; si aún no existen, hacemos fallback.
+  try {
+    const found = await pool.query(
+      `SELECT id, email, name, role, created_at,
+              account_status, admin_tier, blocked_at, blocked_reason
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
+      [id]
+    );
+    return found.rows[0] || null;
+  } catch (err) {
+    // 42703 undefined_column
+    if (err?.code === "42703") {
+      const found = await pool.query(
+        `SELECT id, email, name, role, created_at
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [id]
+      );
+      const u = found.rows[0] || null;
+      if (!u) return null;
+      return {
+        ...u,
+        account_status: "active",
+        admin_tier: null,
+        blocked_at: null,
+        blocked_reason: null,
+      };
+    }
+    throw err;
+  }
+}
+
+async function authMiddleware(req, res, next) {
+  try {
+    const header = req.headers.authorization || "";
+    const [type, token] = header.split(" ");
+
+    if (type !== "Bearer" || !token) {
+      return res.status(401).json({ error: "No autorizado" });
+    }
+
+    requireEnv("JWT_SECRET");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const dbUser = await loadUserFromDbById(decoded.id);
+    if (!dbUser) return res.status(401).json({ error: "No autorizado" });
+
+    // bloqueo (soft)
+    if (dbUser.account_status && dbUser.account_status !== "active") {
+      return res.status(403).json({ error: "Cuenta bloqueada" });
+    }
+
+    const tier = dbUser.role === "admin" ? normalizeAdminTier(dbUser.admin_tier) : null;
+
+    req.user = {
+      id: dbUser.id,
+      email: dbUser.email,
+      role: dbUser.role,
+      admin_tier: tier,
+    };
+    req.authUser = { ...dbUser, admin_tier: tier };
+
+    return next();
+  } catch {
+    return res.status(401).json({ error: "Token inválido o expirado" });
+  }
+}
+
+function providerAuthMiddleware(req, res, next) {
+  return authMiddleware(req, res, () => {
+    const role = req.user?.role;
+    if (role !== "provider" && role !== "admin") {
+      return res.status(403).json({ error: "Acceso solo para proveedores" });
+    }
+    return next();
+  });
+}
+
+function adminAuthMiddleware(req, res, next) {
+  return authMiddleware(req, res, () => {
+    const role = req.user?.role;
+    if (role !== "admin") return res.status(403).json({ error: "Acceso solo para admin" });
+    return next();
+  });
+}
+
+// Optional auth helper (para endpoints públicos que pueden “abrirse” al admin)
+async function tryGetAdminUserFromRequest(req) {
+  try {
+    const header = req.headers.authorization || "";
+    const [type, token] = header.split(" ");
+    if (type !== "Bearer" || !token) return null;
+
+    requireEnv("JWT_SECRET");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const dbUser = await loadUserFromDbById(decoded.id);
+    if (!dbUser) return null;
+    if (dbUser.account_status && dbUser.account_status !== "active") return null;
+
+    const tier = dbUser.role === "admin" ? normalizeAdminTier(dbUser.admin_tier) : null;
+    if (dbUser.role !== "admin") return null;
+
+    return { ...dbUser, admin_tier: tier };
+  } catch {
+    return null;
+  }
+}
+
+// ===================== AUDIT LOG =====================
+
+async function writeAdminAuditLog(req, { action, entityType, entityId, beforeState, afterState }) {
+  try {
+    const adminId = req.authUser?.id;
+    if (!adminId) return;
+
+    await pool.query(
+      `INSERT INTO admin_audit_logs
+        (admin_user_id, action, entity_type, entity_id, before_state, after_state, ip, user_agent)
+       VALUES
+        ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)`,
+      [
+        adminId,
+        action,
+        entityType,
+        entityId || null,
+        beforeState ? JSON.stringify(beforeState) : null,
+        afterState ? JSON.stringify(afterState) : null,
+        req.ip || null,
+        req.headers["user-agent"] || null,
+      ]
+    );
+  } catch (err) {
+    // si la tabla aún no existe, no rompemos el flujo
+    if (err?.code === "42P01") return;
+    console.warn("Audit log error:", err?.message || err);
+  }
+}
+
 // ===================== UPLOADS (PROVIDERS PHOTOS) =====================
 
 const PROVIDER_UPLOAD_ROOT = path.join(__dirname, "uploads", "providers");
-const ALLOWED_PROVIDER_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
+const ALLOWED_PROVIDER_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 try {
   fs.mkdirSync(PROVIDER_UPLOAD_ROOT, { recursive: true });
@@ -349,16 +499,36 @@ app.post("/auth/login", authLimiter, async (req, res) => {
       return res.status(400).json({ error: "email y password son obligatorios" });
     }
 
-    const found = await pool.query(
-      `SELECT id, email, password_hash, name, role, created_at
-       FROM users
-       WHERE email = $1
-       LIMIT 1`,
-      [emailNorm]
-    );
+    // Intentamos incluir account_status/admin_tier; fallback si no existen columnas aún
+    let found;
+    try {
+      found = await pool.query(
+        `SELECT id, email, password_hash, name, role, admin_tier, account_status, blocked_at, blocked_reason, created_at
+         FROM users
+         WHERE email = $1
+         LIMIT 1`,
+        [emailNorm]
+      );
+    } catch (err) {
+      if (err?.code === "42703") {
+        found = await pool.query(
+          `SELECT id, email, password_hash, name, role, created_at
+           FROM users
+           WHERE email = $1
+           LIMIT 1`,
+          [emailNorm]
+        );
+      } else {
+        throw err;
+      }
+    }
 
     const user = found.rows[0];
     if (!user) return res.status(401).json({ error: "Credenciales inválidas" });
+
+    if (user.account_status && user.account_status !== "active") {
+      return res.status(403).json({ error: "Cuenta bloqueada" });
+    }
 
     const ok = await bcrypt.compare(String(password), user.password_hash);
     if (!ok) return res.status(401).json({ error: "Credenciales inválidas" });
@@ -370,6 +540,8 @@ app.post("/auth/login", authLimiter, async (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      admin_tier: user.role === "admin" ? normalizeAdminTier(user.admin_tier) : null,
+      account_status: user.account_status || "active",
       created_at: user.created_at,
     };
 
@@ -382,20 +554,20 @@ app.post("/auth/login", authLimiter, async (req, res) => {
 
 app.get("/auth/me", authMiddleware, async (req, res) => {
   try {
-    const { id } = req.user;
-
-    const found = await pool.query(
-      `SELECT id, email, name, role, created_at
-       FROM users
-       WHERE id = $1
-       LIMIT 1`,
-      [id]
-    );
-
-    const user = found.rows[0];
+    const user = req.authUser;
     if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
 
-    return res.json({ user });
+    const safeUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      admin_tier: user.role === "admin" ? user.admin_tier : null,
+      account_status: user.account_status || "active",
+      created_at: user.created_at,
+    };
+
+    return res.json({ user: safeUser });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
@@ -417,10 +589,9 @@ app.put("/auth/password", changePasswordLimiter, authMiddleware, async (req, res
       return res.status(400).json({ error: "password mínimo 5 caracteres" });
     }
 
-    const found = await pool.query(
-      `SELECT password_hash FROM users WHERE id = $1 LIMIT 1`,
-      [userId]
-    );
+    const found = await pool.query(`SELECT password_hash FROM users WHERE id = $1 LIMIT 1`, [
+      userId,
+    ]);
 
     const row = found.rows[0];
     if (!row) return res.status(404).json({ error: "Usuario no encontrado" });
@@ -437,10 +608,7 @@ app.put("/auth/password", changePasswordLimiter, authMiddleware, async (req, res
 
     const newHash = await bcrypt.hash(String(newPassword), 10);
 
-    await pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [
-      newHash,
-      userId,
-    ]);
+    await pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [newHash, userId]);
 
     return res.json({ ok: true });
   } catch (err) {
@@ -499,10 +667,7 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
     await client.query("BEGIN");
 
     if (nameFromBody) {
-      await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [
-        nameFromBody,
-        userId,
-      ]);
+      await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [nameFromBody, userId]);
     }
 
     const upsert = await client.query(
@@ -555,7 +720,7 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
     try {
       await client.query("ROLLBACK");
     } catch {
-      // ignore
+      void 0;
     }
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
@@ -584,9 +749,7 @@ app.post("/providers/leads", providerLeadsLimiter, async (req, res) => {
     }
 
     if (!isValidMXPhone(phone)) {
-      return res
-        .status(400)
-        .json({ error: "Teléfono inválido (10 dígitos, sin secuencias)" });
+      return res.status(400).json({ error: "Teléfono inválido (10 dígitos, sin secuencias)" });
     }
 
     const phoneDigits = normalizePhoneDigits(phone);
@@ -612,6 +775,8 @@ app.post("/providers/leads", providerLeadsLimiter, async (req, res) => {
 
 /**
  * Paso 2: crear cuenta proveedor + perfil
+ * IMPORTANTE:
+ * - Ahora nace en pending_review + hidden (no se publica hasta aprobación)
  */
 app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
   const client = await pool.connect();
@@ -650,8 +815,7 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     if (!companyName || !ownerName) {
       await client.query("ROLLBACK");
       return res.status(400).json({
-        error:
-          "Falta companyName/ownerName. Completa el registro inicial (lead) primero.",
+        error: "Falta companyName/ownerName. Completa el registro inicial (lead) primero.",
       });
     }
     if (phoneDigits && phoneDigits.length !== 10) {
@@ -660,10 +824,9 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     }
 
     // Evita duplicado en users
-    const exists = await client.query(
-      `SELECT id, role FROM users WHERE email = $1 LIMIT 1`,
-      [emailNorm]
-    );
+    const exists = await client.query(`SELECT id, role FROM users WHERE email = $1 LIMIT 1`, [
+      emailNorm,
+    ]);
     if (exists.rowCount > 0) {
       await client.query("ROLLBACK");
       return res.status(409).json({ error: "Ese email ya existe" });
@@ -748,20 +911,26 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
       );
     }
 
+    // Moderación: nace como "pending_review" + "hidden"
+    const reviewStatus = "pending_review";
+    const publicVisibility = "hidden";
+
     const profileIns = await client.query(
       `INSERT INTO provider_profiles (
         user_id, company_name, owner_name, phone,
         venue_name, venue_location, location_place_id, location_lat, location_lng,
         capacity_min, capacity_max, price_from, price_to,
         short_description, description, spaces, services, rules,
-        website, instagram, facebook, map_text, event_types, selling_points
+        website, instagram, facebook, map_text, event_types, selling_points,
+        review_status, public_visibility
       )
       VALUES (
         $1,$2,$3,$4,
         $5,$6,$7,$8,$9,
         $10,$11,$12,$13,
         $14,$15,$16,$17,$18,
-        $19,$20,$21,$22,$23,$24
+        $19,$20,$21,$22,$23,$24,
+        $25,$26
       )
       RETURNING *`,
       [
@@ -793,6 +962,9 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
         mapText,
         eventTypes,
         sellingPoints,
+
+        reviewStatus,
+        publicVisibility,
       ]
     );
 
@@ -809,7 +981,7 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     try {
       await client.query("ROLLBACK");
     } catch {
-      // ignore
+      void 0;
     }
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
@@ -831,16 +1003,35 @@ app.post("/providers/login", providerLoginLimiter, async (req, res) => {
       return res.status(400).json({ error: "email y password son obligatorios" });
     }
 
-    const found = await pool.query(
-      `SELECT id, email, password_hash, name, role, created_at
-       FROM users
-       WHERE email = $1
-       LIMIT 1`,
-      [emailNorm]
-    );
+    let found;
+    try {
+      found = await pool.query(
+        `SELECT id, email, password_hash, name, role, admin_tier, account_status, created_at
+         FROM users
+         WHERE email = $1
+         LIMIT 1`,
+        [emailNorm]
+      );
+    } catch (err) {
+      if (err?.code === "42703") {
+        found = await pool.query(
+          `SELECT id, email, password_hash, name, role, created_at
+           FROM users
+           WHERE email = $1
+           LIMIT 1`,
+          [emailNorm]
+        );
+      } else {
+        throw err;
+      }
+    }
 
     const user = found.rows[0];
     if (!user) return res.status(401).json({ error: "Credenciales inválidas" });
+
+    if (user.account_status && user.account_status !== "active") {
+      return res.status(403).json({ error: "Cuenta bloqueada" });
+    }
 
     if (user.role !== "provider" && user.role !== "admin") {
       return res.status(403).json({ error: "Acceso solo para proveedores" });
@@ -885,13 +1076,9 @@ app.get("/providers/me", providerAuthMiddleware, async (req, res) => {
     const provider = u.rows[0] || null;
     if (!provider) return res.status(404).json({ error: "Proveedor no encontrado" });
 
-    const p = await pool.query(
-      `SELECT *
-       FROM provider_profiles
-       WHERE user_id = $1
-       LIMIT 1`,
-      [userId]
-    );
+    const p = await pool.query(`SELECT * FROM provider_profiles WHERE user_id = $1 LIMIT 1`, [
+      userId,
+    ]);
 
     const profile = p.rows[0] || null;
 
@@ -971,7 +1158,7 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     await client.query("BEGIN");
 
     const currentRes = await client.query(
-      `SELECT event_types, selling_points
+      `SELECT event_types, selling_points, company_name, owner_name, phone
        FROM provider_profiles
        WHERE user_id = $1
        LIMIT 1`,
@@ -1001,16 +1188,6 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     if (ownerName) {
       await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [ownerName, userId]);
     }
-
-    // Traemos el perfil actual para rellenar company/owner/phone si no vienen
-    const baseRes = await client.query(
-      `SELECT company_name, owner_name, phone
-       FROM provider_profiles
-       WHERE user_id = $1
-       LIMIT 1`,
-      [userId]
-    );
-    const base = baseRes.rows[0] || {};
 
     const upsert = await client.query(
       `INSERT INTO provider_profiles (
@@ -1054,9 +1231,9 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
       RETURNING *`,
       [
         userId,
-        (companyName ?? base.company_name ?? "").trim(),
-        (ownerName ?? base.owner_name ?? "").trim(),
-        phoneDigits || base.phone || null,
+        (companyName ?? current?.company_name ?? "").trim(),
+        (ownerName ?? current?.owner_name ?? "").trim(),
+        phoneDigits || current?.phone || null,
 
         venueName,
         venueLocation,
@@ -1090,7 +1267,7 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     try {
       await client.query("ROLLBACK");
     } catch {
-      // ignore
+      void 0;
     }
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
@@ -1122,9 +1299,7 @@ app.post(
         [userId]
       );
       if (hasProfile.rowCount === 0) {
-        return res
-          .status(400)
-          .json({ error: "Primero guarda tu ficha antes de subir fotos." });
+        return res.status(400).json({ error: "Primero guarda tu ficha antes de subir fotos." });
       }
 
       const maxRes = await pool.query(
@@ -1203,6 +1378,7 @@ app.delete("/providers/photos/:photoId", providerAuthMiddleware, async (req, res
 /**
  * Vista pública por id (uuid)
  * GET /providers/:id
+ * Regla: solo mostrar si está approved + listed (a menos que sea admin)
  */
 app.get("/providers/:id", async (req, res) => {
   try {
@@ -1212,6 +1388,9 @@ app.get("/providers/:id", async (req, res) => {
       return res.status(400).json({ error: "ID inválido" });
     }
 
+    const admin = await tryGetAdminUserFromRequest(req);
+    const isAdmin = Boolean(admin);
+
     const found = await pool.query(
       `SELECT
         p.user_id,
@@ -1220,6 +1399,7 @@ app.get("/providers/:id", async (req, res) => {
         p.capacity_min, p.capacity_max, p.price_from, p.price_to,
         p.short_description, p.description, p.spaces, p.services, p.rules,
         p.website, p.instagram, p.facebook, p.map_text, p.event_types, p.selling_points,
+        p.review_status, p.public_visibility,
         p.created_at, p.updated_at
        FROM provider_profiles p
        WHERE p.user_id = $1
@@ -1229,6 +1409,15 @@ app.get("/providers/:id", async (req, res) => {
 
     const profile = found.rows[0] || null;
     if (!profile) return res.status(404).json({ error: "Proveedor no encontrado" });
+
+    // Si no es admin, solo approved + listed
+    if (!isAdmin) {
+      const rs = String(profile.review_status || "");
+      const pv = String(profile.public_visibility || "");
+      if (!(rs === "approved" && pv === "listed")) {
+        return res.status(404).json({ error: "Proveedor no encontrado" });
+      }
+    }
 
     const photos = await pool.query(
       `SELECT id, url, sort_order, created_at
@@ -1244,6 +1433,354 @@ app.get("/providers/:id", async (req, res) => {
     return res.status(500).json({ error: "Error interno" });
   }
 });
+
+// ===================== ADMIN API =====================
+
+/**
+ * GET /admin/users
+ * Query: role, status, q, limit, offset
+ */
+app.get(
+  "/admin/users",
+  adminAuthMiddleware,
+  requirePermission("admin:users:read"),
+  async (req, res) => {
+    try {
+      const role = toNullIfEmpty(req.query.role);
+      const status = toNullIfEmpty(req.query.status);
+      const q = toNullIfEmpty(req.query.q);
+
+      const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
+
+      const where = [];
+      const params = [];
+
+      if (role) {
+        params.push(role);
+        where.push(`role = $${params.length}`);
+      }
+      if (status) {
+        params.push(status);
+        where.push(`account_status = $${params.length}`);
+      }
+      if (q) {
+        params.push(`%${q}%`);
+        where.push(`(email ILIKE $${params.length} OR COALESCE(name,'') ILIKE $${params.length})`);
+      }
+
+      params.push(limit);
+      params.push(offset);
+
+      const sql = `
+        SELECT id, email, name, role, admin_tier, account_status, blocked_at, blocked_reason, created_at
+        FROM users
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY created_at DESC
+        LIMIT $${params.length - 1}
+        OFFSET $${params.length}
+      `;
+
+      const rows = await pool.query(sql, params);
+      return res.json({ users: rows.rows || [] });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+/**
+ * PATCH /admin/users/:id/block
+ * Body: { reason }
+ */
+app.patch(
+  "/admin/users/:id/block",
+  adminAuthMiddleware,
+  requirePermission("admin:users:block"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const reason = toNullIfEmpty(req.body?.reason) || "Bloqueado por administrador";
+
+      if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
+      if (id === req.authUser.id) return res.status(400).json({ error: "No puedes bloquearte a ti mismo" });
+
+      const beforeRes = await pool.query(
+        `SELECT id, email, role, admin_tier, account_status, blocked_at, blocked_reason
+         FROM users WHERE id = $1 LIMIT 1`,
+        [id]
+      );
+      const before = beforeRes.rows[0];
+      if (!before) return res.status(404).json({ error: "Usuario no encontrado" });
+
+      const updated = await pool.query(
+        `UPDATE users
+         SET account_status = 'blocked',
+             blocked_at = now(),
+             blocked_reason = $2
+         WHERE id = $1
+         RETURNING id, email, role, admin_tier, account_status, blocked_at, blocked_reason`,
+        [id, reason]
+      );
+
+      await writeAdminAuditLog(req, {
+        action: "users:block",
+        entityType: "user",
+        entityId: id,
+        beforeState: before,
+        afterState: updated.rows[0],
+      });
+
+      return res.json({ user: updated.rows[0] });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+/**
+ * PATCH /admin/users/:id/unblock
+ * Body: { reason }
+ */
+app.patch(
+  "/admin/users/:id/unblock",
+  adminAuthMiddleware,
+  requirePermission("admin:users:unblock"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const reason = toNullIfEmpty(req.body?.reason) || "Desbloqueado por administrador";
+
+      if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const beforeRes = await pool.query(
+        `SELECT id, email, role, admin_tier, account_status, blocked_at, blocked_reason
+         FROM users WHERE id = $1 LIMIT 1`,
+        [id]
+      );
+      const before = beforeRes.rows[0];
+      if (!before) return res.status(404).json({ error: "Usuario no encontrado" });
+
+      const updated = await pool.query(
+        `UPDATE users
+         SET account_status = 'active',
+             blocked_at = NULL,
+             blocked_reason = $2
+         WHERE id = $1
+         RETURNING id, email, role, admin_tier, account_status, blocked_at, blocked_reason`,
+        [id, reason]
+      );
+
+      await writeAdminAuditLog(req, {
+        action: "users:unblock",
+        entityType: "user",
+        entityId: id,
+        beforeState: before,
+        afterState: updated.rows[0],
+      });
+
+      return res.json({ user: updated.rows[0] });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+/**
+ * GET /admin/providers
+ * Query: review_status, visibility, q, limit, offset
+ */
+app.get(
+  "/admin/providers",
+  adminAuthMiddleware,
+  requirePermission("admin:providers:read"),
+  async (req, res) => {
+    try {
+      const reviewStatus = toNullIfEmpty(req.query.review_status);
+      const visibility = toNullIfEmpty(req.query.visibility);
+      const q = toNullIfEmpty(req.query.q);
+
+      const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
+
+      const where = ["u.role = 'provider'"];
+      const params = [];
+
+      if (reviewStatus) {
+        params.push(reviewStatus);
+        where.push(`p.review_status = $${params.length}`);
+      }
+      if (visibility) {
+        params.push(visibility);
+        where.push(`p.public_visibility = $${params.length}`);
+      }
+      if (q) {
+        params.push(`%${q}%`);
+        where.push(
+          `(u.email ILIKE $${params.length} OR COALESCE(p.company_name,'') ILIKE $${params.length} OR COALESCE(p.venue_name,'') ILIKE $${params.length})`
+        );
+      }
+
+      params.push(limit);
+      params.push(offset);
+
+      const sql = `
+        SELECT
+          u.id AS user_id,
+          u.email, u.name, u.created_at,
+          p.company_name, p.owner_name, p.phone,
+          p.venue_name, p.venue_location,
+          p.review_status, p.public_visibility,
+          p.reviewed_by, p.reviewed_at, p.review_notes,
+          p.updated_at
+        FROM users u
+        LEFT JOIN provider_profiles p ON p.user_id = u.id
+        WHERE ${where.join(" AND ")}
+        ORDER BY COALESCE(p.updated_at, u.created_at) DESC
+        LIMIT $${params.length - 1}
+        OFFSET $${params.length}
+      `;
+
+      const rows = await pool.query(sql, params);
+      return res.json({ providers: rows.rows || [] });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+/**
+ * PATCH /admin/providers/:id/status
+ * Body: { review_status, public_visibility, review_notes }
+ */
+app.patch(
+  "/admin/providers/:id/status",
+  adminAuthMiddleware,
+  requirePermission("admin:providers:review"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const review_status = toNullIfEmpty(req.body?.review_status);
+      const public_visibility = toNullIfEmpty(req.body?.public_visibility);
+      const review_notes = toNullIfEmpty(req.body?.review_notes);
+
+      const allowedReview = new Set([
+        "draft",
+        "pending_review",
+        "needs_changes",
+        "approved",
+        "rejected",
+        "suspended",
+        "archived",
+      ]);
+      const allowedVisibility = new Set(["hidden", "listed"]);
+
+      if (review_status && !allowedReview.has(review_status)) {
+        return res.status(400).json({ error: "review_status inválido" });
+      }
+      if (public_visibility && !allowedVisibility.has(public_visibility)) {
+        return res.status(400).json({ error: "public_visibility inválido" });
+      }
+
+      const beforeRes = await pool.query(
+        `SELECT user_id, review_status, public_visibility, reviewed_by, reviewed_at, review_notes
+         FROM provider_profiles
+         WHERE user_id = $1
+         LIMIT 1`,
+        [id]
+      );
+      const before = beforeRes.rows[0];
+      if (!before) return res.status(404).json({ error: "Proveedor no encontrado" });
+
+      const updatedRes = await pool.query(
+        `UPDATE provider_profiles
+         SET review_status = COALESCE($2, review_status),
+             public_visibility = COALESCE($3, public_visibility),
+             review_notes = COALESCE($4, review_notes),
+             reviewed_by = $1,
+             reviewed_at = now()
+         WHERE user_id = $5
+         RETURNING user_id, review_status, public_visibility, reviewed_by, reviewed_at, review_notes`,
+        [req.authUser.id, review_status, public_visibility, review_notes, id]
+      );
+
+      const after = updatedRes.rows[0];
+
+      await writeAdminAuditLog(req, {
+        action: "providers:status",
+        entityType: "provider",
+        entityId: id,
+        beforeState: before,
+        afterState: after,
+      });
+
+      return res.json({ moderation: after });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+/**
+ * GET /admin/audit (mínimo)
+ * Query: entity_type, entity_id, limit
+ */
+app.get(
+  "/admin/audit",
+  adminAuthMiddleware,
+  (req, res, next) => {
+    // solo super por ahora
+    if (req.authUser?.admin_tier !== "super") {
+      return res.status(403).json({ error: "No tienes permisos para ver auditoría" });
+    }
+    return next();
+  },
+  async (req, res) => {
+    try {
+      const entityType = toNullIfEmpty(req.query.entity_type);
+      const entityId = toNullIfEmpty(req.query.entity_id);
+      const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+
+      const where = [];
+      const params = [];
+
+      if (entityType) {
+        params.push(entityType);
+        where.push(`entity_type = $${params.length}`);
+      }
+      if (entityId) {
+        if (!isUuid(entityId)) return res.status(400).json({ error: "entity_id inválido" });
+        params.push(entityId);
+        where.push(`entity_id = $${params.length}`);
+      }
+
+      params.push(limit);
+
+      const rows = await pool.query(
+        `
+        SELECT id, admin_user_id, action, entity_type, entity_id, before_state, after_state, ip, user_agent, created_at
+        FROM admin_audit_logs
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY created_at DESC
+        LIMIT $${params.length}
+        `,
+        params
+      );
+
+      return res.json({ logs: rows.rows || [] });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
 
 // ===================== FINAL =====================
 
