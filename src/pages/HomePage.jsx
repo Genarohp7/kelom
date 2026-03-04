@@ -7,6 +7,10 @@ import tipsImage from "../assets/web/pages/home/home-tips.jpg.png";
 const SHOW_DEMO_SECTIONS = true; // hero/venues/featured siguen visibles
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
+// ✅ paginación
+const PAGE_SIZE = 10;
+const FETCH_SIZE = 11; // pedimos 11 pero mostramos 10 (para detectar "hay siguiente")
+
 const CATEGORY_OPTIONS = [
   "Jardín",
   "Hacienda",
@@ -76,11 +80,7 @@ function normalizeCategory(input) {
 }
 
 /**
- * ✅ Combobox moderno (reemplazo de <datalist>)
- * - Autocompleta con dropdown estilizable
- * - Permite escribir libre
- * - Soporta teclado: ↑ ↓ Enter Esc
- * - Cierra al click fuera
+ * ✅ Combobox moderno (sin setState-in-effect)
  */
 function SmartCombo({
   id,
@@ -102,16 +102,14 @@ function SmartCombo({
     return options.filter((opt) => stripDiacritics(opt).includes(needle));
   }, [value, options]);
 
-  // ✅ Derivado (NO setState en effects)
   const safeActiveIndex = useMemo(() => {
     if (!open) return -1;
     if (filtered.length === 0) return -1;
-    if (activeIndex < 0) return -1; // no hay selección "activa" hasta que uses teclado
-    if (activeIndex >= filtered.length) return filtered.length - 1; // clamp
+    if (activeIndex < 0) return -1;
+    if (activeIndex >= filtered.length) return filtered.length - 1;
     return activeIndex;
   }, [open, filtered.length, activeIndex]);
 
-  // Cerrar al click fuera
   useEffect(() => {
     if (!open) return;
 
@@ -247,18 +245,45 @@ function SmartCombo({
 }
 
 function HomePage() {
+  // ===== Home (sin búsqueda) =====
   const [providers, setProviders] = useState([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState("");
+  const [providersOffset, setProvidersOffset] = useState(0);
+  const [providersHasNext, setProvidersHasNext] = useState(false);
 
-  // búsqueda
+  // ===== Búsqueda =====
   const [searchWhat, setSearchWhat] = useState("");
   const [searchWhere, setSearchWhere] = useState("");
-  const [searchResults, setSearchResults] = useState(null); // null = no buscó, [] = resultados
+  const [activeSearch, setActiveSearch] = useState(null); // { category, where } | null
+
+  const [searchResults, setSearchResults] = useState(null); // null = no buscó
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [searchHasNext, setSearchHasNext] = useState(false);
 
-  // Solo trae publicados (approved + listed) porque el backend ya filtra
+  // ===== helper fetch =====
+  const fetchProvidersPage = async ({ category, where, offset }) => {
+    const qs = new URLSearchParams();
+    qs.set("limit", String(FETCH_SIZE));
+    qs.set("offset", String(offset || 0));
+    if (category) qs.set("category", category);
+    if (where) qs.set("where", where);
+
+    const res = await fetch(`${API_BASE}/providers?${qs.toString()}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+    const list = Array.isArray(data?.providers) ? data.providers : [];
+    const hasNext = list.length > PAGE_SIZE;
+    return {
+      list: list.slice(0, PAGE_SIZE),
+      hasNext,
+    };
+  };
+
+  // ===== Carga Home (paginado) =====
   useEffect(() => {
     let cancelled = false;
 
@@ -267,15 +292,22 @@ function HomePage() {
       setProvidersLoading(true);
 
       try {
-        const res = await fetch(`${API_BASE}/providers?limit=8`);
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+        const { list, hasNext } = await fetchProvidersPage({
+          category: "",
+          where: "",
+          offset: providersOffset,
+        });
 
-        const list = Array.isArray(data?.providers) ? data.providers : [];
-        if (!cancelled) setProviders(list);
+        if (!cancelled) {
+          setProviders(list);
+          setProvidersHasNext(hasNext);
+        }
       } catch (err) {
-        if (!cancelled)
+        if (!cancelled) {
           setProvidersError(String(err?.message || "No se pudo cargar proveedores."));
+          setProviders([]);
+          setProvidersHasNext(false);
+        }
       } finally {
         if (!cancelled) setProvidersLoading(false);
       }
@@ -285,7 +317,45 @@ function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [providersOffset]);
+
+  // ===== Carga búsqueda (paginado) =====
+  useEffect(() => {
+    if (!activeSearch) return;
+
+    let cancelled = false;
+
+    async function run() {
+      setSearchError("");
+      setSearchLoading(true);
+
+      try {
+        const { list, hasNext } = await fetchProvidersPage({
+          category: activeSearch.category,
+          where: activeSearch.where,
+          offset: searchOffset,
+        });
+
+        if (!cancelled) {
+          setSearchResults(list);
+          setSearchHasNext(hasNext);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSearchError(String(err?.message || "No se pudo realizar la búsqueda."));
+          setSearchResults([]);
+          setSearchHasNext(false);
+        }
+      } finally {
+        if (!cancelled) setSearchLoading(false);
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSearch, searchOffset]);
 
   const featuredCompanies = [
     {
@@ -331,9 +401,14 @@ function HomePage() {
     setSearchResults(null);
     setSearchError("");
     setSearchLoading(false);
+    setActiveSearch(null);
+    setSearchOffset(0);
+    setSearchHasNext(false);
+    // regresamos Home al inicio (UX más natural)
+    setProvidersOffset(0);
   };
 
-  const handleSearchSubmit = async (event) => {
+  const handleSearchSubmit = (event) => {
     event.preventDefault();
 
     const category = normalizeCategory(searchWhat);
@@ -345,46 +420,48 @@ function HomePage() {
       return;
     }
 
-    setSearchError("");
-    setSearchLoading(true);
-
-    try {
-      const qs = new URLSearchParams();
-      qs.set("limit", "48");
-      if (category) qs.set("category", category);
-      if (where) qs.set("where", where);
-
-      const res = await fetch(`${API_BASE}/providers?${qs.toString()}`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-
-      const list = Array.isArray(data?.providers) ? data.providers : [];
-      setSearchResults(list);
-    } catch (err) {
-      setSearchError(String(err?.message || "No se pudo realizar la búsqueda."));
-      setSearchResults([]);
-    } finally {
-      setSearchLoading(false);
-    }
+    setActiveSearch({ category, where });
+    setSearchOffset(0);
+    setSearchResults([]); // mientras carga, para que cambie a modo "resultados"
   };
 
   const listToShow = useMemo(() => {
-    if (searchResults !== null) return searchResults;
+    if (activeSearch) return searchResults || [];
     return providers;
-  }, [searchResults, providers]);
+  }, [activeSearch, searchResults, providers]);
 
-  const loadingToShow = searchResults !== null ? searchLoading : providersLoading;
-  const errorToShow = searchResults !== null ? searchError : providersError;
+  const loadingToShow = activeSearch ? searchLoading : providersLoading;
+  const errorToShow = activeSearch ? searchError : providersError;
 
   const activeFiltersText = useMemo(() => {
-    if (searchResults === null) return "";
+    if (!activeSearch) return "";
     const parts = [];
     if (String(searchWhat || "").trim())
       parts.push(`Categoría: ${normalizeCategory(searchWhat)}`);
     if (String(searchWhere || "").trim())
       parts.push(`Búsqueda: ${searchWhere.trim()}`);
     return parts.join(" · ");
-  }, [searchResults, searchWhat, searchWhere]);
+  }, [activeSearch, searchWhat, searchWhere]);
+
+  // ===== paginación UI =====
+  const pageNumber = activeSearch
+    ? Math.floor(searchOffset / PAGE_SIZE) + 1
+    : Math.floor(providersOffset / PAGE_SIZE) + 1;
+
+  const canPrev = activeSearch ? searchOffset > 0 : providersOffset > 0;
+  const canNext = activeSearch ? searchHasNext : providersHasNext;
+
+  const goPrev = () => {
+    if (!canPrev || loadingToShow) return;
+    if (activeSearch) setSearchOffset((o) => Math.max(o - PAGE_SIZE, 0));
+    else setProvidersOffset((o) => Math.max(o - PAGE_SIZE, 0));
+  };
+
+  const goNext = () => {
+    if (!canNext || loadingToShow) return;
+    if (activeSearch) setSearchOffset((o) => o + PAGE_SIZE);
+    else setProvidersOffset((o) => o + PAGE_SIZE);
+  };
 
   return (
     <div className="home">
@@ -395,12 +472,14 @@ function HomePage() {
             <div className="container hero__inner">
               <div className="hero__eyebrow">Planea tu boda con calma</div>
               <h1 className="hero__title">
-                Encuentra el <span className="hero__title-highlight">lugar perfecto</span>{" "}
+                Encuentra el{" "}
+                <span className="hero__title-highlight">lugar perfecto</span>{" "}
                 para decir “sí”.
               </h1>
               <p className="hero__subtitle">
-                Jardines, salones, haciendas, banquetes y más. Kelom te ayuda a descubrir opciones
-                pensadas para ti, sin perderte entre miles de resultados.
+                Jardines, salones, haciendas, banquetes y más. Kelom te ayuda a
+                descubrir opciones pensadas para ti, sin perderte entre miles de
+                resultados.
               </p>
 
               <div className="search-panel">
@@ -440,7 +519,7 @@ function HomePage() {
                       {searchLoading ? "Buscando..." : "Buscar"}
                     </button>
 
-                    {searchResults !== null && (
+                    {activeSearch && (
                       <button
                         type="button"
                         className="search-panel__button search-panel__button--clear"
@@ -454,8 +533,8 @@ function HomePage() {
                 </form>
 
                 <p className="search-panel__hint">
-                  Tip: puedes elegir de la lista o escribir libre. Nosotros intentamos entenderte
-                  antes de juzgarte. (Casi siempre.)
+                  Tip: puedes elegir de la lista o escribir libre. Nosotros
+                  intentamos entenderte antes de juzgarte. (Casi siempre.)
                 </p>
               </div>
             </div>
@@ -467,10 +546,10 @@ function HomePage() {
               <header className="venues__header">
                 <div>
                   <h2 className="venues__title">
-                    {searchResults !== null ? "Resultados de tu búsqueda" : "Lugares para realizar tu sueño"}
+                    {activeSearch ? "Resultados de tu búsqueda" : "Lugares para realizar tu sueño"}
                   </h2>
                   <p className="venues__subtitle">
-                    {searchResults !== null
+                    {activeSearch
                       ? activeFiltersText || "Aplicando filtros…"
                       : "Aquí solo aparecen proveedores aprobados y publicados por Kelom."}
                   </p>
@@ -481,49 +560,77 @@ function HomePage() {
 
               {loadingToShow ? (
                 <p style={{ marginTop: "0.8rem" }}>
-                  {searchResults !== null ? "Buscando proveedores…" : "Cargando proveedores…"}
+                  {activeSearch ? "Buscando proveedores…" : "Cargando proveedores…"}
                 </p>
               ) : listToShow.length === 0 ? (
                 <p style={{ marginTop: "0.8rem" }}>
-                  {searchResults !== null
+                  {activeSearch
                     ? "No encontramos proveedores con esos filtros. Prueba otra combinación."
                     : "Aún no hay proveedores publicados. Vuelve pronto."}
                 </p>
               ) : (
-                <div className="venues__grid">
-                  {listToShow.map((p) => {
-                    const id = p.user_id;
-                    const name = p.venue_name || p.company_name || "Proveedor";
-                    const location = p.venue_location || "Ubicación por definir";
-                    const category = p.business_category || p.businessCategory || p.category || "";
-                    const image =
-                      toAbsoluteApiUrl(p.main_photo_url) ||
-                      "https://images.pexels.com/photos/3951852/pexels-photo-3951852.jpeg?auto=compress&cs=tinysrgb&w=800";
+                <>
+                  <div className="venues__grid">
+                    {listToShow.map((p) => {
+                      const id = p.user_id;
+                      const name = p.venue_name || p.company_name || "Proveedor";
+                      const location = p.venue_location || "Ubicación por definir";
+                      const category =
+                        p.business_category || p.businessCategory || p.category || "";
+                      const image =
+                        toAbsoluteApiUrl(p.main_photo_url) ||
+                        "https://images.pexels.com/photos/3951852/pexels-photo-3951852.jpeg?auto=compress&cs=tinysrgb&w=800";
 
-                    return (
-                      <article key={id} className="venue-card">
-                        <div className="venue-card__image-wrap">
-                          <img className="venue-card__image" src={image} alt={name} />
-                        </div>
-
-                        <div className="venue-card__body">
-                          <h3 className="venue-card__name">{name}</h3>
-
-                          <div className="venue-card__rating">
-                            <span className="venue-card__rating-stars">★</span>{" "}
-                            {category ? category : "Publicado en Kelom"}
+                      return (
+                        <article key={id} className="venue-card">
+                          <div className="venue-card__image-wrap">
+                            <img className="venue-card__image" src={image} alt={name} />
                           </div>
 
-                          <div className="venue-card__location">{location}</div>
+                          <div className="venue-card__body">
+                            <h3 className="venue-card__name">{name}</h3>
 
-                          <Link to={`/proveedores/${id}`} className="venue-card__link">
-                            Ver más detalles
-                          </Link>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
+                            <div className="venue-card__rating">
+                              <span className="venue-card__rating-stars">★</span>{" "}
+                              {category ? category : "Publicado en Kelom"}
+                            </div>
+
+                            <div className="venue-card__location">{location}</div>
+
+                            <Link to={`/proveedores/${id}`} className="venue-card__link">
+                              Ver más detalles
+                            </Link>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+
+                  {/* ✅ Paginación: máximo 10 por vista */}
+                  {(canPrev || canNext) && (
+                    <div className="venues__pagination" aria-label="Paginación de proveedores">
+                      <button
+                        type="button"
+                        className="pager-btn"
+                        onClick={goPrev}
+                        disabled={!canPrev || loadingToShow}
+                      >
+                        ← Anterior
+                      </button>
+
+                      <div className="pager-pill">Página {pageNumber}</div>
+
+                      <button
+                        type="button"
+                        className="pager-btn pager-btn--primary"
+                        onClick={goNext}
+                        disabled={!canNext || loadingToShow}
+                      >
+                        Siguiente →
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </section>
@@ -533,13 +640,19 @@ function HomePage() {
             <div className="container">
               <header className="featured__header">
                 <h2 className="featured__title">Empresas destacadas</h2>
-                <p className="featured__subtitle">Proveedores clave para completar tu boda ideal.</p>
+                <p className="featured__subtitle">
+                  Proveedores clave para completar tu boda ideal.
+                </p>
               </header>
 
               <div className="featured__grid">
                 {featuredCompanies.map((company) => (
                   <article key={company.id} className="featured-card">
-                    <img src={company.image} alt={company.name} className="featured-card__image" />
+                    <img
+                      src={company.image}
+                      alt={company.name}
+                      className="featured-card__image"
+                    />
                     <div className="featured-card__name">{company.name}</div>
                     <div className="featured-card__category">{company.category}</div>
                   </article>
@@ -555,7 +668,9 @@ function HomePage() {
         <div className="container">
           <header className="tips__header">
             <h2 className="tips__title">Tips para tu boda</h2>
-            <p className="tips__subtitle">Consejos cortos para que disfrutes el proceso, no solo el gran día.</p>
+            <p className="tips__subtitle">
+              Consejos cortos para que disfrutes el proceso, no solo el gran día.
+            </p>
           </header>
 
           <div className="tips__content">
@@ -576,7 +691,11 @@ function HomePage() {
             </div>
 
             <div className="tips__image-wrap">
-              <img src={tipsImage} alt="Pareja organizando su boda con calma" className="tips__image" />
+              <img
+                src={tipsImage}
+                alt="Pareja organizando su boda con calma"
+                className="tips__image"
+              />
             </div>
           </div>
         </div>
