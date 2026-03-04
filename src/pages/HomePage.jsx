@@ -7,9 +7,9 @@ import tipsImage from "../assets/web/pages/home/home-tips.jpg.png";
 const SHOW_DEMO_SECTIONS = true; // hero/venues/featured siguen visibles
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
-// ✅ paginación
+// paginación
 const PAGE_SIZE = 10;
-const FETCH_SIZE = 11; // pedimos 11 pero mostramos 10 (para detectar "hay siguiente")
+const FETCH_SIZE = 11;
 
 const CATEGORY_OPTIONS = [
   "Jardín",
@@ -80,7 +80,7 @@ function normalizeCategory(input) {
 }
 
 /**
- * ✅ Combobox moderno (sin setState-in-effect)
+ * Combobox moderno (sin setState-in-effect)
  */
 function SmartCombo({
   id,
@@ -245,6 +245,8 @@ function SmartCombo({
 }
 
 function HomePage() {
+  const venuesRef = useRef(null);
+
   // ===== Home (sin búsqueda) =====
   const [providers, setProviders] = useState([]);
   const [providersLoading, setProvidersLoading] = useState(true);
@@ -257,13 +259,12 @@ function HomePage() {
   const [searchWhere, setSearchWhere] = useState("");
   const [activeSearch, setActiveSearch] = useState(null); // { category, where } | null
 
-  const [searchResults, setSearchResults] = useState(null); // null = no buscó
+  const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [searchOffset, setSearchOffset] = useState(0);
   const [searchHasNext, setSearchHasNext] = useState(false);
 
-  // ===== helper fetch =====
   const fetchProvidersPage = async ({ category, where, offset }) => {
     const qs = new URLSearchParams();
     qs.set("limit", String(FETCH_SIZE));
@@ -277,13 +278,11 @@ function HomePage() {
 
     const list = Array.isArray(data?.providers) ? data.providers : [];
     const hasNext = list.length > PAGE_SIZE;
-    return {
-      list: list.slice(0, PAGE_SIZE),
-      hasNext,
-    };
+
+    return { list: list.slice(0, PAGE_SIZE), hasNext };
   };
 
-  // ===== Carga Home (paginado) =====
+  // Carga Home paginado
   useEffect(() => {
     let cancelled = false;
 
@@ -319,7 +318,7 @@ function HomePage() {
     };
   }, [providersOffset]);
 
-  // ===== Carga búsqueda (paginado) =====
+  // Carga búsqueda paginada
   useEffect(() => {
     if (!activeSearch) return;
 
@@ -357,11 +356,13 @@ function HomePage() {
     };
   }, [activeSearch, searchOffset]);
 
+  // ✅ featured ahora incluye "filterCategory" (lo que manda a API)
   const featuredCompanies = [
     {
       id: 1,
       name: "Lugares",
       category: "Haciendas, jardines, salones",
+      filterCategory: null, // Lugares = default (por ahora)
       image:
         "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=400",
     },
@@ -369,6 +370,7 @@ function HomePage() {
       id: 2,
       name: "Banquetes",
       category: "Cocina tradicional y de autor",
+      filterCategory: "Banquetes",
       image:
         "https://images.pexels.com/photos/1128678/pexels-photo-1128678.jpeg?auto=compress&cs=tinysrgb&w=400",
     },
@@ -376,6 +378,7 @@ function HomePage() {
       id: 3,
       name: "Vestidos",
       category: "Atelier y tiendas especializadas",
+      filterCategory: "Vestidos",
       image:
         "https://images.pexels.com/photos/3137073/pexels-photo-3137073.jpeg?auto=compress&cs=tinysrgb&w=400",
     },
@@ -383,6 +386,7 @@ function HomePage() {
       id: 4,
       name: "Organizadoras",
       category: "Wedding planners",
+      filterCategory: "Organizador para Bodas", // ✅ categoría real en BD
       image:
         "https://images.pexels.com/photos/3951851/pexels-photo-3951851.jpeg?auto=compress&cs=tinysrgb&w=400",
     },
@@ -390,10 +394,17 @@ function HomePage() {
       id: 5,
       name: "Pasteles",
       category: "Repostería para bodas",
+      filterCategory: "Pasteles",
       image:
         "https://images.pexels.com/photos/140831/pexels-photo-140831.jpeg?auto=compress&cs=tinysrgb&w=400",
     },
   ];
+
+  const scrollToVenues = () => {
+    requestAnimationFrame(() => {
+      venuesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const clearSearch = () => {
     setSearchWhat("");
@@ -404,8 +415,8 @@ function HomePage() {
     setActiveSearch(null);
     setSearchOffset(0);
     setSearchHasNext(false);
-    // regresamos Home al inicio (UX más natural)
     setProvidersOffset(0);
+    scrollToVenues();
   };
 
   const handleSearchSubmit = (event) => {
@@ -414,7 +425,6 @@ function HomePage() {
     const category = normalizeCategory(searchWhat);
     const where = String(searchWhere || "").trim();
 
-    // si no hay filtros, regresamos al modo “home normal”
     if (!category && !where) {
       clearSearch();
       return;
@@ -422,7 +432,24 @@ function HomePage() {
 
     setActiveSearch({ category, where });
     setSearchOffset(0);
-    setSearchResults([]); // mientras carga, para que cambie a modo "resultados"
+    setSearchResults([]);
+    scrollToVenues();
+  };
+
+  // ✅ NUEVO: click en featured card => cambia SOLO la lista de proveedores
+  const handleFeaturedClick = (company) => {
+    if (!company?.filterCategory) {
+      // Lugares = estado default (por ahora)
+      clearSearch();
+      return;
+    }
+
+    setSearchWhat(company.filterCategory);
+    setSearchWhere("");
+    setActiveSearch({ category: company.filterCategory, where: "" });
+    setSearchOffset(0);
+    setSearchResults([]);
+    scrollToVenues();
   };
 
   const listToShow = useMemo(() => {
@@ -443,7 +470,6 @@ function HomePage() {
     return parts.join(" · ");
   }, [activeSearch, searchWhat, searchWhere]);
 
-  // ===== paginación UI =====
   const pageNumber = activeSearch
     ? Math.floor(searchOffset / PAGE_SIZE) + 1
     : Math.floor(providersOffset / PAGE_SIZE) + 1;
@@ -455,12 +481,14 @@ function HomePage() {
     if (!canPrev || loadingToShow) return;
     if (activeSearch) setSearchOffset((o) => Math.max(o - PAGE_SIZE, 0));
     else setProvidersOffset((o) => Math.max(o - PAGE_SIZE, 0));
+    scrollToVenues();
   };
 
   const goNext = () => {
     if (!canNext || loadingToShow) return;
     if (activeSearch) setSearchOffset((o) => o + PAGE_SIZE);
     else setProvidersOffset((o) => o + PAGE_SIZE);
+    scrollToVenues();
   };
 
   return (
@@ -540,8 +568,8 @@ function HomePage() {
             </div>
           </section>
 
-          {/* LUGARES / VENUES (REAL DESDE BACKEND) */}
-          <section className="venues">
+          {/* LUGARES / VENUES */}
+          <section className="venues" ref={venuesRef}>
             <div className="container">
               <header className="venues__header">
                 <div>
@@ -606,7 +634,6 @@ function HomePage() {
                     })}
                   </div>
 
-                  {/* ✅ Paginación: máximo 10 por vista */}
                   {(canPrev || canNext) && (
                     <div className="venues__pagination" aria-label="Paginación de proveedores">
                       <button
@@ -647,7 +674,14 @@ function HomePage() {
 
               <div className="featured__grid">
                 {featuredCompanies.map((company) => (
-                  <article key={company.id} className="featured-card">
+                  <button
+                    key={company.id}
+                    type="button"
+                    className="featured-card featured-card--button"
+                    onClick={() => handleFeaturedClick(company)}
+                    title={`Ver proveedores: ${company.name}`}
+                    aria-label={`Filtrar proveedores por ${company.name}`}
+                  >
                     <img
                       src={company.image}
                       alt={company.name}
@@ -655,7 +689,7 @@ function HomePage() {
                     />
                     <div className="featured-card__name">{company.name}</div>
                     <div className="featured-card__category">{company.category}</div>
-                  </article>
+                  </button>
                 ))}
               </div>
             </div>
