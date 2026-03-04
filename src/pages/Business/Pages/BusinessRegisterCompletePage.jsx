@@ -20,14 +20,14 @@ const BUSINESS_CATEGORY_OPTIONS = [
   "Jardín",
   "Hacienda",
   "Salón",
-  "Catering",
+  "Banquetes", // antes "Catering"
   "Organizador para Bodas",
+  "Vestidos",  // ✅ nuevo
   "Pasteles",
   "DJ",
   "Florería",
   "Fotógrafo",
 ];
-
 // ✅ NUEVO: Alcaldías CDMX + Municipios EdoMex (campo obligatorio)
 const LOCALITY_AREA_OPTIONS = [
   // CDMX
