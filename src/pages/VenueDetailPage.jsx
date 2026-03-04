@@ -65,8 +65,35 @@ const venuesDetail = [
     mapText: "Zona sur de CDMX, a 10 minutos del centro de Tlalpan.",
     opinions: [],
     category: "Jardín",
+    mapEmbedUrl: "https://www.google.com/maps?output=embed&q=Tlalpan%2C%20CDMX",
   },
 ];
+
+function toNumberOrNull(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function buildGoogleMapsEmbedUrl({ lat, lng, address }) {
+  const base = "https://www.google.com/maps";
+
+  const latN = toNumberOrNull(lat);
+  const lngN = toNumberOrNull(lng);
+
+  // ✅ Preferimos coords si existen (más preciso)
+  if (latN !== null && lngN !== null) {
+    return `${base}?output=embed&q=${encodeURIComponent(`${latN},${lngN}`)}&z=15`;
+  }
+
+  // ✅ Fallback a texto (dirección)
+  const addr = String(address || "").trim();
+  if (addr) {
+    return `${base}?output=embed&q=${encodeURIComponent(addr)}`;
+  }
+
+  return "";
+}
 
 function mapApiProviderToVenue(profile, photos = []) {
   const photoUrls = Array.isArray(photos)
@@ -111,11 +138,22 @@ function mapApiProviderToVenue(profile, photos = []) {
   const category =
     profile?.business_category || profile?.businessCategory || profile?.category || "";
 
+  const venueLocation =
+    profile?.venue_location || profile?.venueLocation || "Ubicación por definir";
+
+  const locationLat = profile?.location_lat ?? profile?.locationLat ?? null;
+  const locationLng = profile?.location_lng ?? profile?.locationLng ?? null;
+
+  const mapEmbedUrl = buildGoogleMapsEmbedUrl({
+    lat: locationLat,
+    lng: locationLng,
+    address: venueLocation,
+  });
+
   return {
     id: profile?.user_id || "mi-perfil",
     name: profile?.venue_name || profile?.venueName || "Mi proveedor",
-    location:
-      profile?.venue_location || profile?.venueLocation || "Ubicación por definir",
+    location: venueLocation,
     rating: 0,
     reviews: 0,
     ranking: "",
@@ -137,6 +175,7 @@ function mapApiProviderToVenue(profile, photos = []) {
       profile?.mapText ||
       "Ubicación por definir. (Google Maps ya está listo para usarse aquí).",
     opinions: [],
+    mapEmbedUrl,
   };
 }
 
@@ -197,6 +236,8 @@ function VenueDetailPage() {
                 capacityMax: draft.capacityMax,
                 priceFrom: draft.priceFrom,
                 priceTo: draft.priceTo,
+                locationLat: draft.locationLat,
+                locationLng: draft.locationLng,
               },
               []
             );
@@ -217,7 +258,6 @@ function VenueDetailPage() {
           const msg = String(err?.message || "No se pudo cargar el perfil.");
           if (msg.toLowerCase().includes("token")) {
             clearProviderSession();
-            // ✅ ruta real de login
             navigate("/empresas/acceso", {
               replace: true,
               state: { from: location.pathname + location.search },
@@ -265,7 +305,6 @@ function VenueDetailPage() {
   const handleGoEdit = () => {
     const token = getProviderToken();
     if (!token) {
-      // ✅ ruta real de login
       navigate("/empresas/acceso", {
         state: { from: "/empresas/registro/completar" },
       });
@@ -276,7 +315,6 @@ function VenueDetailPage() {
 
   const handleLogout = () => {
     clearProviderSession();
-    // ✅ regresamos al BusinessAreaPage
     navigate("/empresas", { replace: true });
   };
 
@@ -471,12 +509,19 @@ function VenueDetailPage() {
           </div>
 
           <div className="venue-map__frame">
-            <iframe
-              className="venue-map__iframe"
-              title={`Mapa de ${venue.name}`}
-              loading="lazy"
-              src="about:blank"
-            />
+            {venue.mapEmbedUrl ? (
+              <iframe
+                className="venue-map__iframe"
+                title={`Mapa de ${venue.name}`}
+                loading="lazy"
+                src={venue.mapEmbedUrl}
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            ) : (
+              <div className="venue-map__placeholder">
+                No hay coordenadas/dirección suficiente para mostrar el mapa.
+              </div>
+            )}
           </div>
         </div>
       </section>
