@@ -108,12 +108,31 @@
   padding: 0.65rem 1rem;
   font-size: 0.95rem;
   outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.search-panel__input:focus {
+  border-color: rgba(232, 154, 169, 0.8);
+  box-shadow: 0 0 0 4px rgba(232, 154, 169, 0.18);
 }
 
 .search-panel__input::placeholder {
   color: #bbb;
 }
 
+/* ✅ Acciones en una sola columna (Buscar + Limpiar) */
+.search-panel__actions {
+  display: flex;
+  gap: 0.8rem;
+  align-items: stretch;
+}
+
+.search-panel__actions .search-panel__button {
+  flex: 1;
+}
+
+/* Botones */
 .search-panel__button {
   border-radius: 999px;
   border: none;
@@ -124,16 +143,111 @@
   font-size: 0.95rem;
   cursor: pointer;
   box-shadow: 0 10px 25px rgba(232, 154, 169, 0.4);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease,
-    background-color 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
 .search-panel__button:hover {
   background: var(--color-primary-dark);
   transform: translateY(-1px);
   box-shadow: 0 14px 30px rgba(232, 154, 169, 0.5);
+}
+
+.search-panel__button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ✅ Botón secundario */
+.search-panel__button--clear {
+  background: transparent;
+  border: 1px solid rgba(20, 20, 20, 0.25);
+  color: #141414;
+  box-shadow: none;
+}
+
+.search-panel__button--clear:hover {
+  background: rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+
+/* ✅ Combobox moderno (reemplazo de datalist) */
+.combo {
+  position: relative;
+}
+
+.combo__control {
+  position: relative;
+}
+
+.combo__input {
+  padding-right: 3rem; /* espacio para el toggle */
+}
+
+.combo__toggle {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: rgba(0, 0, 0, 0.03);
+  color: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  line-height: 1;
+  font-size: 0.95rem;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.combo__toggle:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.combo__popover {
+  position: absolute;
+  z-index: 30;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.55rem);
+  background: #ffffff;
+  border: 1px solid rgba(232, 154, 169, 0.18);
+  border-radius: 18px;
+  padding: 0.45rem;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.08);
+  max-height: 320px;
+  overflow: auto;
+}
+
+.combo__option {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: #141414;
+  font-family: inherit;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.combo__option:hover {
+  background: rgba(232, 154, 169, 0.12);
+}
+
+.combo__option--active {
+  background: rgba(232, 154, 169, 0.18);
+}
+
+.combo__empty {
+  padding: 0.85rem 0.95rem;
+  color: var(--color-text-soft);
+  font-size: 0.9rem;
 }
 
 .search-panel__hint {
@@ -446,6 +560,10 @@
   .search-panel__button {
     width: 100%;
     justify-self: center;
+  }
+
+  .search-panel__actions {
+    flex-direction: column;
   }
 
   .tips__list {

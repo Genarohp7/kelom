@@ -1,7 +1,7 @@
 // src/pages/HomePage.jsx
 import "../../src/styles/HomePage.css";
 import { Link } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import tipsImage from "../assets/web/pages/home/home-tips.jpg.png";
 
 const SHOW_DEMO_SECTIONS = true; // hero/venues/featured siguen visibles
@@ -75,6 +75,177 @@ function normalizeCategory(input) {
   return found || raw;
 }
 
+/**
+ * ✅ Combobox moderno (reemplazo de <datalist>)
+ * - Autocompleta con dropdown estilizable
+ * - Permite escribir libre
+ * - Soporta teclado: ↑ ↓ Enter Esc
+ * - Cierra al click fuera
+ */
+function SmartCombo({
+  id,
+  placeholder,
+  value,
+  onChange,
+  options = [],
+  emptyText = "Sin coincidencias",
+}) {
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+
+  const filtered = useMemo(() => {
+    const needle = stripDiacritics(value);
+    if (!needle) return options;
+    return options.filter((opt) => stripDiacritics(opt).includes(needle));
+  }, [value, options]);
+
+  // ✅ Derivado (NO setState en effects)
+  const safeActiveIndex = useMemo(() => {
+    if (!open) return -1;
+    if (filtered.length === 0) return -1;
+    if (activeIndex < 0) return -1; // no hay selección "activa" hasta que uses teclado
+    if (activeIndex >= filtered.length) return filtered.length - 1; // clamp
+    return activeIndex;
+  }, [open, filtered.length, activeIndex]);
+
+  // Cerrar al click fuera
+  useEffect(() => {
+    if (!open) return;
+
+    const onDocDown = (e) => {
+      const root = rootRef.current;
+      if (!root) return;
+      if (!root.contains(e.target)) setOpen(false);
+    };
+
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
+  }, [open]);
+
+  const pick = (opt) => {
+    onChange(opt);
+    setOpen(false);
+    setActiveIndex(-1);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") {
+      setOpen(false);
+      setActiveIndex(-1);
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!open) setOpen(true);
+      if (filtered.length === 0) return;
+
+      setActiveIndex((prev) => {
+        const normalized = prev < 0 || prev >= filtered.length ? -1 : prev;
+        const next = normalized < 0 ? 0 : (normalized + 1) % filtered.length;
+        return next;
+      });
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!open) setOpen(true);
+      if (filtered.length === 0) return;
+
+      setActiveIndex((prev) => {
+        const normalized = prev < 0 || prev >= filtered.length ? -1 : prev;
+        if (normalized < 0) return filtered.length - 1;
+        const next = normalized - 1;
+        return next < 0 ? filtered.length - 1 : next;
+      });
+      return;
+    }
+
+    if (e.key === "Enter") {
+      if (open && safeActiveIndex >= 0 && filtered[safeActiveIndex]) {
+        e.preventDefault();
+        pick(filtered[safeActiveIndex]);
+      }
+    }
+  };
+
+  const listboxId = `${id}-listbox`;
+
+  return (
+    <div className="combo" ref={rootRef}>
+      <div className="combo__control">
+        <input
+          ref={inputRef}
+          id={id}
+          type="text"
+          className="search-panel__input combo__input"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setOpen(true);
+            setActiveIndex(-1);
+          }}
+          onFocus={() => setOpen(true)}
+          onKeyDown={onKeyDown}
+          autoComplete="off"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-activedescendant={
+            open && safeActiveIndex >= 0 ? `${id}-opt-${safeActiveIndex}` : undefined
+          }
+        />
+
+        <button
+          type="button"
+          className="combo__toggle"
+          aria-label={open ? "Cerrar opciones" : "Mostrar opciones"}
+          onClick={() => {
+            setOpen((v) => !v);
+            if (!open) inputRef.current?.focus();
+          }}
+        >
+          ▾
+        </button>
+      </div>
+
+      {open && (
+        <div className="combo__popover" role="listbox" id={listboxId}>
+          {filtered.length === 0 ? (
+            <div className="combo__empty">{emptyText}</div>
+          ) : (
+            filtered.map((opt, idx) => (
+              <button
+                key={`${opt}-${idx}`}
+                id={`${id}-opt-${idx}`}
+                type="button"
+                role="option"
+                aria-selected={idx === safeActiveIndex}
+                className={
+                  idx === safeActiveIndex
+                    ? "combo__option combo__option--active"
+                    : "combo__option"
+                }
+                onMouseDown={(ev) => ev.preventDefault()}
+                onClick={() => pick(opt)}
+              >
+                {opt}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HomePage() {
   const [providers, setProviders] = useState([]);
   const [providersLoading, setProvidersLoading] = useState(true);
@@ -104,9 +275,7 @@ function HomePage() {
         if (!cancelled) setProviders(list);
       } catch (err) {
         if (!cancelled)
-          setProvidersError(
-            String(err?.message || "No se pudo cargar proveedores."),
-          );
+          setProvidersError(String(err?.message || "No se pudo cargar proveedores."));
       } finally {
         if (!cancelled) setProvidersLoading(false);
       }
@@ -192,9 +361,7 @@ function HomePage() {
       const list = Array.isArray(data?.providers) ? data.providers : [];
       setSearchResults(list);
     } catch (err) {
-      setSearchError(
-        String(err?.message || "No se pudo realizar la búsqueda."),
-      );
+      setSearchError(String(err?.message || "No se pudo realizar la búsqueda."));
       setSearchResults([]);
     } finally {
       setSearchLoading(false);
@@ -206,8 +373,7 @@ function HomePage() {
     return providers;
   }, [searchResults, providers]);
 
-  const loadingToShow =
-    searchResults !== null ? searchLoading : providersLoading;
+  const loadingToShow = searchResults !== null ? searchLoading : providersLoading;
   const errorToShow = searchResults !== null ? searchError : providersError;
 
   const activeFiltersText = useMemo(() => {
@@ -229,92 +395,67 @@ function HomePage() {
             <div className="container hero__inner">
               <div className="hero__eyebrow">Planea tu boda con calma</div>
               <h1 className="hero__title">
-                Encuentra el{" "}
-                <span className="hero__title-highlight">lugar perfecto</span>{" "}
+                Encuentra el <span className="hero__title-highlight">lugar perfecto</span>{" "}
                 para decir “sí”.
               </h1>
               <p className="hero__subtitle">
-                Jardines, salones, haciendas, banquetes y más. Kelom te ayuda a
-                descubrir opciones pensadas para ti, sin perderte entre miles de
-                resultados.
+                Jardines, salones, haciendas, banquetes y más. Kelom te ayuda a descubrir opciones
+                pensadas para ti, sin perderte entre miles de resultados.
               </p>
 
               <div className="search-panel">
-                <form
-                  className="search-panel__form"
-                  onSubmit={handleSearchSubmit}
-                >
+                <form className="search-panel__form" onSubmit={handleSearchSubmit}>
                   <div className="search-panel__field">
-                    <label
-                      className="search-panel__label"
-                      htmlFor="search-what"
-                    >
+                    <label className="search-panel__label" htmlFor="search-what">
                       ¿Qué buscas?
                     </label>
-                    <input
+
+                    <SmartCombo
                       id="search-what"
-                      type="text"
-                      list="kelom-category-options"
-                      className="search-panel__input"
-                      placeholder="Jardín, salón, catering, DJ..."
+                      placeholder="Jardín, salón, banquetes, DJ..."
                       value={searchWhat}
-                      onChange={(e) => setSearchWhat(e.target.value)}
-                      autoComplete="off"
+                      onChange={setSearchWhat}
+                      options={CATEGORY_OPTIONS}
+                      emptyText="No tenemos esa categoría (aún). Puedes escribirla igual."
                     />
-                    <datalist id="kelom-category-options">
-                      {CATEGORY_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt} />
-                      ))}
-                    </datalist>
                   </div>
 
                   <div className="search-panel__field">
-                    <label
-                      className="search-panel__label"
-                      htmlFor="search-where"
-                    >
+                    <label className="search-panel__label" htmlFor="search-where">
                       ¿Qué localidad o proveedor?
                     </label>
-                    <input
+
+                    <SmartCombo
                       id="search-where"
-                      type="text"
-                      list="kelom-locality-options"
-                      className="search-panel__input"
                       placeholder="Tlalpan, Naucalpan… o escribe el nombre"
                       value={searchWhere}
-                      onChange={(e) => setSearchWhere(e.target.value)}
-                      autoComplete="off"
+                      onChange={setSearchWhere}
+                      options={LOCALITY_OPTIONS}
+                      emptyText="Sin coincidencias. Puedes escribir el nombre del proveedor."
                     />
-                    <datalist id="kelom-locality-options">
-                      {LOCALITY_OPTIONS.map((opt) => (
-                        <option key={opt} value={opt} />
-                      ))}
-                    </datalist>
                   </div>
 
-                  <button
-                    className="search-panel__button"
-                    type="submit"
-                    disabled={searchLoading}
-                  >
-                    {searchLoading ? "Buscando..." : "Buscar"}
-                  </button>
-
-                  {searchResults !== null && (
-                    <button
-                      type="button"
-                      className="search-panel__button search-panel__button--clear"
-                      onClick={clearSearch}
-                      disabled={searchLoading}
-                    >
-                      Limpiar
+                  <div className="search-panel__actions">
+                    <button className="search-panel__button" type="submit" disabled={searchLoading}>
+                      {searchLoading ? "Buscando..." : "Buscar"}
                     </button>
-                  )}
+
+                    {searchResults !== null && (
+                      <button
+                        type="button"
+                        className="search-panel__button search-panel__button--clear"
+                        onClick={clearSearch}
+                        disabled={searchLoading}
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
                 </form>
 
                 <p className="search-panel__hint">
-                  Tip: puedes elegir de la lista o escribir libre. Nosotros
-                  intentamos entenderte antes de juzgarte. (Casi siempre.)
+                  Tip: puedes elegir de la lista o escribir libre. Nosotros intentamos entenderte
+                  antes de juzgarte. (Casi siempre.)
                 </p>
               </div>
             </div>
@@ -326,9 +467,7 @@ function HomePage() {
               <header className="venues__header">
                 <div>
                   <h2 className="venues__title">
-                    {searchResults !== null
-                      ? "Resultados de tu búsqueda"
-                      : "Lugares para realizar tu sueño"}
+                    {searchResults !== null ? "Resultados de tu búsqueda" : "Lugares para realizar tu sueño"}
                   </h2>
                   <p className="venues__subtitle">
                     {searchResults !== null
@@ -338,15 +477,11 @@ function HomePage() {
                 </div>
               </header>
 
-              {errorToShow && (
-                <p style={{ marginTop: "0.8rem" }}>{errorToShow}</p>
-              )}
+              {errorToShow && <p style={{ marginTop: "0.8rem" }}>{errorToShow}</p>}
 
               {loadingToShow ? (
                 <p style={{ marginTop: "0.8rem" }}>
-                  {searchResults !== null
-                    ? "Buscando proveedores…"
-                    : "Cargando proveedores…"}
+                  {searchResults !== null ? "Buscando proveedores…" : "Cargando proveedores…"}
                 </p>
               ) : listToShow.length === 0 ? (
                 <p style={{ marginTop: "0.8rem" }}>
@@ -359,13 +494,8 @@ function HomePage() {
                   {listToShow.map((p) => {
                     const id = p.user_id;
                     const name = p.venue_name || p.company_name || "Proveedor";
-                    const location =
-                      p.venue_location || "Ubicación por definir";
-                    const category =
-                      p.business_category ||
-                      p.businessCategory ||
-                      p.category ||
-                      "";
+                    const location = p.venue_location || "Ubicación por definir";
+                    const category = p.business_category || p.businessCategory || p.category || "";
                     const image =
                       toAbsoluteApiUrl(p.main_photo_url) ||
                       "https://images.pexels.com/photos/3951852/pexels-photo-3951852.jpeg?auto=compress&cs=tinysrgb&w=800";
@@ -373,11 +503,7 @@ function HomePage() {
                     return (
                       <article key={id} className="venue-card">
                         <div className="venue-card__image-wrap">
-                          <img
-                            className="venue-card__image"
-                            src={image}
-                            alt={name}
-                          />
+                          <img className="venue-card__image" src={image} alt={name} />
                         </div>
 
                         <div className="venue-card__body">
@@ -390,10 +516,7 @@ function HomePage() {
 
                           <div className="venue-card__location">{location}</div>
 
-                          <Link
-                            to={`/proveedores/${id}`}
-                            className="venue-card__link"
-                          >
+                          <Link to={`/proveedores/${id}`} className="venue-card__link">
                             Ver más detalles
                           </Link>
                         </div>
@@ -405,28 +528,20 @@ function HomePage() {
             </div>
           </section>
 
-          {/* EMPRESAS DESTACADAS (lo dejas igual por ahora) */}
+          {/* EMPRESAS DESTACADAS */}
           <section className="featured">
             <div className="container">
               <header className="featured__header">
                 <h2 className="featured__title">Empresas destacadas</h2>
-                <p className="featured__subtitle">
-                  Proveedores clave para completar tu boda ideal.
-                </p>
+                <p className="featured__subtitle">Proveedores clave para completar tu boda ideal.</p>
               </header>
 
               <div className="featured__grid">
                 {featuredCompanies.map((company) => (
                   <article key={company.id} className="featured-card">
-                    <img
-                      src={company.image}
-                      alt={company.name}
-                      className="featured-card__image"
-                    />
+                    <img src={company.image} alt={company.name} className="featured-card__image" />
                     <div className="featured-card__name">{company.name}</div>
-                    <div className="featured-card__category">
-                      {company.category}
-                    </div>
+                    <div className="featured-card__category">{company.category}</div>
                   </article>
                 ))}
               </div>
@@ -440,10 +555,7 @@ function HomePage() {
         <div className="container">
           <header className="tips__header">
             <h2 className="tips__title">Tips para tu boda</h2>
-            <p className="tips__subtitle">
-              Consejos cortos para que disfrutes el proceso, no solo el gran
-              día.
-            </p>
+            <p className="tips__subtitle">Consejos cortos para que disfrutes el proceso, no solo el gran día.</p>
           </header>
 
           <div className="tips__content">
@@ -451,28 +563,20 @@ function HomePage() {
               <article className="tips-card">
                 <h3 className="tips-card__title">Empieza por el presupuesto</h3>
                 <p className="tips-card__text">
-                  Definir un rango claro desde el inicio te ayudará a elegir
-                  opciones realistas sin renunciar al estilo que quieres.
+                  Definir un rango claro desde el inicio te ayudará a elegir opciones realistas sin renunciar al estilo que quieres.
                 </p>
               </article>
 
               <article className="tips-card">
-                <h3 className="tips-card__title">
-                  Haz una lista de prioridades
-                </h3>
+                <h3 className="tips-card__title">Haz una lista de prioridades</h3>
                 <p className="tips-card__text">
-                  ¿Es más importante el lugar, la comida o la música? Ponerlo en
-                  papel facilita las decisiones cuando tengas que elegir.
+                  ¿Es más importante el lugar, la comida o la música? Ponerlo en papel facilita las decisiones cuando tengas que elegir.
                 </p>
               </article>
             </div>
 
             <div className="tips__image-wrap">
-              <img
-                src={tipsImage}
-                alt="Pareja organizando su boda con calma"
-                className="tips__image"
-              />
+              <img src={tipsImage} alt="Pareja organizando su boda con calma" className="tips__image" />
             </div>
           </div>
         </div>
