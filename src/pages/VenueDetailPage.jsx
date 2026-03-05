@@ -2,7 +2,10 @@
 import "../../Blocks/venues/VenueDetailPage.css";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
-import { clearProviderSession, getProviderToken } from "../services/providerAuth";
+import {
+  clearProviderSession,
+  getProviderToken,
+} from "../services/providerAuth";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
@@ -17,7 +20,7 @@ function safeParse(json) {
 
 function isUuid(v) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    String(v || "")
+    String(v || ""),
   );
 }
 
@@ -124,20 +127,25 @@ function mapApiProviderToVenue(profile, photos = []) {
   const eventTypes = Array.isArray(profile?.event_types)
     ? profile.event_types
     : Array.isArray(profile?.eventTypes)
-    ? profile.eventTypes
-    : [];
+      ? profile.eventTypes
+      : [];
 
   const sellingPoints = Array.isArray(profile?.selling_points)
     ? profile.selling_points
     : Array.isArray(profile?.sellingPoints)
-    ? profile.sellingPoints
-    : [];
+      ? profile.sellingPoints
+      : [];
 
   const category =
-    profile?.business_category || profile?.businessCategory || profile?.category || "";
+    profile?.business_category ||
+    profile?.businessCategory ||
+    profile?.category ||
+    "";
 
   const venueLocation =
-    profile?.venue_location || profile?.venueLocation || "Ubicación por definir";
+    profile?.venue_location ||
+    profile?.venueLocation ||
+    "Ubicación por definir";
 
   const locationLat = profile?.location_lat ?? profile?.locationLat ?? null;
   const locationLng = profile?.location_lng ?? profile?.locationLng ?? null;
@@ -237,7 +245,7 @@ function VenueDetailPage() {
                 locationLat: draft.locationLat,
                 locationLng: draft.locationLng,
               },
-              []
+              [],
             );
             setApiVenue(venue);
           }
@@ -250,7 +258,10 @@ function VenueDetailPage() {
           const data = await fetchJson(`${API_BASE}/providers/me`, { token });
           if (cancelled) return;
 
-          const venue = mapApiProviderToVenue(data?.profile, data?.photos || []);
+          const venue = mapApiProviderToVenue(
+            data?.profile,
+            data?.photos || [],
+          );
           setApiVenue(venue);
         } catch (err) {
           const msg = String(err?.message || "No se pudo cargar el perfil.");
@@ -276,11 +287,16 @@ function VenueDetailPage() {
           const data = await fetchJson(`${API_BASE}/providers/${id}`);
           if (cancelled) return;
 
-          const venue = mapApiProviderToVenue(data?.profile, data?.photos || []);
+          const venue = mapApiProviderToVenue(
+            data?.profile,
+            data?.photos || [],
+          );
           setApiVenue(venue);
         } catch (err) {
           if (!cancelled)
-            setApiError(String(err?.message || "No se pudo cargar el proveedor."));
+            setApiError(
+              String(err?.message || "No se pudo cargar el proveedor."),
+            );
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -296,7 +312,9 @@ function VenueDetailPage() {
 
   const venue = useMemo(() => {
     if (apiVenue) return apiVenue;
-    const foundDemo = venuesDetail.find((item) => String(item.id) === String(id));
+    const foundDemo = venuesDetail.find(
+      (item) => String(item.id) === String(id),
+    );
     return foundDemo || null;
   }, [apiVenue, id]);
 
@@ -351,7 +369,10 @@ function VenueDetailPage() {
         <section className="venue-not-found">
           <div className="container">
             <h1>Proveedor no encontrado</h1>
-            <p>Es posible que el enlace sea incorrecto o que el proveedor no exista.</p>
+            <p>
+              Es posible que el enlace sea incorrecto o que el proveedor no
+              exista.
+            </p>
             <Link to="/" className="venue-not-found__back-link">
               ← Volver a la lista de lugares
             </Link>
@@ -366,8 +387,14 @@ function VenueDetailPage() {
       <section className="venue-hero">
         <div className="container venue-hero__grid">
           <div className="venue-hero__info">
-            <Link to={isProviderView ? "/empresas" : "/"} className="venue-hero__back-link">
-              ← {isProviderView ? "Volver al área de empresas" : "Volver a la lista de lugares"}
+            <Link
+              to={isProviderView ? "/empresas" : "/"}
+              className="venue-hero__back-link"
+            >
+              ←{" "}
+              {isProviderView
+                ? "Volver al área de empresas"
+                : "Volver a la lista de lugares"}
             </Link>
 
             <span className="venue-hero__pill">
@@ -413,6 +440,7 @@ function VenueDetailPage() {
                     className="btn btn--ghost"
                     title="Solicitudes de información"
                     aria-label="Solicitudes de información"
+                    onClick={() => navigate("/empresas/solicitudes")}
                     style={{
                       width: "46px",
                       minWidth: "46px",
@@ -439,10 +467,18 @@ function VenueDetailPage() {
                     </svg>
                   </button>
 
-                  <button type="button" className="btn btn--primary" onClick={handleGoEdit}>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={handleGoEdit}
+                  >
                     Editar mi perfil
                   </button>
-                  <button type="button" className="btn btn--ghost" onClick={handleLogout}>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={handleLogout}
+                  >
                     Cerrar sesión
                   </button>
                 </>
@@ -451,7 +487,11 @@ function VenueDetailPage() {
           </div>
 
           <div className="venue-hero__media">
-            <img src={venue.mainImage} alt={venue.name} className="venue-hero__image" />
+            <img
+              src={venue.mainImage}
+              alt={venue.name}
+              className="venue-hero__image"
+            />
           </div>
         </div>
       </section>
@@ -464,7 +504,11 @@ function VenueDetailPage() {
           <div className="venue-gallery__grid">
             {(venue.gallery || []).map((photo, index) => (
               <figure key={index} className="venue-gallery__item">
-                <img src={photo} alt={`${venue.name} foto ${index + 1}`} loading="lazy" />
+                <img
+                  src={photo}
+                  alt={`${venue.name} foto ${index + 1}`}
+                  loading="lazy"
+                />
               </figure>
             ))}
           </div>
@@ -479,7 +523,9 @@ function VenueDetailPage() {
               <p>{venue.shortDescription}</p>
 
               <div className="venue-info__tags">
-                {venue.category ? <span className="chip">{venue.category}</span> : null}
+                {venue.category ? (
+                  <span className="chip">{venue.category}</span>
+                ) : null}
                 <span className="chip">{venue.capacity}</span>
                 <span className="chip">{venue.priceRange}</span>
                 {(venue.eventTypes || []).map((type) => (
@@ -491,7 +537,9 @@ function VenueDetailPage() {
 
               {venue.sellingPoints && venue.sellingPoints.length > 0 && (
                 <>
-                  <h3 style={{ marginTop: "1.2rem" }}>Lo mejor de este lugar</h3>
+                  <h3 style={{ marginTop: "1.2rem" }}>
+                    Lo mejor de este lugar
+                  </h3>
                   <ul style={{ marginTop: "0.6rem" }}>
                     {venue.sellingPoints.map((p) => (
                       <li key={p}>{p}</li>

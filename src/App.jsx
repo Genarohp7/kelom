@@ -14,6 +14,7 @@ import BusinessBenefitsPage from "./pages/Business/Pages/BusinessBenefitsPage.js
 import BusinessLoginPage from "./pages/Business/Pages/BusinessLoginPage.jsx";
 import BusinessRegisterPage from "./pages/Business/Pages/BusinessRegisterPage.jsx";
 import BusinessRegisterCompletePage from "./pages/Business/Pages/BusinessRegisterCompletePage.jsx";
+import ProviderInboxPage from "./pages/Business/Pages/ProviderInboxPage.jsx";
 
 // Detalle de proveedor
 import VenueDetailPage from "./pages/VenueDetailPage.jsx";
@@ -143,6 +144,9 @@ function App() {
             path="/empresas/registro/completar"
             element={<BusinessRegisterCompletePage />}
           />
+
+          {/* Bandeja de solicitudes del proveedor */}
+          <Route path="/empresas/solicitudes" element={<ProviderInboxPage />} />
 
           {/* Detalle de proveedor */}
           <Route path="/proveedores/:id" element={<VenueDetailPage />} />
