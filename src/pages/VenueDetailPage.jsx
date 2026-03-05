@@ -81,12 +81,10 @@ function buildGoogleMapsEmbedUrl({ lat, lng, address }) {
   const latN = toNumberOrNull(lat);
   const lngN = toNumberOrNull(lng);
 
-  // ✅ Preferimos coords si existen (más preciso)
   if (latN !== null && lngN !== null) {
     return `${base}?output=embed&q=${encodeURIComponent(`${latN},${lngN}`)}&z=15`;
   }
 
-  // ✅ Fallback a texto (dirección)
   const addr = String(address || "").trim();
   if (addr) {
     return `${base}?output=embed&q=${encodeURIComponent(addr)}`;
@@ -401,6 +399,12 @@ function VenueDetailPage() {
               >
                 Ver ubicación
               </button>
+
+              {!isProviderView && (
+                <button type="button" className="btn btn--primary">
+                  Solicitar información
+                </button>
+              )}
 
               {isProviderView && (
                 <>
