@@ -408,6 +408,37 @@ function VenueDetailPage() {
 
               {isProviderView && (
                 <>
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    title="Solicitudes de información"
+                    aria-label="Solicitudes de información"
+                    style={{
+                      width: "46px",
+                      minWidth: "46px",
+                      padding: "0.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M4 6h16v12H4z" />
+                      <path d="m22 6-10 7L2 6" />
+                    </svg>
+                  </button>
+
                   <button type="button" className="btn btn--primary" onClick={handleGoEdit}>
                     Editar mi perfil
                   </button>
