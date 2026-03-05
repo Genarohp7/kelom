@@ -119,6 +119,17 @@
   margin-top: 0.8rem;
 }
 
+.venue-request-banner {
+  margin-top: 0.35rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  background: #fff6fa;
+  border: 1px solid rgba(232, 154, 169, 0.35);
+  color: var(--color-primary-dark);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
 /* Botones (solo para esta vista) */
 
 .btn {
@@ -132,8 +143,16 @@
     background-color 0.15s ease,
     color 0.15s ease,
     box-shadow 0.15s ease,
-    transform 0.1s ease;
+    transform 0.1s ease,
+    opacity 0.15s ease;
   white-space: nowrap;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn--primary {
@@ -143,7 +162,7 @@
   box-shadow: 0 6px 16px rgba(232, 154, 169, 0.4);
 }
 
-.btn--primary:hover {
+.btn--primary:hover:not(:disabled) {
   background: var(--color-primary-dark);
   border-color: var(--color-primary-dark);
   transform: translateY(-1px);
@@ -155,7 +174,7 @@
   background: #fff;
 }
 
-.btn--ghost:hover {
+.btn--ghost:hover:not(:disabled) {
   background: #ffeef5;
 }
 
@@ -335,6 +354,154 @@
   height: 100%;
 }
 
+.venue-map__placeholder {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  color: var(--color-text-soft);
+  font-size: 0.92rem;
+}
+
+/* ========== MODAL SOLICITUD ========== */
+
+.venue-request-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(16, 18, 27, 0.5);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+}
+
+.venue-request-modal__card {
+  position: relative;
+  width: min(100%, 620px);
+  max-height: min(88vh, 760px);
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(232, 154, 169, 0.18);
+  border-radius: 1.5rem;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.25);
+  padding: 1.35rem 1.35rem 1.25rem;
+}
+
+.venue-request-modal__close {
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: #fff4f8;
+  color: var(--color-primary-dark);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    background-color 0.15s ease;
+}
+
+.venue-request-modal__close:hover {
+  transform: scale(1.03);
+  background: #ffe8f1;
+}
+
+.venue-request-modal__header {
+  padding-right: 2.8rem;
+}
+
+.venue-request-modal__eyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-primary-dark);
+}
+
+.venue-request-modal__title {
+  margin: 0 0 0.45rem;
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.venue-request-modal__subtitle {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.6;
+  color: var(--color-text-soft);
+}
+
+.venue-request-form {
+  margin-top: 1.2rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.venue-request-form__field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.venue-request-form__label {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.venue-request-form__textarea,
+.venue-request-form__input {
+  width: 100%;
+  border: 1px solid #eadbe2;
+  background: #fff;
+  color: var(--color-text-main);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  font-size: 0.95rem;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.12s ease;
+}
+
+.venue-request-form__textarea {
+  resize: vertical;
+  min-height: 140px;
+}
+
+.venue-request-form__textarea:focus,
+.venue-request-form__input:focus {
+  border-color: rgba(232, 154, 169, 0.75);
+  box-shadow: 0 0 0 4px rgba(232, 154, 169, 0.12);
+}
+
+.venue-request-form__hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-soft);
+}
+
+.venue-request-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.7rem;
+  margin-top: 0.2rem;
+}
+
+.venue-request-form__disclaimer {
+  margin: 0.1rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--color-text-soft);
+}
+
 /* ========== NOT FOUND ========== */
 
 .venue-not-found {
@@ -383,5 +550,30 @@
 
   .venue-gallery__item {
     height: 160px;
+  }
+
+  .venue-request-modal {
+    padding: 0.75rem;
+    align-items: flex-end;
+  }
+
+  .venue-request-modal__card {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 1.25rem 1.25rem 0.95rem 0.95rem;
+    padding: 1rem 1rem 1.05rem;
+  }
+
+  .venue-request-modal__title {
+    font-size: 1.2rem;
+  }
+
+  .venue-request-form__actions {
+    flex-direction: column-reverse;
+  }
+
+  .venue-request-form__actions .btn {
+    width: 100%;
+    justify-content: center;
   }
 }

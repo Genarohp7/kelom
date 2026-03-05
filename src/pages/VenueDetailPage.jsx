@@ -9,6 +9,8 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
+const DEFAULT_REQUEST_MESSAGE =
+  "Me interesan tus servicios, contáctame para obtener más información.";
 
 function safeParse(json) {
   try {
@@ -200,6 +202,11 @@ function VenueDetailPage() {
   const [apiVenue, setApiVenue] = useState(null);
   const [apiError, setApiError] = useState("");
 
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestMessage, setRequestMessage] = useState(DEFAULT_REQUEST_MESSAGE);
+  const [preferredSchedule, setPreferredSchedule] = useState("");
+  const [requestUiMessage, setRequestUiMessage] = useState("");
+
   useEffect(() => {
     let cancelled = false;
 
@@ -310,6 +317,26 @@ function VenueDetailPage() {
     };
   }, [id, isProviderView, navigate, location.pathname, location.search]);
 
+  useEffect(() => {
+    if (!isRequestModalOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleEsc = (event) => {
+      if (event.key === "Escape") {
+        setIsRequestModalOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEsc);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleEsc);
+    };
+  }, [isRequestModalOpen]);
+
   const venue = useMemo(() => {
     if (apiVenue) return apiVenue;
     const foundDemo = venuesDetail.find(
@@ -317,6 +344,10 @@ function VenueDetailPage() {
     );
     return foundDemo || null;
   }, [apiVenue, id]);
+
+  const isRequestSubmitDisabled =
+    !String(preferredSchedule || "").trim() ||
+    !String(requestMessage || "").trim();
 
   const handleGoEdit = () => {
     const token = getProviderToken();
@@ -332,6 +363,33 @@ function VenueDetailPage() {
   const handleLogout = () => {
     clearProviderSession();
     navigate("/empresas", { replace: true });
+  };
+
+  const openRequestModal = () => {
+    setRequestUiMessage("");
+    setRequestMessage(DEFAULT_REQUEST_MESSAGE);
+    setPreferredSchedule("");
+    setIsRequestModalOpen(true);
+  };
+
+  const closeRequestModal = () => {
+    setIsRequestModalOpen(false);
+  };
+
+  const handleMessageFocus = () => {
+    if (requestMessage === DEFAULT_REQUEST_MESSAGE) {
+      setRequestMessage("");
+    }
+  };
+
+  const handleRequestSubmit = (event) => {
+    event.preventDefault();
+    if (isRequestSubmitDisabled) return;
+
+    setIsRequestModalOpen(false);
+    setRequestUiMessage(
+      "Tu solicitud quedó capturada como vista previa. Después conectaremos el envío real al proveedor.",
+    );
   };
 
   if (loading) {
@@ -383,232 +441,350 @@ function VenueDetailPage() {
   }
 
   return (
-    <div className="venue-page">
-      <section className="venue-hero">
-        <div className="container venue-hero__grid">
-          <div className="venue-hero__info">
-            <Link
-              to={isProviderView ? "/empresas" : "/"}
-              className="venue-hero__back-link"
-            >
-              ←{" "}
-              {isProviderView
-                ? "Volver al área de empresas"
-                : "Volver a la lista de lugares"}
-            </Link>
-
-            <span className="venue-hero__pill">
-              {isProviderView || isUuid(id) ? "Proveedor" : "Lugar para boda"}
-            </span>
-
-            <h1 className="venue-hero__name">{venue.name}</h1>
-            <p className="venue-hero__location">{venue.location}</p>
-
-            <p className="venue-hero__lead">{venue.shortDescription}</p>
-
-            <ul className="venue-hero__highlights">
-              {venue.category ? <li>{venue.category}</li> : null}
-              <li>{venue.capacity}</li>
-              <li>{venue.priceRange}</li>
-              {(venue.eventTypes || []).slice(0, 2).map((type) => (
-                <li key={type}>{type}</li>
-              ))}
-            </ul>
-
-            <div className="venue-hero__ctas">
-              <button
-                type="button"
-                className="btn btn--ghost"
-                onClick={() => {
-                  const el = document.getElementById("venue-map");
-                  if (el) el.scrollIntoView({ behavior: "smooth" });
-                }}
+    <>
+      <div className="venue-page">
+        <section className="venue-hero">
+          <div className="container venue-hero__grid">
+            <div className="venue-hero__info">
+              <Link
+                to={isProviderView ? "/empresas" : "/"}
+                className="venue-hero__back-link"
               >
-                Ver ubicación
-              </button>
+                ←{" "}
+                {isProviderView
+                  ? "Volver al área de empresas"
+                  : "Volver a la lista de lugares"}
+              </Link>
 
-              {!isProviderView && (
-                <button type="button" className="btn btn--primary">
-                  Solicitar información
-                </button>
+              <span className="venue-hero__pill">
+                {isProviderView || isUuid(id) ? "Proveedor" : "Lugar para boda"}
+              </span>
+
+              <h1 className="venue-hero__name">{venue.name}</h1>
+              <p className="venue-hero__location">{venue.location}</p>
+
+              <p className="venue-hero__lead">{venue.shortDescription}</p>
+
+              <ul className="venue-hero__highlights">
+                {venue.category ? <li>{venue.category}</li> : null}
+                <li>{venue.capacity}</li>
+                <li>{venue.priceRange}</li>
+                {(venue.eventTypes || []).slice(0, 2).map((type) => (
+                  <li key={type}>{type}</li>
+                ))}
+              </ul>
+
+              {requestUiMessage && !isProviderView && (
+                <div className="venue-request-banner">{requestUiMessage}</div>
               )}
 
-              {isProviderView && (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    title="Solicitudes de información"
-                    aria-label="Solicitudes de información"
-                    onClick={() => navigate("/empresas/solicitudes")}
-                    style={{
-                      width: "46px",
-                      minWidth: "46px",
-                      padding: "0.75rem",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <svg
-                      aria-hidden="true"
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M4 6h16v12H4z" />
-                      <path d="m22 6-10 7L2 6" />
-                    </svg>
-                  </button>
+              <div className="venue-hero__ctas">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={() => {
+                    const el = document.getElementById("venue-map");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  Ver ubicación
+                </button>
 
+                {!isProviderView && (
                   <button
                     type="button"
                     className="btn btn--primary"
-                    onClick={handleGoEdit}
+                    onClick={openRequestModal}
                   >
-                    Editar mi perfil
+                    Solicitar información
                   </button>
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    onClick={handleLogout}
-                  >
-                    Cerrar sesión
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+                )}
 
-          <div className="venue-hero__media">
-            <img
-              src={venue.mainImage}
-              alt={venue.name}
-              className="venue-hero__image"
-            />
-          </div>
-        </div>
-      </section>
+                {isProviderView && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      title="Solicitudes de información"
+                      aria-label="Solicitudes de información"
+                      onClick={() => navigate("/empresas/solicitudes")}
+                      style={{
+                        width: "46px",
+                        minWidth: "46px",
+                        padding: "0.75rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <svg
+                        aria-hidden="true"
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M4 6h16v12H4z" />
+                        <path d="m22 6-10 7L2 6" />
+                      </svg>
+                    </button>
 
-      <section className="venue-gallery">
-        <div className="container">
-          <h2 className="section-title">Fotos del lugar</h2>
-          <p className="section-subtitle">Galería real (backend).</p>
-
-          <div className="venue-gallery__grid">
-            {(venue.gallery || []).map((photo, index) => (
-              <figure key={index} className="venue-gallery__item">
-                <img
-                  src={photo}
-                  alt={`${venue.name} foto ${index + 1}`}
-                  loading="lazy"
-                />
-              </figure>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="venue-info">
-        <div className="container">
-          <div className="venue-info__grid">
-            <div className="venue-info__description">
-              <h2 className="section-title">Sobre este lugar</h2>
-              <p>{venue.shortDescription}</p>
-
-              <div className="venue-info__tags">
-                {venue.category ? (
-                  <span className="chip">{venue.category}</span>
-                ) : null}
-                <span className="chip">{venue.capacity}</span>
-                <span className="chip">{venue.priceRange}</span>
-                {(venue.eventTypes || []).map((type) => (
-                  <span key={type} className="chip">
-                    {type}
-                  </span>
-                ))}
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={handleGoEdit}
+                    >
+                      Editar mi perfil
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={handleLogout}
+                    >
+                      Cerrar sesión
+                    </button>
+                  </>
+                )}
               </div>
-
-              {venue.sellingPoints && venue.sellingPoints.length > 0 && (
-                <>
-                  <h3 style={{ marginTop: "1.2rem" }}>
-                    Lo mejor de este lugar
-                  </h3>
-                  <ul style={{ marginTop: "0.6rem" }}>
-                    {venue.sellingPoints.map((p) => (
-                      <li key={p}>{p}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
             </div>
 
-            <aside className="venue-info__sidebar">
-              <h3 className="venue-info__sidebar-title">Información rápida</h3>
-              <ul className="venue-info__list">
-                {venue.category ? (
-                  <li>
-                    <span className="venue-info__label">Categoría: </span>
-                    {venue.category}
-                  </li>
-                ) : null}
-                <li>
-                  <span className="venue-info__label">Ubicación: </span>
-                  {venue.location}
-                </li>
-                <li>
-                  <span className="venue-info__label">Capacidad: </span>
-                  {venue.capacity}
-                </li>
-                <li>
-                  <span className="venue-info__label">Tipo de eventos: </span>
-                  {(venue.eventTypes || []).join(", ") || "Por definir"}
-                </li>
-                <li>
-                  <span className="venue-info__label">Rango de precio: </span>
-                  {venue.priceRange}
-                </li>
-              </ul>
-            </aside>
-          </div>
-        </div>
-      </section>
-
-      <section className="venue-map" id="venue-map">
-        <div className="container venue-map__inner">
-          <div className="venue-map__info">
-            <h2 className="section-title">Ubicación y accesos</h2>
-            <p>{venue.mapText}</p>
-            <ul className="venue-map__list">
-              <li>Zona: {venue.location}</li>
-              <li>Ideal para invitados que vienen de distintos puntos.</li>
-            </ul>
-          </div>
-
-          <div className="venue-map__frame">
-            {venue.mapEmbedUrl ? (
-              <iframe
-                className="venue-map__iframe"
-                title={`Mapa de ${venue.name}`}
-                loading="lazy"
-                src={venue.mapEmbedUrl}
-                referrerPolicy="no-referrer-when-downgrade"
+            <div className="venue-hero__media">
+              <img
+                src={venue.mainImage}
+                alt={venue.name}
+                className="venue-hero__image"
               />
-            ) : (
-              <div className="venue-map__placeholder">
-                No hay coordenadas/dirección suficiente para mostrar el mapa.
+            </div>
+          </div>
+        </section>
+
+        <section className="venue-gallery">
+          <div className="container">
+            <h2 className="section-title">Fotos del lugar</h2>
+            <p className="section-subtitle">Galería real (backend).</p>
+
+            <div className="venue-gallery__grid">
+              {(venue.gallery || []).map((photo, index) => (
+                <figure key={index} className="venue-gallery__item">
+                  <img
+                    src={photo}
+                    alt={`${venue.name} foto ${index + 1}`}
+                    loading="lazy"
+                  />
+                </figure>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="venue-info">
+          <div className="container">
+            <div className="venue-info__grid">
+              <div className="venue-info__description">
+                <h2 className="section-title">Sobre este lugar</h2>
+                <p>{venue.shortDescription}</p>
+
+                <div className="venue-info__tags">
+                  {venue.category ? (
+                    <span className="chip">{venue.category}</span>
+                  ) : null}
+                  <span className="chip">{venue.capacity}</span>
+                  <span className="chip">{venue.priceRange}</span>
+                  {(venue.eventTypes || []).map((type) => (
+                    <span key={type} className="chip">
+                      {type}
+                    </span>
+                  ))}
+                </div>
+
+                {venue.sellingPoints && venue.sellingPoints.length > 0 && (
+                  <>
+                    <h3 style={{ marginTop: "1.2rem" }}>
+                      Lo mejor de este lugar
+                    </h3>
+                    <ul style={{ marginTop: "0.6rem" }}>
+                      {venue.sellingPoints.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
               </div>
-            )}
+
+              <aside className="venue-info__sidebar">
+                <h3 className="venue-info__sidebar-title">Información rápida</h3>
+                <ul className="venue-info__list">
+                  {venue.category ? (
+                    <li>
+                      <span className="venue-info__label">Categoría: </span>
+                      {venue.category}
+                    </li>
+                  ) : null}
+                  <li>
+                    <span className="venue-info__label">Ubicación: </span>
+                    {venue.location}
+                  </li>
+                  <li>
+                    <span className="venue-info__label">Capacidad: </span>
+                    {venue.capacity}
+                  </li>
+                  <li>
+                    <span className="venue-info__label">Tipo de eventos: </span>
+                    {(venue.eventTypes || []).join(", ") || "Por definir"}
+                  </li>
+                  <li>
+                    <span className="venue-info__label">Rango de precio: </span>
+                    {venue.priceRange}
+                  </li>
+                </ul>
+              </aside>
+            </div>
+          </div>
+        </section>
+
+        <section className="venue-map" id="venue-map">
+          <div className="container venue-map__inner">
+            <div className="venue-map__info">
+              <h2 className="section-title">Ubicación y accesos</h2>
+              <p>{venue.mapText}</p>
+              <ul className="venue-map__list">
+                <li>Zona: {venue.location}</li>
+                <li>Ideal para invitados que vienen de distintos puntos.</li>
+              </ul>
+            </div>
+
+            <div className="venue-map__frame">
+              {venue.mapEmbedUrl ? (
+                <iframe
+                  className="venue-map__iframe"
+                  title={`Mapa de ${venue.name}`}
+                  loading="lazy"
+                  src={venue.mapEmbedUrl}
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              ) : (
+                <div className="venue-map__placeholder">
+                  No hay coordenadas/dirección suficiente para mostrar el mapa.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {!isProviderView && isRequestModalOpen && (
+        <div
+          className="venue-request-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="venue-request-modal-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeRequestModal();
+            }
+          }}
+        >
+          <div className="venue-request-modal__card">
+            <button
+              type="button"
+              className="venue-request-modal__close"
+              onClick={closeRequestModal}
+              aria-label="Cerrar ventana"
+            >
+              ×
+            </button>
+
+            <div className="venue-request-modal__header">
+              <p className="venue-request-modal__eyebrow">Solicitud rápida</p>
+              <h2
+                id="venue-request-modal-title"
+                className="venue-request-modal__title"
+              >
+                Solicitar información a {venue.name}
+              </h2>
+              <p className="venue-request-modal__subtitle">
+                Déjale al proveedor un mensaje breve y el horario en el que
+                prefieres ser contactado.
+              </p>
+            </div>
+
+            <form
+              className="venue-request-form"
+              onSubmit={handleRequestSubmit}
+              noValidate
+            >
+              <div className="venue-request-form__field">
+                <label
+                  className="venue-request-form__label"
+                  htmlFor="venue-request-message"
+                >
+                  Mensaje
+                </label>
+                <textarea
+                  id="venue-request-message"
+                  className="venue-request-form__textarea"
+                  rows={5}
+                  value={requestMessage}
+                  onFocus={handleMessageFocus}
+                  onChange={(e) => setRequestMessage(e.target.value)}
+                />
+                <p className="venue-request-form__hint">
+                  Puedes dejar el mensaje sugerido o escribir uno más específico.
+                </p>
+              </div>
+
+              <div className="venue-request-form__field">
+                <label
+                  className="venue-request-form__label"
+                  htmlFor="venue-request-schedule"
+                >
+                  Horario preferido para ser contactado *
+                </label>
+                <input
+                  id="venue-request-schedule"
+                  type="text"
+                  className="venue-request-form__input"
+                  placeholder="Ej. Lunes a viernes de 5:00 pm a 8:00 pm"
+                  value={preferredSchedule}
+                  onChange={(e) => setPreferredSchedule(e.target.value)}
+                  required
+                />
+                <p className="venue-request-form__hint">
+                  Este campo es obligatorio para activar el envío.
+                </p>
+              </div>
+
+              <div className="venue-request-form__actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  onClick={closeRequestModal}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={isRequestSubmitDisabled}
+                >
+                  Enviar solicitud
+                </button>
+              </div>
+
+              <p className="venue-request-form__disclaimer">
+                Por ahora esta es una vista previa visual del flujo. El envío real
+                al proveedor lo conectaremos después.
+              </p>
+            </form>
           </div>
         </div>
-      </section>
-    </div>
+      )}
+    </>
   );
 }
 
