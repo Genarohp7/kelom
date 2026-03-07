@@ -117,7 +117,7 @@ app.use(
 app.use(express.json({ limit: "500kb" }));
 
 // Servir uploads
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ===================== HELPERS =====================
 
@@ -835,6 +835,11 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     // Perfil requerido
     const venueName = String(body.venueName || "").trim();
     const venueLocation = String(body.venueLocation || "").trim();
+    const businessCategory = String(body.businessCategory || "").trim();
+
+    // ✅ NUEVO: alcaldía/municipio obligatorio
+    const localityArea = String(body.localityArea || "").trim();
+
     const capacityMin = toIntOrNull(body.capacityMin);
     const capacityMax = toIntOrNull(body.capacityMax);
     const priceFrom = toIntOrNull(body.priceFrom);
@@ -847,6 +852,8 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     if (
       !venueName ||
       !venueLocation ||
+      !businessCategory ||
+      !localityArea ||
       capacityMin === null ||
       priceFrom === null ||
       priceTo === null ||
@@ -918,7 +925,8 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     const profileIns = await client.query(
       `INSERT INTO provider_profiles (
         user_id, company_name, owner_name, phone,
-        venue_name, venue_location, location_place_id, location_lat, location_lng,
+        venue_name, venue_location, business_category, locality_area,
+        location_place_id, location_lat, location_lng,
         capacity_min, capacity_max, price_from, price_to,
         short_description, description, spaces, services, rules,
         website, instagram, facebook, map_text, event_types, selling_points,
@@ -926,11 +934,12 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
       )
       VALUES (
         $1,$2,$3,$4,
-        $5,$6,$7,$8,$9,
-        $10,$11,$12,$13,
-        $14,$15,$16,$17,$18,
-        $19,$20,$21,$22,$23,$24,
-        $25,$26
+        $5,$6,$7,$8,
+        $9,$10,$11,
+        $12,$13,$14,$15,
+        $16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25,$26,
+        $27,$28
       )
       RETURNING *`,
       [
@@ -941,6 +950,9 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
 
         venueName,
         venueLocation,
+        businessCategory,
+        localityArea,
+
         locationPlaceId,
         locationLat,
         locationLng,
@@ -1115,6 +1127,11 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     // Perfil requerido
     const venueName = String(body.venueName || "").trim();
     const venueLocation = String(body.venueLocation || "").trim();
+    const businessCategory = String(body.businessCategory || "").trim();
+
+    // ✅ NUEVO: alcaldía/municipio obligatorio
+    const localityArea = String(body.localityArea || "").trim();
+
     const capacityMin = toIntOrNull(body.capacityMin);
     const capacityMax = toIntOrNull(body.capacityMax);
     const priceFrom = toIntOrNull(body.priceFrom);
@@ -1127,6 +1144,8 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     if (
       !venueName ||
       !venueLocation ||
+      !businessCategory ||
+      !localityArea ||
       capacityMin === null ||
       priceFrom === null ||
       priceTo === null ||
@@ -1192,17 +1211,19 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     const upsert = await client.query(
       `INSERT INTO provider_profiles (
         user_id, company_name, owner_name, phone,
-        venue_name, venue_location, location_place_id, location_lat, location_lng,
+        venue_name, venue_location, business_category, locality_area,
+        location_place_id, location_lat, location_lng,
         capacity_min, capacity_max, price_from, price_to,
         short_description, description, spaces, services, rules,
         website, instagram, facebook, map_text, event_types, selling_points
       )
       VALUES (
         $1,$2,$3,$4,
-        $5,$6,$7,$8,$9,
-        $10,$11,$12,$13,
-        $14,$15,$16,$17,$18,
-        $19,$20,$21,$22,$23,$24
+        $5,$6,$7,$8,
+        $9,$10,$11,
+        $12,$13,$14,$15,
+        $16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25,$26
       )
       ON CONFLICT (user_id) DO UPDATE SET
         company_name = EXCLUDED.company_name,
@@ -1210,6 +1231,8 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
         phone = EXCLUDED.phone,
         venue_name = EXCLUDED.venue_name,
         venue_location = EXCLUDED.venue_location,
+        business_category = EXCLUDED.business_category,
+        locality_area = EXCLUDED.locality_area,
         location_place_id = EXCLUDED.location_place_id,
         location_lat = EXCLUDED.location_lat,
         location_lng = EXCLUDED.location_lng,
@@ -1237,6 +1260,9 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
 
         venueName,
         venueLocation,
+        businessCategory,
+        localityArea,
+
         locationPlaceId,
         locationLat,
         locationLng,
@@ -1375,6 +1401,99 @@ app.delete("/providers/photos/:photoId", providerAuthMiddleware, async (req, res
   }
 });
 
+// ===================== PUBLIC PROVIDERS LIST (Home + Search) =====================
+// GET /providers?q=&category=&where=&limit=&offset=
+// Devuelve SOLO approved + listed (visible públicamente)
+app.get("/providers", async (req, res) => {
+  try {
+    const q = toNullIfEmpty(req.query.q); // compat
+    const category = toNullIfEmpty(req.query.category);
+    const whereText = toNullIfEmpty(req.query.where);
+
+    const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 100);
+    const offset = Math.max(Number(req.query.offset || 0), 0);
+
+    const where = [
+      "p.review_status = 'approved'",
+      "p.public_visibility = 'listed'",
+      "u.role = 'provider'",
+      "u.account_status = 'active'",
+    ];
+
+    const params = [];
+
+    if (q) {
+      params.push(`%${q}%`);
+      where.push(
+        `(p.venue_name ILIKE $${params.length}
+          OR p.company_name ILIKE $${params.length}
+          OR p.venue_location ILIKE $${params.length}
+          OR COALESCE(p.locality_area,'') ILIKE $${params.length})`
+      );
+    }
+
+    if (category) {
+      params.push(category);
+      where.push(`p.business_category = $${params.length}`);
+    }
+
+    if (whereText) {
+      params.push(`%${whereText}%`);
+      where.push(
+        `(p.venue_name ILIKE $${params.length}
+          OR p.company_name ILIKE $${params.length}
+          OR p.venue_location ILIKE $${params.length}
+          OR COALESCE(p.locality_area,'') ILIKE $${params.length})`
+      );
+    }
+
+    params.push(limit);
+    params.push(offset);
+
+    const sql = `
+      SELECT
+        p.user_id,
+        p.company_name,
+        p.owner_name,
+        p.venue_name,
+        p.venue_location,
+        p.business_category,
+        p.locality_area,
+        p.short_description,
+        p.capacity_min,
+        p.capacity_max,
+        p.price_from,
+        p.price_to,
+        p.event_types,
+        p.selling_points,
+        p.updated_at,
+        (
+          SELECT url
+          FROM provider_photos ph
+          WHERE ph.user_id = p.user_id
+          ORDER BY ph.sort_order ASC, ph.created_at ASC
+          LIMIT 1
+        ) AS main_photo_url
+      FROM provider_profiles p
+      JOIN users u ON u.id = p.user_id
+      WHERE ${where.join(" AND ")}
+      ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+      LIMIT $${params.length - 1}
+      OFFSET $${params.length}
+    `;
+
+    const rows = await pool.query(sql, params);
+
+    return res.json({
+      providers: rows.rows || [],
+      pagination: { limit, offset, next_offset: offset + limit },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+});
+
 /**
  * Vista pública por id (uuid)
  * GET /providers/:id
@@ -1395,7 +1514,7 @@ app.get("/providers/:id", async (req, res) => {
       `SELECT
         p.user_id,
         p.company_name, p.owner_name,
-        p.venue_name, p.venue_location, p.location_place_id, p.location_lat, p.location_lng,
+        p.venue_name, p.venue_location, p.business_category, p.locality_area, p.location_place_id, p.location_lat, p.location_lng,
         p.capacity_min, p.capacity_max, p.price_from, p.price_to,
         p.short_description, p.description, p.spaces, p.services, p.rules,
         p.website, p.instagram, p.facebook, p.map_text, p.event_types, p.selling_points,
@@ -1466,7 +1585,9 @@ app.get(
       }
       if (q) {
         params.push(`%${q}%`);
-        where.push(`(email ILIKE $${params.length} OR COALESCE(name,'') ILIKE $${params.length})`);
+        where.push(
+          `(email ILIKE $${params.length} OR COALESCE(name,'') ILIKE $${params.length})`
+        );
       }
 
       params.push(limit);
@@ -1504,7 +1625,9 @@ app.patch(
       const reason = toNullIfEmpty(req.body?.reason) || "Bloqueado por administrador";
 
       if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
-      if (id === req.authUser.id) return res.status(400).json({ error: "No puedes bloquearte a ti mismo" });
+      if (id === req.authUser.id) {
+        return res.status(400).json({ error: "No puedes bloquearte a ti mismo" });
+      }
 
       const beforeRes = await pool.query(
         `SELECT id, email, role, admin_tier, account_status, blocked_at, blocked_reason
@@ -1551,7 +1674,6 @@ app.patch(
   async (req, res) => {
     try {
       const { id } = req.params;
-      const reason = toNullIfEmpty(req.body?.reason) || "Desbloqueado por administrador";
 
       if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
 
@@ -1567,10 +1689,10 @@ app.patch(
         `UPDATE users
          SET account_status = 'active',
              blocked_at = NULL,
-             blocked_reason = $2
+             blocked_reason = NULL
          WHERE id = $1
          RETURNING id, email, role, admin_tier, account_status, blocked_at, blocked_reason`,
-        [id, reason]
+        [id]
       );
 
       await writeAdminAuditLog(req, {
