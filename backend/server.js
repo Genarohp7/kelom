@@ -189,6 +189,15 @@ function toFloatOrNull(v) {
   return n;
 }
 
+function toBoolOrNull(v) {
+  if (v === undefined || v === null || v === "") return null;
+  if (typeof v === "boolean") return v;
+  const s = String(v).trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(s)) return true;
+  if (["false", "0", "no", "n", "off"].includes(s)) return false;
+  return null;
+}
+
 function toTextArray(value, { maxItems = 30, maxLen = 140 } = {}) {
   if (!value) return [];
   let arr = [];
@@ -1006,8 +1015,8 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
       sellingPointsFromBody.length > 0
         ? sellingPointsFromBody
         : sellingPointsTextFromBody.length > 0
-        ? sellingPointsTextFromBody
-        : [];
+          ? sellingPointsTextFromBody
+          : [];
 
     const password_hash = await bcrypt.hash(password, 10);
 
@@ -1311,8 +1320,8 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
       sellingPointsFromBody.length > 0
         ? sellingPointsFromBody
         : sellingPointsTextFromBody.length > 0
-        ? sellingPointsTextFromBody
-        : current?.selling_points || [];
+          ? sellingPointsTextFromBody
+          : current?.selling_points || [];
 
     // Actualizar name del usuario si viene ownerName (opcional)
     if (ownerName) {
@@ -1697,7 +1706,6 @@ app.get(
             OR COALESCE(r.requester_name,'') ILIKE $${params.length}
             OR COALESCE(p.venue_name,'') ILIKE $${params.length}
             OR COALESCE(p.company_name,'') ILIKE $${params.length}
-            OR COALESCE(pu.email,'') ILIKE $${params.length}
             OR COALESCE(r.message,'') ILIKE $${params.length})`
         );
       }
@@ -1724,11 +1732,9 @@ app.get(
           r.updated_at,
           p.venue_name AS provider_venue_name,
           p.company_name AS provider_company_name,
-          p.is_featured AS provider_is_featured,
-          pu.email AS provider_email
+          p.is_featured AS provider_is_featured
         FROM provider_info_requests r
         LEFT JOIN provider_profiles p ON p.user_id = r.provider_id
-        LEFT JOIN users pu ON pu.id = r.provider_id
         ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
         ORDER BY r.created_at DESC
         LIMIT $${params.length - 1}
@@ -1783,80 +1789,67 @@ app.get(
   }
 );
 
-async function moderateInfoRequest(req, res) {
-  try {
-    const { id } = req.params;
-    if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
-
-    const moderation_status = toNullIfEmpty(req.body?.moderation_status);
-    const moderation_notes = toNullIfEmpty(req.body?.moderation_notes);
-
-    const allowed = new Set(["approved", "declined"]);
-    if (!moderation_status || !allowed.has(moderation_status)) {
-      return res.status(400).json({ error: "moderation_status inválido" });
-    }
-
-    const beforeRes = await pool.query(
-      `SELECT *
-       FROM provider_info_requests
-       WHERE id = $1
-       LIMIT 1`,
-      [id]
-    );
-    const before = beforeRes.rows[0];
-    if (!before) return res.status(404).json({ error: "Solicitud no encontrada" });
-
-    const updatedRes = await pool.query(
-      `
-      UPDATE provider_info_requests
-      SET
-        moderation_status = $2,
-        moderated_by = $3,
-        moderated_at = now(),
-        moderation_notes = COALESCE($4, moderation_notes)
-      WHERE id = $1
-      RETURNING *
-      `,
-      [id, moderation_status, req.authUser.id, moderation_notes]
-    );
-
-    const after = updatedRes.rows[0];
-
-    await writeAdminAuditLog(req, {
-      action: "info_requests:moderate",
-      entityType: "provider_info_request",
-      entityId: id,
-      beforeState: before,
-      afterState: after,
-    });
-
-    return res.json({ request: after });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Error interno" });
-  }
-}
-
 /**
- * ✅ NUEVA: la que tu AdminDashboard usa
- * PATCH /admin/info-requests/:id
- */
-app.patch(
-  "/admin/info-requests/:id",
-  adminAuthMiddleware,
-  requirePermission("admin:providers:review"),
-  moderateInfoRequest
-);
-
-/**
- * ✅ Backward compatibility:
  * PATCH /admin/info-requests/:id/moderate
+ * Body: { moderation_status: 'approved'|'declined', moderation_notes? }
  */
 app.patch(
   "/admin/info-requests/:id/moderate",
   adminAuthMiddleware,
   requirePermission("admin:providers:review"),
-  moderateInfoRequest
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const moderation_status = toNullIfEmpty(req.body?.moderation_status);
+      const moderation_notes = toNullIfEmpty(req.body?.moderation_notes);
+
+      const allowed = new Set(["approved", "declined"]);
+      if (!moderation_status || !allowed.has(moderation_status)) {
+        return res.status(400).json({ error: "moderation_status inválido" });
+      }
+
+      const beforeRes = await pool.query(
+        `SELECT *
+         FROM provider_info_requests
+         WHERE id = $1
+         LIMIT 1`,
+        [id]
+      );
+      const before = beforeRes.rows[0];
+      if (!before) return res.status(404).json({ error: "Solicitud no encontrada" });
+
+      const updatedRes = await pool.query(
+        `
+        UPDATE provider_info_requests
+        SET
+          moderation_status = $2,
+          moderated_by = $3,
+          moderated_at = now(),
+          moderation_notes = COALESCE($4, moderation_notes)
+        WHERE id = $1
+        RETURNING *
+        `,
+        [id, moderation_status, req.authUser.id, moderation_notes]
+      );
+
+      const after = updatedRes.rows[0];
+
+      await writeAdminAuditLog(req, {
+        action: "info_requests:moderate",
+        entityType: "provider_info_request",
+        entityId: id,
+        beforeState: before,
+        afterState: after,
+      });
+
+      return res.json({ request: after });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
 );
 
 // ===================== ADMIN API =====================
@@ -1891,7 +1884,9 @@ app.get(
       }
       if (q) {
         params.push(`%${q}%`);
-        where.push(`(email ILIKE $${params.length} OR COALESCE(name,'') ILIKE $${params.length})`);
+        where.push(
+          `(email ILIKE $${params.length} OR COALESCE(name,'') ILIKE $${params.length})`
+        );
       }
 
       params.push(limit);
@@ -1969,6 +1964,7 @@ app.patch(
 
 /**
  * PATCH /admin/users/:id/unblock
+ * Body: { reason }
  */
 app.patch(
   "/admin/users/:id/unblock",
@@ -2059,6 +2055,7 @@ app.get(
           p.company_name, p.owner_name, p.phone,
           p.venue_name, p.venue_location,
           p.review_status, p.public_visibility,
+          p.is_featured,
           p.reviewed_by, p.reviewed_at, p.review_notes,
           p.updated_at
         FROM users u
@@ -2080,7 +2077,7 @@ app.get(
 
 /**
  * PATCH /admin/providers/:id/status
- * Body: { review_status, public_visibility, review_notes }
+ * Body: { review_status, public_visibility, review_notes, is_featured }
  */
 app.patch(
   "/admin/providers/:id/status",
@@ -2094,6 +2091,9 @@ app.patch(
       const review_status = toNullIfEmpty(req.body?.review_status);
       const public_visibility = toNullIfEmpty(req.body?.public_visibility);
       const review_notes = toNullIfEmpty(req.body?.review_notes);
+
+      // ✅ NUEVO: premium toggle
+      const is_featured = toBoolOrNull(req.body?.is_featured);
 
       const allowedReview = new Set([
         "draft",
@@ -2112,9 +2112,12 @@ app.patch(
       if (public_visibility && !allowedVisibility.has(public_visibility)) {
         return res.status(400).json({ error: "public_visibility inválido" });
       }
+      if (req.body?.is_featured !== undefined && is_featured === null) {
+        return res.status(400).json({ error: "is_featured inválido (usa true/false)" });
+      }
 
       const beforeRes = await pool.query(
-        `SELECT user_id, review_status, public_visibility, reviewed_by, reviewed_at, review_notes
+        `SELECT user_id, review_status, public_visibility, reviewed_by, reviewed_at, review_notes, is_featured
          FROM provider_profiles
          WHERE user_id = $1
          LIMIT 1`,
@@ -2123,16 +2126,22 @@ app.patch(
       const before = beforeRes.rows[0];
       if (!before) return res.status(404).json({ error: "Proveedor no encontrado" });
 
+      // Si el patch toca moderación del perfil, sí actualizamos reviewed_by/reviewed_at.
+      // Si solo cambia is_featured, NO tocamos reviewed_*.
+      const touchesReview = Boolean(review_status || public_visibility || review_notes !== null);
+
       const updatedRes = await pool.query(
         `UPDATE provider_profiles
-         SET review_status = COALESCE($2, review_status),
-             public_visibility = COALESCE($3, public_visibility),
-             review_notes = COALESCE($4, review_notes),
-             reviewed_by = $1,
-             reviewed_at = now()
-         WHERE user_id = $5
-         RETURNING user_id, review_status, public_visibility, reviewed_by, reviewed_at, review_notes`,
-        [req.authUser.id, review_status, public_visibility, review_notes, id]
+         SET
+           review_status = COALESCE($2, review_status),
+           public_visibility = COALESCE($3, public_visibility),
+           review_notes = COALESCE($4, review_notes),
+           is_featured = COALESCE($5, is_featured),
+           reviewed_by = CASE WHEN $6::boolean THEN $1 ELSE reviewed_by END,
+           reviewed_at = CASE WHEN $6::boolean THEN now() ELSE reviewed_at END
+         WHERE user_id = $7
+         RETURNING user_id, review_status, public_visibility, reviewed_by, reviewed_at, review_notes, is_featured`,
+        [req.authUser.id, review_status, public_visibility, review_notes, is_featured, touchesReview, id]
       );
 
       const after = updatedRes.rows[0];

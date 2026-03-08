@@ -86,6 +86,10 @@ function badgeClass(kind, value) {
     return "admin-badge";
   }
 
+  if (kind === "featured") {
+    return value ? "admin-badge admin-badge--warn" : "admin-badge admin-badge--muted";
+  }
+
   return "admin-badge";
 }
 
@@ -177,7 +181,8 @@ function AdminDashboardPage() {
 
   const requestsQueryString = useMemo(() => {
     const p = new URLSearchParams();
-    if (requestFilters.moderation_status) p.set("moderation_status", requestFilters.moderation_status);
+    if (requestFilters.moderation_status)
+      p.set("moderation_status", requestFilters.moderation_status);
     if (requestFilters.q.trim()) p.set("q", requestFilters.q.trim());
     p.set("limit", "100");
     return p.toString();
@@ -257,6 +262,8 @@ function AdminDashboardPage() {
                 review_notes: moderation?.review_notes ?? p.review_notes,
                 reviewed_by: moderation?.reviewed_by ?? p.reviewed_by,
                 reviewed_at: moderation?.reviewed_at ?? p.reviewed_at,
+                is_featured:
+                  moderation?.is_featured !== undefined ? moderation.is_featured : p.is_featured,
                 updated_at: moderation?.reviewed_at ?? p.updated_at,
               }
             : p
@@ -317,9 +324,7 @@ function AdminDashboardPage() {
                 account_status: nextUser?.account_status ?? u.account_status,
                 blocked_at: nextUser?.blocked_at ?? u.blocked_at,
                 blocked_reason:
-                  nextUser?.blocked_reason !== undefined
-                    ? nextUser.blocked_reason
-                    : u.blocked_reason,
+                  nextUser?.blocked_reason !== undefined ? nextUser.blocked_reason : u.blocked_reason,
               }
             : u
         )
@@ -360,7 +365,6 @@ function AdminDashboardPage() {
         declined: Number(data?.declined || 0),
       });
     } catch {
-      // si falla stats, no rompemos el panel
       setRequestStats((prev) => ({ ...prev }));
     }
   }
@@ -391,7 +395,7 @@ function AdminDashboardPage() {
       ""
     );
 
-    if (notes === null) return; // cancelado
+    if (notes === null) return;
 
     setRequestBusyId(requestId);
     setRequestsError("");
@@ -427,7 +431,6 @@ function AdminDashboardPage() {
         moderation_status === "approved" ? "Solicitud aprobada ✅" : "Solicitud declinada ✅"
       );
 
-      // refrescamos stats + lista por filtros (por si ya no coincide)
       setTimeout(() => loadRequests(), 150);
     } catch (err) {
       setRequestsError(err?.message || "No se pudo moderar la solicitud.");
@@ -704,6 +707,7 @@ function AdminDashboardPage() {
                     <th>Proveedor</th>
                     <th>Estatus</th>
                     <th>Visibilidad</th>
+                    <th>Modalidad</th>
                     <th>Notas</th>
                     <th>Acciones</th>
                   </tr>
@@ -712,6 +716,7 @@ function AdminDashboardPage() {
                 <tbody>
                   {providers.map((p) => {
                     const isBusy = providerBusyId === p.user_id;
+                    const isFeatured = Boolean(p.is_featured);
 
                     return (
                       <tr key={p.user_id}>
@@ -752,6 +757,12 @@ function AdminDashboardPage() {
                           </span>
                         </td>
 
+                        <td>
+                          <span className={badgeClass("featured", isFeatured)}>
+                            {isFeatured ? "⭐ Destacado" : "Gratis"}
+                          </span>
+                        </td>
+
                         <td style={{ minWidth: 260 }}>
                           <textarea
                             className="admin-notes"
@@ -768,8 +779,25 @@ function AdminDashboardPage() {
                           <div className="admin-notes__hint">Tip: se guarda al perder foco.</div>
                         </td>
 
-                        <td style={{ minWidth: 260 }}>
+                        <td style={{ minWidth: 340 }}>
                           <div className="admin-actions">
+                            <button
+                              className={isFeatured ? "btn btn--ghost" : "btn btn--primary"}
+                              disabled={isBusy}
+                              onClick={() =>
+                                patchProvider(
+                                  p.user_id,
+                                  { is_featured: !isFeatured },
+                                  isFeatured
+                                    ? "Proveedor ahora es gratis ✅"
+                                    : "Proveedor marcado como Destacado ✅"
+                                )
+                              }
+                              title="Activa/Desactiva Proveedor Destacado Kelom"
+                            >
+                              {isBusy ? "…" : isFeatured ? "Quitar destacado" : "Hacer destacado"}
+                            </button>
+
                             <button
                               className="btn btn--primary"
                               disabled={isBusy}
@@ -787,7 +815,9 @@ function AdminDashboardPage() {
                             <button
                               className="btn btn--ghost"
                               disabled={isBusy}
-                              onClick={() => patchProvider(p.user_id, { public_visibility: "hidden" }, "Ocultado ✅")}
+                              onClick={() =>
+                                patchProvider(p.user_id, { public_visibility: "hidden" }, "Ocultado ✅")
+                              }
                             >
                               Ocultar
                             </button>
@@ -827,7 +857,7 @@ function AdminDashboardPage() {
 
                   {!providers.length && (
                     <tr>
-                      <td colSpan={5} style={{ padding: "1rem" }}>
+                      <td colSpan={6} style={{ padding: "1rem" }}>
                         {providersLoading ? "Cargando…" : "No hay resultados con estos filtros."}
                       </td>
                     </tr>
@@ -886,7 +916,9 @@ function AdminDashboardPage() {
 
                             <div className="admin-provider__meta">
                               <div className="admin-provider__id">ID: {u.id}</div>
-                              <div className="admin-provider__review">Creado: {new Date(u.created_at).toLocaleString()}</div>
+                              <div className="admin-provider__review">
+                                Creado: {new Date(u.created_at).toLocaleString()}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -896,7 +928,9 @@ function AdminDashboardPage() {
                         </td>
 
                         <td>
-                          <span className={badgeClass("user-status", u.account_status)}>{u.account_status}</span>
+                          <span className={badgeClass("user-status", u.account_status)}>
+                            {u.account_status}
+                          </span>
                         </td>
 
                         <td style={{ minWidth: 240 }}>
@@ -906,7 +940,9 @@ function AdminDashboardPage() {
                                 <strong>Motivo:</strong> {u.blocked_reason || "—"}
                               </div>
                               <div className="admin-provider__review">
-                                {u.blocked_at ? `Bloqueado: ${new Date(u.blocked_at).toLocaleString()}` : "Bloqueado"}
+                                {u.blocked_at
+                                  ? `Bloqueado: ${new Date(u.blocked_at).toLocaleString()}`
+                                  : "Bloqueado"}
                               </div>
                             </div>
                           ) : (
@@ -926,7 +962,11 @@ function AdminDashboardPage() {
                                 {isBusy ? "…" : "Bloquear"}
                               </button>
                             ) : (
-                              <button className="btn btn--primary" disabled={isBusy} onClick={() => handleUnblockUser(u.id)}>
+                              <button
+                                className="btn btn--primary"
+                                disabled={isBusy}
+                                onClick={() => handleUnblockUser(u.id)}
+                              >
                                 {isBusy ? "…" : "Desbloquear"}
                               </button>
                             )}
@@ -997,7 +1037,9 @@ function AdminDashboardPage() {
                             <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>
                               {r.provider_is_featured ? "⭐ Destacado" : "Gratis"}
                             </span>
-                            <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>ID: {r.provider_id}</span>
+                            <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>
+                              ID: {r.provider_id}
+                            </span>
                           </div>
                         </td>
 
@@ -1006,7 +1048,9 @@ function AdminDashboardPage() {
                             <strong>{requesterLabel}</strong>
                             <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>{requesterEmail}</span>
                             {r.requester_phone ? (
-                              <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>{r.requester_phone}</span>
+                              <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>
+                                {r.requester_phone}
+                              </span>
                             ) : null}
                             <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>
                               Horario: {r.preferred_contact_schedule || "—"}
