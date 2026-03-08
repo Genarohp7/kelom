@@ -35,10 +35,10 @@ const USER_STATUSES = [
 ];
 
 const REQUEST_MOD_STATUSES = [
-  { value: "", label: "Todas" },
   { value: "pending", label: "Pendientes" },
   { value: "approved", label: "Aprobadas" },
   { value: "declined", label: "Declinadas" },
+  { value: "", label: "Todas" },
 ];
 
 function badgeClass(kind, value) {
@@ -71,17 +71,17 @@ function badgeClass(kind, value) {
     return "admin-badge";
   }
 
-  if (kind === "request-mod") {
+  if (kind === "moderation") {
     if (v === "approved") return "admin-badge admin-badge--ok";
     if (v === "pending") return "admin-badge admin-badge--warn";
     if (v === "declined") return "admin-badge admin-badge--bad";
     return "admin-badge";
   }
 
-  if (kind === "request-provider-status") {
-    if (v === "atendida") return "admin-badge admin-badge--ok";
-    if (v === "pendiente") return "admin-badge admin-badge--info";
+  if (kind === "provider-status") {
     if (v === "sin_atender") return "admin-badge admin-badge--warn";
+    if (v === "pendiente") return "admin-badge admin-badge--info";
+    if (v === "atendida") return "admin-badge admin-badge--ok";
     if (v === "cerrada") return "admin-badge admin-badge--muted";
     return "admin-badge";
   }
@@ -89,36 +89,13 @@ function badgeClass(kind, value) {
   return "admin-badge";
 }
 
-function formatDateTime(value) {
-  if (!value) return "—";
+function formatDateTime(v) {
+  if (!v) return "—";
   try {
-    return new Date(value).toLocaleString();
+    return new Date(v).toLocaleString();
   } catch {
-    return String(value);
+    return "—";
   }
-}
-
-function csvEscape(value) {
-  const s = String(value ?? "");
-  const needsQuotes = /[",\n\r]/.test(s);
-  const escaped = s.replaceAll('"', '""');
-  return needsQuotes ? `"${escaped}"` : escaped;
-}
-
-function downloadCsv(filename, rows) {
-  // BOM para Excel (UTF-8)
-  const bom = "\ufeff";
-  const csv = rows.map((r) => r.map(csvEscape).join(",")).join("\n");
-  const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8" });
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
 }
 
 function AdminDashboardPage() {
@@ -127,6 +104,7 @@ function AdminDashboardPage() {
   const [adminUser, setAdminUser] = useState(null);
   const [isChecking, setIsChecking] = useState(true);
 
+  // providers | users | requests
   const [activeSection, setActiveSection] = useState("providers");
 
   // =========================
@@ -178,7 +156,7 @@ function AdminDashboardPage() {
   }, [userFilters]);
 
   // =========================
-  // Requests (Solicitudes) state
+  // Requests (Info Requests) state
   // =========================
   const [requestFilters, setRequestFilters] = useState({
     moderation_status: "pending",
@@ -191,21 +169,19 @@ function AdminDashboardPage() {
   const [requestsError, setRequestsError] = useState("");
   const [requestsFlash, setRequestsFlash] = useState("");
 
+  const [requestStats, setRequestStats] = useState({
+    pending: 0,
+    approved: 0,
+    declined: 0,
+  });
+
   const requestsQueryString = useMemo(() => {
     const p = new URLSearchParams();
     if (requestFilters.moderation_status) p.set("moderation_status", requestFilters.moderation_status);
     if (requestFilters.q.trim()) p.set("q", requestFilters.q.trim());
-    p.set("limit", "200");
+    p.set("limit", "100");
     return p.toString();
   }, [requestFilters]);
-
-  const requestStats = useMemo(() => {
-    const total = requests.length;
-    const pending = requests.filter((r) => r.moderation_status === "pending").length;
-    const approved = requests.filter((r) => r.moderation_status === "approved").length;
-    const declined = requests.filter((r) => r.moderation_status === "declined").length;
-    return { total, pending, approved, declined };
-  }, [requests]);
 
   // =========================
   // Boot
@@ -375,35 +351,59 @@ function AdminDashboardPage() {
     setRequestFilters((prev) => ({ ...prev, [name]: value }));
   }
 
+  async function loadRequestStats() {
+    try {
+      const data = await adminApiFetch("/admin/info-requests/stats", { method: "GET" });
+      setRequestStats({
+        pending: Number(data?.pending || 0),
+        approved: Number(data?.approved || 0),
+        declined: Number(data?.declined || 0),
+      });
+    } catch {
+      // si falla stats, no rompemos el panel
+      setRequestStats((prev) => ({ ...prev }));
+    }
+  }
+
   async function loadRequests() {
     setRequestsError("");
     setRequestsFlash("");
     setRequestsLoading(true);
 
     try {
-      // Nota: este endpoint lo conectamos en el siguiente paso en server.js
       const data = await adminApiFetch(`/admin/info-requests?${requestsQueryString}`, {
         method: "GET",
       });
       setRequests(Array.isArray(data?.requests) ? data.requests : []);
+      await loadRequestStats();
     } catch (err) {
-      setRequestsError(err?.message || "No se pudieron cargar las solicitudes.");
-      setRequests([]);
+      setRequestsError(err?.message || "No se pudo cargar la lista de solicitudes.");
     } finally {
       setRequestsLoading(false);
     }
   }
 
-  async function patchRequestModeration(requestId, patch, successMsg) {
+  async function moderateRequest(requestId, moderation_status) {
+    const notes = window.prompt(
+      moderation_status === "approved"
+        ? "Notas opcionales (por qué se aprueba):"
+        : "Motivo/nota (recomendado) para declinar:",
+      ""
+    );
+
+    if (notes === null) return; // cancelado
+
     setRequestBusyId(requestId);
     setRequestsError("");
     setRequestsFlash("");
 
     try {
-      // Nota: este endpoint lo conectamos en el siguiente paso en server.js
-      const data = await adminApiFetch(`/admin/info-requests/${requestId}`, {
+      const data = await adminApiFetch(`/admin/info-requests/${requestId}/moderate`, {
         method: "PATCH",
-        body: JSON.stringify(patch),
+        body: JSON.stringify({
+          moderation_status,
+          moderation_notes: String(notes || "").trim() || null,
+        }),
       });
 
       const updated = data?.request;
@@ -414,102 +414,26 @@ function AdminDashboardPage() {
             ? {
                 ...r,
                 moderation_status: updated?.moderation_status ?? r.moderation_status,
-                moderation_notes: updated?.moderation_notes ?? r.moderation_notes,
                 moderated_by: updated?.moderated_by ?? r.moderated_by,
                 moderated_at: updated?.moderated_at ?? r.moderated_at,
+                moderation_notes: updated?.moderation_notes ?? r.moderation_notes,
                 updated_at: updated?.updated_at ?? r.updated_at,
               }
             : r
         )
       );
 
-      setRequestsFlash(successMsg || "Actualizado ✅");
+      setRequestsFlash(
+        moderation_status === "approved" ? "Solicitud aprobada ✅" : "Solicitud declinada ✅"
+      );
+
+      // refrescamos stats + lista por filtros (por si ya no coincide)
       setTimeout(() => loadRequests(), 150);
     } catch (err) {
-      setRequestsError(err?.message || "No se pudo actualizar la solicitud.");
+      setRequestsError(err?.message || "No se pudo moderar la solicitud.");
     } finally {
       setRequestBusyId(null);
     }
-  }
-
-  function exportRequestsCsv() {
-    const today = new Date().toISOString().slice(0, 10);
-    const filename = `kelom_solicitudes_${today}.csv`;
-
-    const header = [
-      "id",
-      "created_at",
-      "provider_id",
-      "provider_label",
-      "requester_user_id",
-      "requester_name",
-      "requester_email",
-      "requester_phone",
-      "preferred_contact_schedule",
-      "message",
-      "moderation_status",
-      "moderation_notes",
-      "moderated_by",
-      "moderated_at",
-      "provider_status",
-    ];
-
-    const rows = [
-      header,
-      ...requests.map((r) => {
-        const providerLabel =
-          r.provider_venue_name ||
-          r.provider_company_name ||
-          r.provider_email ||
-          r.provider_id ||
-          "";
-        return [
-          r.id || "",
-          r.created_at || "",
-          r.provider_id || "",
-          providerLabel,
-          r.requester_user_id || "",
-          r.requester_name || "",
-          r.requester_email || "",
-          r.requester_phone || "",
-          r.preferred_contact_schedule || "",
-          r.message || "",
-          r.moderation_status || "",
-          r.moderation_notes || "",
-          r.moderated_by || "",
-          r.moderated_at || "",
-          r.provider_status || "",
-        ];
-      }),
-    ];
-
-    downloadCsv(filename, rows);
-    setRequestsFlash("Archivo CSV generado ✅ (Excel lo abre directo)");
-  }
-
-  function handleApproveRequest(id) {
-    const note = window.prompt("Nota (opcional) para auditoría:", "Aprobada por admin");
-    if (note === null) return;
-
-    patchRequestModeration(
-      id,
-      { moderation_status: "approved", moderation_notes: note.trim() },
-      "Solicitud aprobada ✅"
-    );
-  }
-
-  function handleDeclineRequest(id) {
-    const note = window.prompt(
-      "Motivo de declinación (recomendado):",
-      "Declinada por políticas de la empresa"
-    );
-    if (note === null) return;
-
-    patchRequestModeration(
-      id,
-      { moderation_status: "declined", moderation_notes: note.trim() },
-      "Solicitud declinada ✅"
-    );
   }
 
   // =========================
@@ -541,6 +465,8 @@ function AdminDashboardPage() {
     navigate("/", { replace: true });
   }
 
+  const moderatedTotal = (requestStats.approved || 0) + (requestStats.declined || 0);
+
   if (isChecking) {
     return (
       <div className="admin">
@@ -552,20 +478,6 @@ function AdminDashboardPage() {
       </div>
     );
   }
-
-  const refreshHandler =
-    activeSection === "providers"
-      ? loadProviders
-      : activeSection === "users"
-      ? loadUsers
-      : loadRequests;
-
-  const refreshDisabled =
-    activeSection === "providers"
-      ? providersLoading
-      : activeSection === "users"
-      ? usersLoading
-      : requestsLoading;
 
   return (
     <div className="admin">
@@ -579,9 +491,19 @@ function AdminDashboardPage() {
           </div>
 
           <div className="admin__topbar-actions">
-            <button className="btn btn--ghost" onClick={refreshHandler} disabled={refreshDisabled}>
-              {refreshDisabled ? "Cargando…" : "Refrescar"}
-            </button>
+            {activeSection === "providers" ? (
+              <button className="btn btn--ghost" onClick={loadProviders} disabled={providersLoading}>
+                {providersLoading ? "Cargando…" : "Refrescar"}
+              </button>
+            ) : activeSection === "users" ? (
+              <button className="btn btn--ghost" onClick={loadUsers} disabled={usersLoading}>
+                {usersLoading ? "Cargando…" : "Refrescar"}
+              </button>
+            ) : (
+              <button className="btn btn--ghost" onClick={loadRequests} disabled={requestsLoading}>
+                {requestsLoading ? "Cargando…" : "Refrescar"}
+              </button>
+            )}
 
             <button className="btn btn--primary" onClick={handleLogout}>
               Salir
@@ -617,11 +539,14 @@ function AdminDashboardPage() {
               Solicitudes
             </button>
 
-            {activeSection === "requests" && (
-              <button className="btn btn--ghost" onClick={exportRequestsCsv} disabled={requestsLoading}>
-                Exportar Excel
-              </button>
-            )}
+            <button
+              className="btn btn--ghost"
+              disabled
+              title="En el siguiente paso conectamos exportación a Excel"
+              style={{ opacity: 0.7 }}
+            >
+              Exportar Excel
+            </button>
           </div>
 
           {activeSection === "providers" ? (
@@ -749,7 +674,7 @@ function AdminDashboardPage() {
                 <div className="admin-filters__group" style={{ minWidth: 260 }}>
                   <label className="admin-filters__label">Métricas</label>
                   <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <span className="admin-badge admin-badge--muted">Total: {requestStats.total}</span>
+                    <span className="admin-badge admin-badge--muted">Total: {moderatedTotal}</span>
                     <span className="admin-badge admin-badge--warn">Pend: {requestStats.pending}</span>
                     <span className="admin-badge admin-badge--ok">Apr: {requestStats.approved}</span>
                     <span className="admin-badge admin-badge--bad">Dec: {requestStats.declined}</span>
@@ -961,9 +886,7 @@ function AdminDashboardPage() {
 
                             <div className="admin-provider__meta">
                               <div className="admin-provider__id">ID: {u.id}</div>
-                              <div className="admin-provider__review">
-                                Creado: {new Date(u.created_at).toLocaleString()}
-                              </div>
+                              <div className="admin-provider__review">Creado: {new Date(u.created_at).toLocaleString()}</div>
                             </div>
                           </div>
                         </td>
@@ -1025,8 +948,8 @@ function AdminDashboardPage() {
             </div>
 
             <div className="admin-footer-note">
-              Nota: bloquear un usuario evita su acceso autenticado mientras su <strong>account_status</strong> sea{" "}
-              <strong>blocked</strong>.
+              Nota: bloquear un usuario evita su acceso autenticado mientras su{" "}
+              <strong>account_status</strong> sea <strong>blocked</strong>.
             </div>
           </div>
         ) : (
@@ -1059,74 +982,68 @@ function AdminDashboardPage() {
                     const providerLabel =
                       r.provider_venue_name ||
                       r.provider_company_name ||
-                      r.provider_email ||
-                      r.provider_id ||
-                      "—";
+                      (r.provider_id ? `ID: ${r.provider_id}` : "—");
 
-                    const requesterLabel =
-                      r.requester_name ||
-                      r.requester_email ||
-                      r.requester_user_id ||
-                      "—";
+                    const requesterLabel = r.requester_name || "Sin nombre";
+                    const requesterEmail = r.requester_email || "—";
 
                     return (
                       <tr key={r.id}>
                         <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(r.created_at)}</td>
 
                         <td style={{ minWidth: 220 }}>
-                          <div style={{ display: "grid", gap: 4 }}>
-                            <div style={{ fontWeight: 600 }}>{providerLabel}</div>
-                            <div style={{ opacity: 0.75, fontSize: 12 }}>ID: {r.provider_id}</div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                            <strong>{providerLabel}</strong>
+                            <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>
+                              {r.provider_is_featured ? "⭐ Destacado" : "Gratis"}
+                            </span>
+                            <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>ID: {r.provider_id}</span>
                           </div>
                         </td>
 
                         <td style={{ minWidth: 220 }}>
-                          <div style={{ display: "grid", gap: 4 }}>
-                            <div style={{ fontWeight: 600 }}>{requesterLabel}</div>
-                            <div style={{ opacity: 0.85, fontSize: 12 }}>
-                              {r.requester_email ? r.requester_email : "—"}
-                              {r.requester_phone ? ` • ${r.requester_phone}` : ""}
-                            </div>
-                            <div style={{ opacity: 0.75, fontSize: 12 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                            <strong>{requesterLabel}</strong>
+                            <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>{requesterEmail}</span>
+                            {r.requester_phone ? (
+                              <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>{r.requester_phone}</span>
+                            ) : null}
+                            <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>
                               Horario: {r.preferred_contact_schedule || "—"}
-                            </div>
+                            </span>
                           </div>
                         </td>
 
                         <td>
-                          <span className={badgeClass("request-mod", r.moderation_status)}>
+                          <span className={badgeClass("moderation", r.moderation_status)}>
                             {r.moderation_status}
                           </span>
-                          {r.moderated_at ? (
-                            <div style={{ opacity: 0.7, fontSize: 12, marginTop: 4 }}>
-                              {formatDateTime(r.moderated_at)}
+                          {r.moderation_notes ? (
+                            <div style={{ marginTop: "0.35rem", opacity: 0.75, fontSize: "0.85rem" }}>
+                              Nota: {r.moderation_notes}
                             </div>
                           ) : null}
                         </td>
 
                         <td>
-                          <span className={badgeClass("request-provider-status", r.provider_status)}>
+                          <span className={badgeClass("provider-status", r.provider_status)}>
                             {r.provider_status}
                           </span>
                         </td>
 
                         <td style={{ minWidth: 320 }}>
-                          <div style={{ display: "grid", gap: 6 }}>
-                            <div style={{ color: "rgba(0,0,0,0.75)" }}>{r.message}</div>
-                            {r.moderation_notes ? (
-                              <div style={{ opacity: 0.75, fontSize: 12 }}>
-                                Nota: {r.moderation_notes}
-                              </div>
-                            ) : null}
+                          <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>
+                            {String(r.message || "").slice(0, 320)}
+                            {String(r.message || "").length > 320 ? "…" : ""}
                           </div>
                         </td>
 
-                        <td style={{ minWidth: 220 }}>
+                        <td style={{ minWidth: 260 }}>
                           <div className="admin-actions">
                             <button
                               className="btn btn--primary"
                               disabled={isBusy || r.moderation_status === "approved"}
-                              onClick={() => handleApproveRequest(r.id)}
+                              onClick={() => moderateRequest(r.id, "approved")}
                             >
                               {isBusy ? "…" : "Aprobar"}
                             </button>
@@ -1134,11 +1051,17 @@ function AdminDashboardPage() {
                             <button
                               className="btn btn--ghost"
                               disabled={isBusy || r.moderation_status === "declined"}
-                              onClick={() => handleDeclineRequest(r.id)}
+                              onClick={() => moderateRequest(r.id, "declined")}
                             >
                               Declinar
                             </button>
                           </div>
+
+                          {r.moderated_at ? (
+                            <div style={{ marginTop: "0.5rem", opacity: 0.65, fontSize: "0.85rem" }}>
+                              Moderado: {formatDateTime(r.moderated_at)}
+                            </div>
+                          ) : null}
                         </td>
                       </tr>
                     );
@@ -1156,8 +1079,8 @@ function AdminDashboardPage() {
             </div>
 
             <div className="admin-footer-note">
-              Nota: aquí solo estamos preparando el panel. En el siguiente paso conectamos los endpoints del backend para
-              que la lista cargue y puedas aprobar/declinar de verdad.
+              Nota: al aprobar/declinar aquí, la solicitud queda moderada. En el siguiente paso conectamos
+              el envío por EmailJS y la visibilidad al proveedor.
             </div>
           </div>
         )}
