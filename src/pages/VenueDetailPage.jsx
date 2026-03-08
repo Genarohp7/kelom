@@ -2,10 +2,7 @@
 import "../../Blocks/venues/VenueDetailPage.css";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
-import {
-  clearProviderSession,
-  getProviderToken,
-} from "../services/providerAuth";
+import { clearProviderSession, getProviderToken } from "../services/providerAuth";
 import { getToken } from "../utils/auth.js";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
@@ -203,17 +200,15 @@ function VenueDetailPage() {
   const [apiVenue, setApiVenue] = useState(null);
   const [apiError, setApiError] = useState("");
 
-  // Modal modes: null | "request" | "register"
+  // modal modes: null | "request" | "register"
   const [modalMode, setModalMode] = useState(null);
 
   const [requestMessage, setRequestMessage] = useState(DEFAULT_REQUEST_MESSAGE);
   const [preferredSchedule, setPreferredSchedule] = useState("");
   const [requestUiMessage, setRequestUiMessage] = useState("");
 
-  const [isSendingRequest, setIsSendingRequest] = useState(false);
-  const [requestSendError, setRequestSendError] = useState("");
-
-  const isModalOpen = modalMode !== null;
+  const [requestSending, setRequestSending] = useState(false);
+  const [requestError, setRequestError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -273,10 +268,7 @@ function VenueDetailPage() {
           const data = await fetchJson(`${API_BASE}/providers/me`, { token });
           if (cancelled) return;
 
-          const venue = mapApiProviderToVenue(
-            data?.profile,
-            data?.photos || [],
-          );
+          const venue = mapApiProviderToVenue(data?.profile, data?.photos || []);
           setApiVenue(venue);
         } catch (err) {
           const msg = String(err?.message || "No se pudo cargar el perfil.");
@@ -302,16 +294,12 @@ function VenueDetailPage() {
           const data = await fetchJson(`${API_BASE}/providers/${id}`);
           if (cancelled) return;
 
-          const venue = mapApiProviderToVenue(
-            data?.profile,
-            data?.photos || [],
-          );
+          const venue = mapApiProviderToVenue(data?.profile, data?.photos || []);
           setApiVenue(venue);
         } catch (err) {
-          if (!cancelled)
-            setApiError(
-              String(err?.message || "No se pudo cargar el proveedor."),
-            );
+          if (!cancelled) {
+            setApiError(String(err?.message || "No se pudo cargar el proveedor."));
+          }
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -325,9 +313,10 @@ function VenueDetailPage() {
     };
   }, [id, isProviderView, navigate, location.pathname, location.search]);
 
-  // lock scroll + ESC when modal open
+  const isAnyModalOpen = modalMode !== null;
+
   useEffect(() => {
-    if (!isModalOpen) return undefined;
+    if (!isAnyModalOpen) return undefined;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -344,27 +333,23 @@ function VenueDetailPage() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleEsc);
     };
-  }, [isModalOpen]);
+  }, [isAnyModalOpen]);
 
   const venue = useMemo(() => {
     if (apiVenue) return apiVenue;
-    const foundDemo = venuesDetail.find(
-      (item) => String(item.id) === String(id),
-    );
+    const foundDemo = venuesDetail.find((item) => String(item.id) === String(id));
     return foundDemo || null;
   }, [apiVenue, id]);
 
   const isRequestSubmitDisabled =
-    isSendingRequest ||
+    requestSending ||
     !String(preferredSchedule || "").trim() ||
     !String(requestMessage || "").trim();
 
   const handleGoEdit = () => {
     const token = getProviderToken();
     if (!token) {
-      navigate("/empresas/acceso", {
-        state: { from: "/empresas/registro/completar" },
-      });
+      navigate("/empresas/acceso", { state: { from: "/empresas/registro/completar" } });
       return;
     }
     navigate("/empresas/registro/completar", { state: { authMode: "edit" } });
@@ -375,20 +360,31 @@ function VenueDetailPage() {
     navigate("/empresas", { replace: true });
   };
 
-  const closeAnyModal = () => {
-    if (isSendingRequest) return;
+  const closeModal = () => {
     setModalMode(null);
   };
 
-  const openRegisterModal = () => {
-    setRequestSendError("");
-    setRequestUiMessage("");
-    setModalMode("register");
-  };
+  const openRequestFlow = () => {
+    // solo aplica para vista usuario (no proveedor)
+    if (isProviderView) return;
 
-  const openRequestModal = () => {
-    setRequestSendError("");
+    // 1) gating por login/registro
+    const token = getToken();
+    if (!token) {
+      setRequestError("");
+      setModalMode("register");
+      return;
+    }
+
+    // 2) solo permitimos enviar si el proveedor es UUID real
+    const providerId = isUuid(id) ? id : isUuid(venue?.id) ? venue.id : "";
+    if (!providerId) {
+      setRequestUiMessage("Este proveedor es demo; aún no se puede enviar solicitud aquí.");
+      return;
+    }
+
     setRequestUiMessage("");
+    setRequestError("");
     setRequestMessage(DEFAULT_REQUEST_MESSAGE);
     setPreferredSchedule("");
     setModalMode("request");
@@ -400,89 +396,50 @@ function VenueDetailPage() {
     }
   };
 
-  const handleClickRequestInfo = () => {
-    // Solo aplica a vista de usuario
-    if (isProviderView) return;
-
-    const userToken = getToken();
-    if (!userToken) {
-      // Regla 1: si NO está logeado → NO abre formulario
-      openRegisterModal();
-      return;
-    }
-
-    // Regla 2: si SÍ está logeado → abre formulario
-    openRequestModal();
-  };
-
-  const postInfoRequest = async ({ providerId, message, preferredContactSchedule, token }) => {
-    const res = await fetch(`${API_BASE}/info-requests`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ providerId, message, preferredContactSchedule }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const msg = data?.error || `Error HTTP ${res.status}`;
-      const err = new Error(msg);
-      err.status = res.status;
-      throw err;
-    }
-    return data;
-  };
-
   const handleRequestSubmit = async (event) => {
     event.preventDefault();
     if (isRequestSubmitDisabled) return;
 
-    setRequestSendError("");
-
-    // seguridad extra: este modal solo debe abrir con login, pero por si acaso…
     const token = getToken();
     if (!token) {
-      setModalMode(null);
-      openRegisterModal();
+      setModalMode("register");
       return;
     }
 
-    // providerId debe ser UUID sí o sí (en prod lo es)
-    if (!isUuid(id)) {
-      setRequestSendError("Este proveedor está en modo demo. No se puede enviar solicitud aquí.");
+    const providerId = isUuid(id) ? id : isUuid(venue?.id) ? venue.id : "";
+    if (!providerId) {
+      setRequestError("Proveedor inválido para enviar solicitud.");
       return;
     }
+
+    setRequestSending(true);
+    setRequestError("");
 
     try {
-      setIsSendingRequest(true);
-
-      await postInfoRequest({
-        providerId: id,
-        message: String(requestMessage || "").trim(),
-        preferredContactSchedule: String(preferredSchedule || "").trim(),
-        token,
+      const res = await fetch(`${API_BASE}/info-requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          providerId,
+          message: String(requestMessage || "").trim(),
+          preferredContactSchedule: String(preferredSchedule || "").trim(),
+        }),
       });
 
-      setModalMode(null);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+      closeModal();
       setRequestUiMessage(
-        "Listo ✅ Tu solicitud fue enviada y quedó en revisión por el administrador.",
+        "Solicitud enviada ✅ Quedó pendiente de revisión por Kelom antes de llegar al proveedor.",
       );
     } catch (err) {
-      const status = err?.status;
-
-      // si token inválido/expirado
-      if (status === 401 || status === 403) {
-        setModalMode(null);
-        setRequestUiMessage("");
-        openRegisterModal();
-        return;
-      }
-
-      setRequestSendError(String(err?.message || "No se pudo enviar la solicitud."));
+      setRequestError(String(err?.message || "No se pudo enviar la solicitud."));
     } finally {
-      setIsSendingRequest(false);
+      setRequestSending(false);
     }
   };
 
@@ -521,10 +478,7 @@ function VenueDetailPage() {
         <section className="venue-not-found">
           <div className="container">
             <h1>Proveedor no encontrado</h1>
-            <p>
-              Es posible que el enlace sea incorrecto o que el proveedor no
-              exista.
-            </p>
+            <p>Es posible que el enlace sea incorrecto o que el proveedor no exista.</p>
             <Link to="/" className="venue-not-found__back-link">
               ← Volver a la lista de lugares
             </Link>
@@ -544,10 +498,7 @@ function VenueDetailPage() {
                 to={isProviderView ? "/empresas" : "/"}
                 className="venue-hero__back-link"
               >
-                ←{" "}
-                {isProviderView
-                  ? "Volver al área de empresas"
-                  : "Volver a la lista de lugares"}
+                ← {isProviderView ? "Volver al área de empresas" : "Volver a la lista de lugares"}
               </Link>
 
               <span className="venue-hero__pill">
@@ -585,11 +536,7 @@ function VenueDetailPage() {
                 </button>
 
                 {!isProviderView && (
-                  <button
-                    type="button"
-                    className="btn btn--primary"
-                    onClick={handleClickRequestInfo}
-                  >
+                  <button type="button" className="btn btn--primary" onClick={openRequestFlow}>
                     Solicitar información
                   </button>
                 )}
@@ -628,18 +575,10 @@ function VenueDetailPage() {
                       </svg>
                     </button>
 
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={handleGoEdit}
-                    >
+                    <button type="button" className="btn btn--primary" onClick={handleGoEdit}>
                       Editar mi perfil
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={handleLogout}
-                    >
+                    <button type="button" className="btn btn--ghost" onClick={handleLogout}>
                       Cerrar sesión
                     </button>
                   </>
@@ -648,11 +587,7 @@ function VenueDetailPage() {
             </div>
 
             <div className="venue-hero__media">
-              <img
-                src={venue.mainImage}
-                alt={venue.name}
-                className="venue-hero__image"
-              />
+              <img src={venue.mainImage} alt={venue.name} className="venue-hero__image" />
             </div>
           </div>
         </section>
@@ -665,11 +600,7 @@ function VenueDetailPage() {
             <div className="venue-gallery__grid">
               {(venue.gallery || []).map((photo, index) => (
                 <figure key={index} className="venue-gallery__item">
-                  <img
-                    src={photo}
-                    alt={`${venue.name} foto ${index + 1}`}
-                    loading="lazy"
-                  />
+                  <img src={photo} alt={`${venue.name} foto ${index + 1}`} loading="lazy" />
                 </figure>
               ))}
             </div>
@@ -684,9 +615,7 @@ function VenueDetailPage() {
                 <p>{venue.shortDescription}</p>
 
                 <div className="venue-info__tags">
-                  {venue.category ? (
-                    <span className="chip">{venue.category}</span>
-                  ) : null}
+                  {venue.category ? <span className="chip">{venue.category}</span> : null}
                   <span className="chip">{venue.capacity}</span>
                   <span className="chip">{venue.priceRange}</span>
                   {(venue.eventTypes || []).map((type) => (
@@ -698,9 +627,7 @@ function VenueDetailPage() {
 
                 {venue.sellingPoints && venue.sellingPoints.length > 0 && (
                   <>
-                    <h3 style={{ marginTop: "1.2rem" }}>
-                      Lo mejor de este lugar
-                    </h3>
+                    <h3 style={{ marginTop: "1.2rem" }}>Lo mejor de este lugar</h3>
                     <ul style={{ marginTop: "0.6rem" }}>
                       {venue.sellingPoints.map((p) => (
                         <li key={p}>{p}</li>
@@ -771,168 +698,172 @@ function VenueDetailPage() {
         </section>
       </div>
 
-      {/* ===== Modal (register or request) ===== */}
-      {!isProviderView && isModalOpen && (
+      {/* ===== Modal: pedir registro ===== */}
+      {!isProviderView && modalMode === "register" && (
         <div
           className="venue-request-modal"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="venue-request-modal-title"
+          aria-labelledby="venue-register-modal-title"
           onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              closeAnyModal();
-            }
+            if (event.target === event.currentTarget) closeModal();
           }}
         >
           <div className="venue-request-modal__card">
             <button
               type="button"
               className="venue-request-modal__close"
-              onClick={closeAnyModal}
+              onClick={closeModal}
               aria-label="Cerrar ventana"
-              disabled={isSendingRequest}
-              style={{ opacity: isSendingRequest ? 0.6 : 1 }}
             >
               ×
             </button>
 
-            {modalMode === "register" ? (
-              <>
-                <div className="venue-request-modal__header">
-                  <p className="venue-request-modal__eyebrow">Antes de continuar</p>
-                  <h2
-                    id="venue-request-modal-title"
-                    className="venue-request-modal__title"
-                  >
-                    Primero debes registrarte
-                  </h2>
-                  <p className="venue-request-modal__subtitle">
-                    Para solicitar información a un proveedor necesitas una cuenta.
-                  </p>
-                </div>
+            <div className="venue-request-modal__header">
+              <p className="venue-request-modal__eyebrow">Registro requerido</p>
+              <h2 id="venue-register-modal-title" className="venue-request-modal__title">
+                Para solicitar información necesitas registrarte
+              </h2>
+              <p className="venue-request-modal__subtitle">
+                Así cuidamos a proveedores y usuarios (y evitamos el apocalipsis del spam).
+              </p>
+            </div>
 
-                <div className="venue-request-form">
-                  <div className="venue-request-form__actions">
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={closeAnyModal}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={() => {
-                        closeAnyModal();
-                        navigate("/registro", {
-                          state: { from: location.pathname + location.search },
-                        });
-                      }}
-                    >
-                      Ir a registrarme
-                    </button>
-                  </div>
+            <div className="venue-request-form__actions" style={{ marginTop: "1rem" }}>
+              <button type="button" className="btn btn--ghost" onClick={closeModal}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  closeModal();
+                  navigate("/registro", {
+                    state: { from: location.pathname + location.search },
+                  });
+                }}
+              >
+                Ir a registro
+              </button>
+            </div>
 
-                  <p className="venue-request-form__disclaimer">
-                    Tip nerd: esto evita spam y nos permite moderar solicitudes antes de enviarlas.
-                  </p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="venue-request-modal__header">
-                  <p className="venue-request-modal__eyebrow">Solicitud rápida</p>
-                  <h2
-                    id="venue-request-modal-title"
-                    className="venue-request-modal__title"
-                  >
-                    Solicitar información a {venue.name}
-                  </h2>
-                  <p className="venue-request-modal__subtitle">
-                    Déjale al proveedor un mensaje breve y el horario en el que
-                    prefieres ser contactado.
-                  </p>
-                </div>
+            <div style={{ marginTop: "0.9rem", fontSize: "0.9rem", opacity: 0.8 }}>
+              ¿Ya tienes cuenta? Ve a{" "}
+              <button
+                type="button"
+                className="btn btn--ghost"
+                style={{ padding: "0.25rem 0.7rem" }}
+                onClick={() => {
+                  closeModal();
+                  navigate("/acceso", {
+                    state: { from: location.pathname + location.search },
+                  });
+                }}
+              >
+                iniciar sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-                <form
-                  className="venue-request-form"
-                  onSubmit={handleRequestSubmit}
-                  noValidate
+      {/* ===== Modal: formulario solicitud ===== */}
+      {!isProviderView && modalMode === "request" && (
+        <div
+          className="venue-request-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="venue-request-modal-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeModal();
+          }}
+        >
+          <div className="venue-request-modal__card">
+            <button
+              type="button"
+              className="venue-request-modal__close"
+              onClick={closeModal}
+              aria-label="Cerrar ventana"
+            >
+              ×
+            </button>
+
+            <div className="venue-request-modal__header">
+              <p className="venue-request-modal__eyebrow">Solicitud rápida</p>
+              <h2 id="venue-request-modal-title" className="venue-request-modal__title">
+                Solicitar información a {venue.name}
+              </h2>
+              <p className="venue-request-modal__subtitle">
+                Déjale al proveedor un mensaje breve y el horario en el que prefieres ser
+                contactado.
+              </p>
+            </div>
+
+            <form className="venue-request-form" onSubmit={handleRequestSubmit} noValidate>
+              <div className="venue-request-form__field">
+                <label className="venue-request-form__label" htmlFor="venue-request-message">
+                  Mensaje
+                </label>
+                <textarea
+                  id="venue-request-message"
+                  className="venue-request-form__textarea"
+                  rows={5}
+                  value={requestMessage}
+                  onFocus={handleMessageFocus}
+                  onChange={(e) => setRequestMessage(e.target.value)}
+                />
+                <p className="venue-request-form__hint">
+                  Puedes dejar el mensaje sugerido o escribir uno más específico.
+                </p>
+              </div>
+
+              <div className="venue-request-form__field">
+                <label className="venue-request-form__label" htmlFor="venue-request-schedule">
+                  Horario preferido para ser contactado *
+                </label>
+                <input
+                  id="venue-request-schedule"
+                  type="text"
+                  className="venue-request-form__input"
+                  placeholder="Ej. Lunes a viernes de 5:00 pm a 8:00 pm"
+                  value={preferredSchedule}
+                  onChange={(e) => setPreferredSchedule(e.target.value)}
+                  required
+                />
+                <p className="venue-request-form__hint">
+                  Este campo es obligatorio para activar el envío.
+                </p>
+              </div>
+
+              {requestError ? (
+                <div
+                  style={{
+                    marginTop: "0.8rem",
+                    padding: "0.75rem 0.9rem",
+                    borderRadius: "14px",
+                    background: "rgba(239,68,68,0.10)",
+                    border: "1px solid rgba(239,68,68,0.25)",
+                    color: "rgba(127,29,29,1)",
+                    fontSize: "0.9rem",
+                  }}
                 >
-                  {requestSendError && (
-                    <div className="venue-request-banner" style={{ marginBottom: "0.9rem" }}>
-                      {requestSendError}
-                    </div>
-                  )}
+                  {requestError}
+                </div>
+              ) : null}
 
-                  <div className="venue-request-form__field">
-                    <label
-                      className="venue-request-form__label"
-                      htmlFor="venue-request-message"
-                    >
-                      Mensaje
-                    </label>
-                    <textarea
-                      id="venue-request-message"
-                      className="venue-request-form__textarea"
-                      rows={5}
-                      value={requestMessage}
-                      onFocus={handleMessageFocus}
-                      onChange={(e) => setRequestMessage(e.target.value)}
-                      disabled={isSendingRequest}
-                    />
-                    <p className="venue-request-form__hint">
-                      Puedes dejar el mensaje sugerido o escribir uno más específico.
-                    </p>
-                  </div>
+              <div className="venue-request-form__actions">
+                <button type="button" className="btn btn--ghost" onClick={closeModal}>
+                  Cancelar
+                </button>
+                <button type="submit" className="btn btn--primary" disabled={isRequestSubmitDisabled}>
+                  {requestSending ? "Enviando..." : "Enviar solicitud"}
+                </button>
+              </div>
 
-                  <div className="venue-request-form__field">
-                    <label
-                      className="venue-request-form__label"
-                      htmlFor="venue-request-schedule"
-                    >
-                      Horario preferido para ser contactado *
-                    </label>
-                    <input
-                      id="venue-request-schedule"
-                      type="text"
-                      className="venue-request-form__input"
-                      placeholder="Ej. Lunes a viernes de 5:00 pm a 8:00 pm"
-                      value={preferredSchedule}
-                      onChange={(e) => setPreferredSchedule(e.target.value)}
-                      required
-                      disabled={isSendingRequest}
-                    />
-                    <p className="venue-request-form__hint">
-                      Este campo es obligatorio para activar el envío.
-                    </p>
-                  </div>
-
-                  <div className="venue-request-form__actions">
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={closeAnyModal}
-                      disabled={isSendingRequest}
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn btn--primary"
-                      disabled={isRequestSubmitDisabled}
-                    >
-                      {isSendingRequest ? "Enviando…" : "Enviar solicitud"}
-                    </button>
-                  </div>
-
-                  <p className="venue-request-form__disclaimer">
-                    Esta solicitud se envía al backend y queda en estado <strong>pendiente</strong> para revisión del administrador.
-                  </p>
-                </form>
-              </>
-            )}
+              <p className="venue-request-form__disclaimer">
+                Nota: tu solicitud primero pasa por moderación de Kelom antes de enviarse al proveedor.
+              </p>
+            </form>
           </div>
         </div>
       )}
