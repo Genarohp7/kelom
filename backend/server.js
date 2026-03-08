@@ -92,6 +92,15 @@ const providerLoginLimiter = rateLimit({
   message: { error: "Demasiados intentos. Intenta más tarde." },
 });
 
+// ✅ Info Requests (usuarios -> proveedores)
+const infoRequestLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes. Intenta más tarde." },
+});
+
 app.use(globalLimiter);
 
 // ===================== CORS =====================
@@ -580,9 +589,7 @@ app.put("/auth/password", changePasswordLimiter, authMiddleware, async (req, res
     const { currentPassword, newPassword } = req.body || {};
 
     if (!currentPassword || !newPassword) {
-      return res
-        .status(400)
-        .json({ error: "currentPassword y newPassword son obligatorios" });
+      return res.status(400).json({ error: "currentPassword y newPassword son obligatorios" });
     }
 
     if (String(newPassword).length < 5) {
@@ -601,9 +608,7 @@ app.put("/auth/password", changePasswordLimiter, authMiddleware, async (req, res
 
     const same = await bcrypt.compare(String(newPassword), row.password_hash);
     if (same) {
-      return res
-        .status(400)
-        .json({ error: "La nueva contraseña no puede ser igual a la actual" });
+      return res.status(400).json({ error: "La nueva contraseña no puede ser igual a la actual" });
     }
 
     const newHash = await bcrypt.hash(String(newPassword), 10);
@@ -729,6 +734,112 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
   }
 });
 
+// ===================== INFO REQUESTS (USUARIO -> PROVEEDOR) =====================
+// Crea solicitud y queda pendiente de moderación. Aún NO envía correos.
+app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) => {
+  try {
+    // Solo usuarios finales (parejas)
+    if (req.user?.role !== "user") {
+      return res.status(403).json({ error: "Acceso solo para usuarios" });
+    }
+
+    const body = req.body || {};
+    const providerId = String(body.providerId || body.provider_id || "").trim();
+
+    const message = String(body.message || "").trim();
+    const preferredContactSchedule = String(
+      body.preferredContactSchedule || body.preferred_contact_schedule || ""
+    ).trim();
+
+    if (!providerId || !isUuid(providerId)) {
+      return res.status(400).json({ error: "providerId inválido" });
+    }
+
+    if (!message) {
+      return res.status(400).json({ error: "message es obligatorio" });
+    }
+
+    if (!preferredContactSchedule) {
+      return res.status(400).json({ error: "preferredContactSchedule es obligatorio" });
+    }
+
+    // límites anti-pergamino
+    const messageSafe = message.slice(0, 2000);
+    const scheduleSafe = preferredContactSchedule.slice(0, 220);
+
+    // Validar que el proveedor exista y esté publicado
+    const prov = await pool.query(
+      `
+      SELECT p.user_id
+      FROM provider_profiles p
+      JOIN users u ON u.id = p.user_id
+      WHERE p.user_id = $1
+        AND p.review_status = 'approved'
+        AND p.public_visibility = 'listed'
+        AND u.role = 'provider'
+        AND u.account_status = 'active'
+      LIMIT 1
+      `,
+      [providerId]
+    );
+
+    if (!prov.rowCount) {
+      return res.status(404).json({ error: "Proveedor no encontrado" });
+    }
+
+    // Snapshot del usuario (nombre/email) + teléfono de wedding_profiles si existe
+    const requester = await pool.query(
+      `
+      SELECT u.id, u.name, u.email, wp.phone
+      FROM users u
+      LEFT JOIN wedding_profiles wp ON wp.user_id = u.id
+      WHERE u.id = $1
+      LIMIT 1
+      `,
+      [req.user.id]
+    );
+
+    const r = requester.rows[0] || null;
+    if (!r) return res.status(401).json({ error: "No autorizado" });
+
+    const ins = await pool.query(
+      `
+      INSERT INTO provider_info_requests (
+        provider_id,
+        requester_user_id,
+        requester_name,
+        requester_email,
+        requester_phone,
+        message,
+        preferred_contact_schedule
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING
+        id,
+        provider_id,
+        requester_user_id,
+        moderation_status,
+        provider_status,
+        created_at
+      `,
+      [
+        providerId,
+        r.id,
+        r.name || null,
+        r.email || null,
+        r.phone || null,
+        messageSafe,
+        scheduleSafe,
+      ]
+    );
+
+    return res.status(201).json({ request: ins.rows[0] });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+});
+
 // ===================== PROVIDERS =====================
 
 /**
@@ -837,7 +948,7 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     const venueLocation = String(body.venueLocation || "").trim();
     const businessCategory = String(body.businessCategory || "").trim();
 
-    // ✅ NUEVO: alcaldía/municipio obligatorio
+    // ✅ alcaldía/municipio obligatorio
     const localityArea = String(body.localityArea || "").trim();
 
     const capacityMin = toIntOrNull(body.capacityMin);
@@ -1129,7 +1240,7 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
     const venueLocation = String(body.venueLocation || "").trim();
     const businessCategory = String(body.businessCategory || "").trim();
 
-    // ✅ NUEVO: alcaldía/municipio obligatorio
+    // ✅ alcaldía/municipio obligatorio
     const localityArea = String(body.localityArea || "").trim();
 
     const capacityMin = toIntOrNull(body.capacityMin);
@@ -1553,6 +1664,201 @@ app.get("/providers/:id", async (req, res) => {
   }
 });
 
+// ===================== ADMIN INFO REQUESTS (MODERACIÓN) =====================
+
+/**
+ * GET /admin/info-requests
+ * Query: moderation_status (pending|approved|declined), q, limit, offset
+ */
+app.get(
+  "/admin/info-requests",
+  adminAuthMiddleware,
+  requirePermission("admin:providers:read"),
+  async (req, res) => {
+    try {
+      const moderationStatus = toNullIfEmpty(req.query.moderation_status);
+      const q = toNullIfEmpty(req.query.q);
+
+      const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
+
+      const where = [];
+      const params = [];
+
+      if (moderationStatus) {
+        params.push(moderationStatus);
+        where.push(`r.moderation_status = $${params.length}`);
+      }
+
+      if (q) {
+        params.push(`%${q}%`);
+        where.push(
+          `(COALESCE(r.requester_email,'') ILIKE $${params.length}
+            OR COALESCE(r.requester_name,'') ILIKE $${params.length}
+            OR COALESCE(p.venue_name,'') ILIKE $${params.length}
+            OR COALESCE(p.company_name,'') ILIKE $${params.length}
+            OR COALESCE(pu.email,'') ILIKE $${params.length}
+            OR COALESCE(r.message,'') ILIKE $${params.length})`
+        );
+      }
+
+      params.push(limit);
+      params.push(offset);
+
+      const sql = `
+        SELECT
+          r.id,
+          r.provider_id,
+          r.requester_user_id,
+          r.requester_name,
+          r.requester_email,
+          r.requester_phone,
+          r.message,
+          r.preferred_contact_schedule,
+          r.moderation_status,
+          r.moderated_by,
+          r.moderated_at,
+          r.moderation_notes,
+          r.provider_status,
+          r.created_at,
+          r.updated_at,
+          p.venue_name AS provider_venue_name,
+          p.company_name AS provider_company_name,
+          p.is_featured AS provider_is_featured,
+          pu.email AS provider_email
+        FROM provider_info_requests r
+        LEFT JOIN provider_profiles p ON p.user_id = r.provider_id
+        LEFT JOIN users pu ON pu.id = r.provider_id
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY r.created_at DESC
+        LIMIT $${params.length - 1}
+        OFFSET $${params.length}
+      `;
+
+      const rows = await pool.query(sql, params);
+
+      return res.json({
+        requests: rows.rows || [],
+        pagination: { limit, offset, next_offset: offset + limit },
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+/**
+ * GET /admin/info-requests/stats
+ * Devuelve conteos por moderation_status
+ */
+app.get(
+  "/admin/info-requests/stats",
+  adminAuthMiddleware,
+  requirePermission("admin:providers:read"),
+  async (req, res) => {
+    try {
+      const rows = await pool.query(
+        `
+        SELECT moderation_status, COUNT(*)::int AS count
+        FROM provider_info_requests
+        GROUP BY moderation_status
+        ORDER BY moderation_status
+        `
+      );
+
+      const map = {};
+      for (const r of rows.rows || []) map[r.moderation_status] = r.count;
+
+      return res.json({
+        total: (map.pending || 0) + (map.approved || 0) + (map.declined || 0),
+        pending: map.pending || 0,
+        approved: map.approved || 0,
+        declined: map.declined || 0,
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+async function moderateInfoRequest(req, res) {
+  try {
+    const { id } = req.params;
+    if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
+
+    const moderation_status = toNullIfEmpty(req.body?.moderation_status);
+    const moderation_notes = toNullIfEmpty(req.body?.moderation_notes);
+
+    const allowed = new Set(["approved", "declined"]);
+    if (!moderation_status || !allowed.has(moderation_status)) {
+      return res.status(400).json({ error: "moderation_status inválido" });
+    }
+
+    const beforeRes = await pool.query(
+      `SELECT *
+       FROM provider_info_requests
+       WHERE id = $1
+       LIMIT 1`,
+      [id]
+    );
+    const before = beforeRes.rows[0];
+    if (!before) return res.status(404).json({ error: "Solicitud no encontrada" });
+
+    const updatedRes = await pool.query(
+      `
+      UPDATE provider_info_requests
+      SET
+        moderation_status = $2,
+        moderated_by = $3,
+        moderated_at = now(),
+        moderation_notes = COALESCE($4, moderation_notes)
+      WHERE id = $1
+      RETURNING *
+      `,
+      [id, moderation_status, req.authUser.id, moderation_notes]
+    );
+
+    const after = updatedRes.rows[0];
+
+    await writeAdminAuditLog(req, {
+      action: "info_requests:moderate",
+      entityType: "provider_info_request",
+      entityId: id,
+      beforeState: before,
+      afterState: after,
+    });
+
+    return res.json({ request: after });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+}
+
+/**
+ * ✅ NUEVA: la que tu AdminDashboard usa
+ * PATCH /admin/info-requests/:id
+ */
+app.patch(
+  "/admin/info-requests/:id",
+  adminAuthMiddleware,
+  requirePermission("admin:providers:review"),
+  moderateInfoRequest
+);
+
+/**
+ * ✅ Backward compatibility:
+ * PATCH /admin/info-requests/:id/moderate
+ */
+app.patch(
+  "/admin/info-requests/:id/moderate",
+  adminAuthMiddleware,
+  requirePermission("admin:providers:review"),
+  moderateInfoRequest
+);
+
 // ===================== ADMIN API =====================
 
 /**
@@ -1585,9 +1891,7 @@ app.get(
       }
       if (q) {
         params.push(`%${q}%`);
-        where.push(
-          `(email ILIKE $${params.length} OR COALESCE(name,'') ILIKE $${params.length})`
-        );
+        where.push(`(email ILIKE $${params.length} OR COALESCE(name,'') ILIKE $${params.length})`);
       }
 
       params.push(limit);
@@ -1665,7 +1969,6 @@ app.patch(
 
 /**
  * PATCH /admin/users/:id/unblock
- * Body: { reason }
  */
 app.patch(
   "/admin/users/:id/unblock",
