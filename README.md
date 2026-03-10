@@ -95,3 +95,4 @@ Ejecutar en VM (manual):
 cd /var/www/kelom-api
 set -a; source .env; set +a
 PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f ./migrations/001_wedding_profiles.sql
+PRUEBA_GIT_123

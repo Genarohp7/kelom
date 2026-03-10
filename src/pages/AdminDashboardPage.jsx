@@ -86,10 +86,6 @@ function badgeClass(kind, value) {
     return "admin-badge";
   }
 
-  if (kind === "featured") {
-    return value ? "admin-badge admin-badge--warn" : "admin-badge admin-badge--muted";
-  }
-
   return "admin-badge";
 }
 
@@ -100,6 +96,30 @@ function formatDateTime(v) {
   } catch {
     return "—";
   }
+}
+
+// CSV helpers (Excel-friendly)
+function csvEscape(value) {
+  const s = value === null || value === undefined ? "" : String(value);
+  const needsQuotes = /[",\n\r]/.test(s);
+  const escaped = s.replace(/"/g, '""');
+  return needsQuotes ? `"${escaped}"` : escaped;
+}
+
+function downloadTextFile({ filename, content, mime = "text/csv;charset=utf-8;" }) {
+  // BOM para que Excel respete UTF-8 (acentos/ñ)
+  const bom = "\ufeff";
+  const blob = new Blob([bom + content], { type: mime });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(url);
 }
 
 function AdminDashboardPage() {
@@ -174,15 +194,17 @@ function AdminDashboardPage() {
   const [requestsFlash, setRequestsFlash] = useState("");
 
   const [requestStats, setRequestStats] = useState({
+    total: 0,
     pending: 0,
     approved: 0,
     declined: 0,
   });
 
+  const [isExporting, setIsExporting] = useState(false);
+
   const requestsQueryString = useMemo(() => {
     const p = new URLSearchParams();
-    if (requestFilters.moderation_status)
-      p.set("moderation_status", requestFilters.moderation_status);
+    if (requestFilters.moderation_status) p.set("moderation_status", requestFilters.moderation_status);
     if (requestFilters.q.trim()) p.set("q", requestFilters.q.trim());
     p.set("limit", "100");
     return p.toString();
@@ -262,8 +284,6 @@ function AdminDashboardPage() {
                 review_notes: moderation?.review_notes ?? p.review_notes,
                 reviewed_by: moderation?.reviewed_by ?? p.reviewed_by,
                 reviewed_at: moderation?.reviewed_at ?? p.reviewed_at,
-                is_featured:
-                  moderation?.is_featured !== undefined ? moderation.is_featured : p.is_featured,
                 updated_at: moderation?.reviewed_at ?? p.updated_at,
               }
             : p
@@ -324,7 +344,9 @@ function AdminDashboardPage() {
                 account_status: nextUser?.account_status ?? u.account_status,
                 blocked_at: nextUser?.blocked_at ?? u.blocked_at,
                 blocked_reason:
-                  nextUser?.blocked_reason !== undefined ? nextUser.blocked_reason : u.blocked_reason,
+                  nextUser?.blocked_reason !== undefined
+                    ? nextUser.blocked_reason
+                    : u.blocked_reason,
               }
             : u
         )
@@ -360,6 +382,7 @@ function AdminDashboardPage() {
     try {
       const data = await adminApiFetch("/admin/info-requests/stats", { method: "GET" });
       setRequestStats({
+        total: Number(data?.total || 0),
         pending: Number(data?.pending || 0),
         approved: Number(data?.approved || 0),
         declined: Number(data?.declined || 0),
@@ -436,6 +459,116 @@ function AdminDashboardPage() {
       setRequestsError(err?.message || "No se pudo moderar la solicitud.");
     } finally {
       setRequestBusyId(null);
+    }
+  }
+
+  // Export: trae todo paginado y descarga CSV (Excel)
+  async function fetchAllRequestsForExport() {
+    const limit = 200;
+    let offset = 0;
+    const all = [];
+
+    // armamos query con filtros actuales
+    const baseParams = new URLSearchParams();
+    if (requestFilters.moderation_status) baseParams.set("moderation_status", requestFilters.moderation_status);
+    if (requestFilters.q.trim()) baseParams.set("q", requestFilters.q.trim());
+
+    // guardrail para no ciclar infinito
+    const MAX_ROWS = 20000;
+
+    while (true) {
+      const p = new URLSearchParams(baseParams);
+      p.set("limit", String(limit));
+      p.set("offset", String(offset));
+
+      const data = await adminApiFetch(`/admin/info-requests?${p.toString()}`, { method: "GET" });
+      const rows = Array.isArray(data?.requests) ? data.requests : [];
+
+      all.push(...rows);
+
+      if (rows.length < limit) break;
+      offset += limit;
+
+      if (all.length >= MAX_ROWS) break;
+    }
+
+    return all.slice(0, MAX_ROWS);
+  }
+
+  async function handleExportExcel() {
+    if (activeSection !== "requests") return;
+
+    setRequestsError("");
+    setRequestsFlash("");
+
+    setIsExporting(true);
+    try {
+      const rows = await fetchAllRequestsForExport();
+
+      const headers = [
+        "request_id",
+        "created_at",
+        "provider_label",
+        "provider_id",
+        "provider_is_featured",
+        "requester_name",
+        "requester_email",
+        "requester_phone",
+        "preferred_contact_schedule",
+        "message",
+        "moderation_status",
+        "moderated_at",
+        "moderation_notes",
+        "provider_status",
+      ];
+
+      const lines = [];
+      lines.push(headers.map(csvEscape).join(","));
+
+      for (const r of rows) {
+        const providerLabel =
+          r.provider_venue_name ||
+          r.provider_company_name ||
+          (r.provider_id ? `ID: ${r.provider_id}` : "—");
+
+        const row = [
+          r.id,
+          r.created_at,
+          providerLabel,
+          r.provider_id,
+          r.provider_is_featured ? "true" : "false",
+          r.requester_name || "",
+          r.requester_email || "",
+          r.requester_phone || "",
+          r.preferred_contact_schedule || "",
+          r.message || "",
+          r.moderation_status || "",
+          r.moderated_at || "",
+          r.moderation_notes || "",
+          r.provider_status || "",
+        ];
+
+        lines.push(row.map(csvEscape).join(","));
+      }
+
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, "0");
+      const d = String(today.getDate()).padStart(2, "0");
+
+      const fileName = `kelom_solicitudes_${y}-${m}-${d}.csv`;
+
+      downloadTextFile({
+        filename: fileName,
+        content: lines.join("\n"),
+        mime: "text/csv;charset=utf-8;",
+      });
+
+      setRequestsFlash(`Exportado ✅ (${rows.length} solicitudes)`);
+    } catch (err) {
+      setRequestsError(err?.message || "No se pudo exportar.");
+    } finally {
+      setIsExporting(false);
     }
   }
 
@@ -543,12 +676,17 @@ function AdminDashboardPage() {
             </button>
 
             <button
-              className="btn btn--ghost"
-              disabled
-              title="En el siguiente paso conectamos exportación a Excel"
-              style={{ opacity: 0.7 }}
+              className={activeSection === "requests" ? "btn btn--ghost" : "btn btn--ghost"}
+              onClick={handleExportExcel}
+              disabled={activeSection !== "requests" || isExporting || requestsLoading}
+              title={
+                activeSection !== "requests"
+                  ? "Ve a la sección Solicitudes para exportar"
+                  : "Descarga un CSV compatible con Excel"
+              }
+              style={activeSection !== "requests" ? { opacity: 0.7 } : undefined}
             >
-              Exportar Excel
+              {isExporting ? "Exportando…" : "Exportar Excel"}
             </button>
           </div>
 
@@ -674,10 +812,11 @@ function AdminDashboardPage() {
                   />
                 </div>
 
-                <div className="admin-filters__group" style={{ minWidth: 260 }}>
+                <div className="admin-filters__group" style={{ minWidth: 340 }}>
                   <label className="admin-filters__label">Métricas</label>
                   <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <span className="admin-badge admin-badge--muted">Total: {moderatedTotal}</span>
+                    <span className="admin-badge admin-badge--muted">Total: {requestStats.total}</span>
+                    <span className="admin-badge admin-badge--muted">Moderadas: {moderatedTotal}</span>
                     <span className="admin-badge admin-badge--warn">Pend: {requestStats.pending}</span>
                     <span className="admin-badge admin-badge--ok">Apr: {requestStats.approved}</span>
                     <span className="admin-badge admin-badge--bad">Dec: {requestStats.declined}</span>
@@ -707,7 +846,6 @@ function AdminDashboardPage() {
                     <th>Proveedor</th>
                     <th>Estatus</th>
                     <th>Visibilidad</th>
-                    <th>Modalidad</th>
                     <th>Notas</th>
                     <th>Acciones</th>
                   </tr>
@@ -716,7 +854,6 @@ function AdminDashboardPage() {
                 <tbody>
                   {providers.map((p) => {
                     const isBusy = providerBusyId === p.user_id;
-                    const isFeatured = Boolean(p.is_featured);
 
                     return (
                       <tr key={p.user_id}>
@@ -757,12 +894,6 @@ function AdminDashboardPage() {
                           </span>
                         </td>
 
-                        <td>
-                          <span className={badgeClass("featured", isFeatured)}>
-                            {isFeatured ? "⭐ Destacado" : "Gratis"}
-                          </span>
-                        </td>
-
                         <td style={{ minWidth: 260 }}>
                           <textarea
                             className="admin-notes"
@@ -779,25 +910,8 @@ function AdminDashboardPage() {
                           <div className="admin-notes__hint">Tip: se guarda al perder foco.</div>
                         </td>
 
-                        <td style={{ minWidth: 340 }}>
+                        <td style={{ minWidth: 260 }}>
                           <div className="admin-actions">
-                            <button
-                              className={isFeatured ? "btn btn--ghost" : "btn btn--primary"}
-                              disabled={isBusy}
-                              onClick={() =>
-                                patchProvider(
-                                  p.user_id,
-                                  { is_featured: !isFeatured },
-                                  isFeatured
-                                    ? "Proveedor ahora es gratis ✅"
-                                    : "Proveedor marcado como Destacado ✅"
-                                )
-                              }
-                              title="Activa/Desactiva Proveedor Destacado Kelom"
-                            >
-                              {isBusy ? "…" : isFeatured ? "Quitar destacado" : "Hacer destacado"}
-                            </button>
-
                             <button
                               className="btn btn--primary"
                               disabled={isBusy}
@@ -815,9 +929,7 @@ function AdminDashboardPage() {
                             <button
                               className="btn btn--ghost"
                               disabled={isBusy}
-                              onClick={() =>
-                                patchProvider(p.user_id, { public_visibility: "hidden" }, "Ocultado ✅")
-                              }
+                              onClick={() => patchProvider(p.user_id, { public_visibility: "hidden" }, "Ocultado ✅")}
                             >
                               Ocultar
                             </button>
@@ -857,7 +969,7 @@ function AdminDashboardPage() {
 
                   {!providers.length && (
                     <tr>
-                      <td colSpan={6} style={{ padding: "1rem" }}>
+                      <td colSpan={5} style={{ padding: "1rem" }}>
                         {providersLoading ? "Cargando…" : "No hay resultados con estos filtros."}
                       </td>
                     </tr>
@@ -916,9 +1028,7 @@ function AdminDashboardPage() {
 
                             <div className="admin-provider__meta">
                               <div className="admin-provider__id">ID: {u.id}</div>
-                              <div className="admin-provider__review">
-                                Creado: {new Date(u.created_at).toLocaleString()}
-                              </div>
+                              <div className="admin-provider__review">Creado: {new Date(u.created_at).toLocaleString()}</div>
                             </div>
                           </div>
                         </td>
@@ -928,9 +1038,7 @@ function AdminDashboardPage() {
                         </td>
 
                         <td>
-                          <span className={badgeClass("user-status", u.account_status)}>
-                            {u.account_status}
-                          </span>
+                          <span className={badgeClass("user-status", u.account_status)}>{u.account_status}</span>
                         </td>
 
                         <td style={{ minWidth: 240 }}>
@@ -940,9 +1048,7 @@ function AdminDashboardPage() {
                                 <strong>Motivo:</strong> {u.blocked_reason || "—"}
                               </div>
                               <div className="admin-provider__review">
-                                {u.blocked_at
-                                  ? `Bloqueado: ${new Date(u.blocked_at).toLocaleString()}`
-                                  : "Bloqueado"}
+                                {u.blocked_at ? `Bloqueado: ${new Date(u.blocked_at).toLocaleString()}` : "Bloqueado"}
                               </div>
                             </div>
                           ) : (
@@ -962,11 +1068,7 @@ function AdminDashboardPage() {
                                 {isBusy ? "…" : "Bloquear"}
                               </button>
                             ) : (
-                              <button
-                                className="btn btn--primary"
-                                disabled={isBusy}
-                                onClick={() => handleUnblockUser(u.id)}
-                              >
+                              <button className="btn btn--primary" disabled={isBusy} onClick={() => handleUnblockUser(u.id)}>
                                 {isBusy ? "…" : "Desbloquear"}
                               </button>
                             )}
@@ -1037,9 +1139,7 @@ function AdminDashboardPage() {
                             <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>
                               {r.provider_is_featured ? "⭐ Destacado" : "Gratis"}
                             </span>
-                            <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>
-                              ID: {r.provider_id}
-                            </span>
+                            <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>ID: {r.provider_id}</span>
                           </div>
                         </td>
 
@@ -1048,9 +1148,7 @@ function AdminDashboardPage() {
                             <strong>{requesterLabel}</strong>
                             <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>{requesterEmail}</span>
                             {r.requester_phone ? (
-                              <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>
-                                {r.requester_phone}
-                              </span>
+                              <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>{r.requester_phone}</span>
                             ) : null}
                             <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>
                               Horario: {r.preferred_contact_schedule || "—"}
@@ -1123,8 +1221,7 @@ function AdminDashboardPage() {
             </div>
 
             <div className="admin-footer-note">
-              Nota: al aprobar/declinar aquí, la solicitud queda moderada. En el siguiente paso conectamos
-              el envío por EmailJS y la visibilidad al proveedor.
+              Nota: “Total moderadas” = aprobadas + declinadas. Exportar descarga un CSV compatible con Excel.
             </div>
           </div>
         )}
