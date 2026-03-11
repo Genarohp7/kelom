@@ -2,82 +2,18 @@ import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import "../../../../Blocks/Business/ProviderInboxPage.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
-import { clearProviderSession, getProviderToken } from "../../../services/providerAuth";
+import {
+  clearProviderSession,
+  getProviderToken,
+} from "../../../services/providerAuth";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
 const STATUS_OPTIONS = [
-  { value: "pending", label: "Pendiente" },
-  { value: "attended", label: "Atendida" },
-  { value: "unattended", label: "Sin atender" },
-  { value: "closed", label: "Cerrada" },
-];
-
-const DEMO_REQUESTS = [
-  {
-    id: "req-001",
-    fromName: "Ana Martínez",
-    partnerName: "Luis Herrera",
-    submittedAt: "2026-03-04T11:20:00",
-    eventDate: "2026-11-14",
-    guests: 150,
-    location: "Naucalpan",
-    preferredContact: "WhatsApp",
-    email: "ana.luis@email.com",
-    phone: "5512345678",
-    status: "pending",
-    source: "Botón solicitar información",
-    message:
-      "Hola, nos encantó su lugar. Queremos saber disponibilidad para noviembre, costos aproximados y si incluyen mobiliario básico.",
-  },
-  {
-    id: "req-002",
-    fromName: "Mariana López",
-    partnerName: "Carlos Vega",
-    submittedAt: "2026-03-03T16:45:00",
-    eventDate: "2026-09-21",
-    guests: 90,
-    location: "Atizapán de Zaragoza",
-    preferredContact: "Correo",
-    email: "mariana@email.com",
-    phone: "5587654321",
-    status: "attended",
-    source: "Botón solicitar información",
-    message:
-      "Queremos una boda íntima. Nos interesa conocer si manejan paquetes pequeños y si permiten proveedores externos.",
-  },
-  {
-    id: "req-003",
-    fromName: "Fernanda Ruiz",
-    partnerName: "Jorge Silva",
-    submittedAt: "2026-03-02T09:10:00",
-    eventDate: "2027-01-17",
-    guests: 220,
-    location: "Tlalpan",
-    preferredContact: "Llamada",
-    email: "fernanda@email.com",
-    phone: "5544433322",
-    status: "unattended",
-    source: "Botón solicitar información",
-    message:
-      "Nos interesa una cotización para evento grande. También queremos saber si cuentan con estacionamiento y área techada.",
-  },
-  {
-    id: "req-004",
-    fromName: "Sofía Navarro",
-    partnerName: "Daniel Cruz",
-    submittedAt: "2026-02-28T13:05:00",
-    eventDate: "2026-12-05",
-    guests: 130,
-    location: "Cuajimalpa de Morelos",
-    preferredContact: "WhatsApp",
-    email: "sofia@email.com",
-    phone: "5511122233",
-    status: "closed",
-    source: "Botón solicitar información",
-    message:
-      "Ya encontramos opción, pero muchas gracias. Solo queríamos cerrar la solicitud y agradecer la atención previa.",
-  },
+  { value: "pendiente", label: "Pendiente", className: "pending" },
+  { value: "atendida", label: "Atendida", className: "attended" },
+  { value: "sin_atender", label: "Sin atender", className: "unattended" },
+  { value: "cerrada", label: "Cerrada", className: "closed" },
 ];
 
 function formatDate(dateStr) {
@@ -106,18 +42,66 @@ function formatDateTime(dateStr) {
   });
 }
 
+function normalizeProviderStatus(rawStatus) {
+  const value = String(rawStatus || "").trim().toLowerCase();
+
+  if (value === "pendiente" || value === "pending") return "pendiente";
+  if (value === "atendida" || value === "attended") return "atendida";
+  if (value === "sin_atender" || value === "unattended") return "sin_atender";
+  if (value === "cerrada" || value === "closed") return "cerrada";
+
+  return "sin_atender";
+}
+
+function getStatusMeta(status) {
+  return (
+    STATUS_OPTIONS.find((item) => item.value === normalizeProviderStatus(status)) ||
+    STATUS_OPTIONS[2]
+  );
+}
+
 function getStatusLabel(status) {
-  return STATUS_OPTIONS.find((x) => x.value === status)?.label || "Pendiente";
+  return getStatusMeta(status).label;
+}
+
+function getStatusClassName(status) {
+  return getStatusMeta(status).className;
+}
+
+function normalizeRequestItem(item, index) {
+  if (!item || typeof item !== "object") return null;
+
+  return {
+    id: item.id ?? `request-${index}`,
+    fromName: item.requester_name || item.fromName || "Sin nombre",
+    partnerName: item.partner_name || item.partnerName || "",
+    submittedAt: item.created_at || item.submittedAt || "",
+    eventDate: item.wedding_date || item.eventDate || "",
+    guests: item.guests ?? null,
+    location: item.city || item.location || "Sin zona",
+    preferredContact:
+      item.preferred_contact_schedule ||
+      item.preferredContact ||
+      "Sin especificar",
+    email: item.requester_email || item.email || "Sin correo",
+    phone: item.requester_phone || item.phone || "Sin teléfono",
+    status: normalizeProviderStatus(item.provider_status || item.status),
+    source: item.source || "Solicitud de información",
+    message: item.message || "Sin mensaje",
+  };
 }
 
 function ProviderInboxPage() {
   const navigate = useNavigate();
 
   const [providerName, setProviderName] = useState("Tu bandeja de solicitudes");
-  const [requests, setRequests] = useState(DEMO_REQUESTS);
+  const [requests, setRequests] = useState([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedId, setSelectedId] = useState(DEMO_REQUESTS[0]?.id || null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [savingStatusId, setSavingStatusId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     const token = getProviderToken();
@@ -132,39 +116,82 @@ function ProviderInboxPage() {
 
     let cancelled = false;
 
+    const handleAuthError = () => {
+      clearProviderSession();
+      navigate("/empresas/acceso", {
+        replace: true,
+        state: { from: "/empresas/solicitudes" },
+      });
+    };
+
     const run = async () => {
+      setLoading(true);
+      setErrorMessage("");
+
       try {
-        const res = await fetch(`${API_BASE}/providers/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const [providerRes, requestsRes] = await Promise.all([
+          fetch(`${API_BASE}/providers/me`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+          fetch(`${API_BASE}/providers/info-requests`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+        ]);
 
-        const data = await res.json().catch(() => ({}));
+        const providerData = await providerRes.json().catch(() => ({}));
+        const requestsData = await requestsRes.json().catch(() => ({}));
 
-        if (!res.ok) {
-          throw new Error(data?.error || `HTTP ${res.status}`);
+        if (providerRes.status === 401 || providerRes.status === 403) {
+          if (!cancelled) handleAuthError();
+          return;
+        }
+
+        if (requestsRes.status === 401 || requestsRes.status === 403) {
+          if (!cancelled) handleAuthError();
+          return;
+        }
+
+        if (!providerRes.ok) {
+          throw new Error(providerData?.error || `HTTP ${providerRes.status}`);
+        }
+
+        if (!requestsRes.ok) {
+          throw new Error(requestsData?.error || `HTTP ${requestsRes.status}`);
         }
 
         if (cancelled) return;
 
         const venueName =
-          data?.profile?.venue_name ||
-          data?.profile?.company_name ||
-          data?.provider?.name ||
+          providerData?.profile?.venue_name ||
+          providerData?.profile?.company_name ||
+          providerData?.provider?.name ||
           "Tu bandeja de solicitudes";
 
         setProviderName(venueName);
+        setRequests(Array.isArray(requestsData?.requests) ? requestsData.requests : []);
       } catch (err) {
         if (cancelled) return;
 
         const msg = String(err?.message || "").toLowerCase();
-        if (msg.includes("token") || msg.includes("401") || msg.includes("403")) {
-          clearProviderSession();
-          navigate("/empresas/acceso", {
-            replace: true,
-            state: { from: "/empresas/solicitudes" },
-          });
+
+        if (
+          msg.includes("token") ||
+          msg.includes("401") ||
+          msg.includes("403") ||
+          msg.includes("no autorizado")
+        ) {
+          handleAuthError();
+          return;
+        }
+
+        setErrorMessage(err?.message || "No se pudieron cargar las solicitudes.");
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
       }
     };
@@ -176,23 +203,31 @@ function ProviderInboxPage() {
     };
   }, [navigate]);
 
+  const normalizedRequests = useMemo(() => {
+    return requests
+      .map((item, index) => normalizeRequestItem(item, index))
+      .filter(Boolean);
+  }, [requests]);
+
   const filteredRequests = useMemo(() => {
     const needle = String(search || "").trim().toLowerCase();
 
-    return requests.filter((item) => {
+    return normalizedRequests.filter((item) => {
       const matchesStatus =
         statusFilter === "all" ? true : item.status === statusFilter;
 
       const matchesSearch =
         !needle ||
-        item.fromName.toLowerCase().includes(needle) ||
-        item.partnerName.toLowerCase().includes(needle) ||
-        item.location.toLowerCase().includes(needle) ||
-        item.message.toLowerCase().includes(needle);
+        String(item.fromName || "").toLowerCase().includes(needle) ||
+        String(item.partnerName || "").toLowerCase().includes(needle) ||
+        String(item.location || "").toLowerCase().includes(needle) ||
+        String(item.message || "").toLowerCase().includes(needle) ||
+        String(item.email || "").toLowerCase().includes(needle) ||
+        String(item.phone || "").toLowerCase().includes(needle);
 
       return matchesStatus && matchesSearch;
     });
-  }, [requests, search, statusFilter]);
+  }, [normalizedRequests, search, statusFilter]);
 
   useEffect(() => {
     if (!filteredRequests.length) {
@@ -207,31 +242,86 @@ function ProviderInboxPage() {
   }, [filteredRequests, selectedId]);
 
   const selectedRequest = useMemo(
-    () => requests.find((item) => item.id === selectedId) || null,
-    [requests, selectedId]
+    () => normalizedRequests.find((item) => item.id === selectedId) || null,
+    [normalizedRequests, selectedId]
   );
 
   const stats = useMemo(() => {
     return {
-      total: requests.length,
-      pending: requests.filter((x) => x.status === "pending").length,
-      attended: requests.filter((x) => x.status === "attended").length,
-      unattended: requests.filter((x) => x.status === "unattended").length,
-      closed: requests.filter((x) => x.status === "closed").length,
+      total: normalizedRequests.length,
+      pendiente: normalizedRequests.filter((x) => x.status === "pendiente").length,
+      atendida: normalizedRequests.filter((x) => x.status === "atendida").length,
+      sin_atender: normalizedRequests.filter((x) => x.status === "sin_atender").length,
+      cerrada: normalizedRequests.filter((x) => x.status === "cerrada").length,
     };
-  }, [requests]);
+  }, [normalizedRequests]);
 
   const handleLogout = () => {
     clearProviderSession();
     navigate("/empresas", { replace: true });
   };
 
-  const handleStatusChange = (requestId, nextStatus) => {
-    setRequests((prev) =>
-      prev.map((item) =>
-        item.id === requestId ? { ...item, status: nextStatus } : item
-      )
-    );
+  const handleStatusChange = async (requestId, nextStatus) => {
+    const token = getProviderToken();
+    if (!token) {
+      clearProviderSession();
+      navigate("/empresas/acceso", {
+        replace: true,
+        state: { from: "/empresas/solicitudes" },
+      });
+      return;
+    }
+
+    setSavingStatusId(requestId);
+    setErrorMessage("");
+
+    try {
+      const res = await fetch(`${API_BASE}/providers/info-requests/${requestId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          provider_status: nextStatus,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401 || res.status === 403) {
+        clearProviderSession();
+        navigate("/empresas/acceso", {
+          replace: true,
+          state: { from: "/empresas/solicitudes" },
+        });
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+
+      const updatedRequest = data?.request || null;
+      if (!updatedRequest) {
+        throw new Error("No se recibió la solicitud actualizada.");
+      }
+
+      setRequests((prev) =>
+        prev.map((item) =>
+          item.id === requestId
+            ? {
+                ...item,
+                ...updatedRequest,
+              }
+            : item
+        )
+      );
+    } catch (err) {
+      setErrorMessage(err?.message || "No se pudo actualizar el estado.");
+    } finally {
+      setSavingStatusId(null);
+    }
   };
 
   return (
@@ -305,28 +395,48 @@ function ProviderInboxPage() {
               </article>
 
               <article className="provider-inbox__stat-card">
-                <span className="provider-inbox__stat-number">{stats.pending}</span>
+                <span className="provider-inbox__stat-number">
+                  {stats.pendiente}
+                </span>
                 <span className="provider-inbox__stat-label">Pendientes</span>
               </article>
 
               <article className="provider-inbox__stat-card">
-                <span className="provider-inbox__stat-number">{stats.attended}</span>
+                <span className="provider-inbox__stat-number">
+                  {stats.atendida}
+                </span>
                 <span className="provider-inbox__stat-label">Atendidas</span>
               </article>
 
               <article className="provider-inbox__stat-card">
                 <span className="provider-inbox__stat-number">
-                  {stats.unattended}
+                  {stats.sin_atender}
                 </span>
                 <span className="provider-inbox__stat-label">Sin atender</span>
               </article>
 
               <article className="provider-inbox__stat-card">
-                <span className="provider-inbox__stat-number">{stats.closed}</span>
+                <span className="provider-inbox__stat-number">
+                  {stats.cerrada}
+                </span>
                 <span className="provider-inbox__stat-label">Cerradas</span>
               </article>
             </div>
           </section>
+
+          {errorMessage ? (
+            <div
+              style={{
+                marginBottom: "1rem",
+                padding: "0.85rem 1rem",
+                borderRadius: "12px",
+                background: "rgba(180, 40, 40, 0.08)",
+                border: "1px solid rgba(180, 40, 40, 0.18)",
+              }}
+            >
+              {errorMessage}
+            </div>
+          ) : null}
 
           <section className="provider-inbox__workspace">
             <aside className="provider-inbox__sidebar">
@@ -334,7 +444,7 @@ function ProviderInboxPage() {
                 <input
                   type="text"
                   className="provider-inbox__search"
-                  placeholder="Buscar por nombre, zona o mensaje..."
+                  placeholder="Buscar por nombre, zona, correo, teléfono o mensaje..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -370,13 +480,19 @@ function ProviderInboxPage() {
               </div>
 
               <div className="provider-inbox__list">
-                {filteredRequests.length === 0 ? (
+                {loading ? (
+                  <div className="provider-inbox__empty">
+                    <div className="provider-inbox__empty-icon">⏳</div>
+                    <h3>Cargando solicitudes</h3>
+                    <p>Espera un momento mientras traemos la información real.</p>
+                  </div>
+                ) : filteredRequests.length === 0 ? (
                   <div className="provider-inbox__empty">
                     <div className="provider-inbox__empty-icon">✉️</div>
                     <h3>No hay solicitudes en esta vista</h3>
                     <p>
-                      Ajusta tus filtros o espera a que empiecen a llegar mensajes
-                      reales.
+                      Ajusta tus filtros o espera a que el admin apruebe nuevas
+                      solicitudes para este proveedor.
                     </p>
                   </div>
                 ) : (
@@ -394,12 +510,18 @@ function ProviderInboxPage() {
                       <div className="request-card__top">
                         <div>
                           <h3 className="request-card__name">{item.fromName}</h3>
-                          <p className="request-card__couple">
-                            con {item.partnerName}
-                          </p>
+                          {item.partnerName ? (
+                            <p className="request-card__couple">
+                              con {item.partnerName}
+                            </p>
+                          ) : null}
                         </div>
 
-                        <span className={`status-pill status-pill--${item.status}`}>
+                        <span
+                          className={`status-pill status-pill--${getStatusClassName(
+                            item.status
+                          )}`}
+                        >
                           {getStatusLabel(item.status)}
                         </span>
                       </div>
@@ -431,12 +553,16 @@ function ProviderInboxPage() {
                     <div>
                       <p className="detail-card__eyebrow">Detalle de solicitud</p>
                       <h2 className="detail-card__title">
-                        {selectedRequest.fromName} + {selectedRequest.partnerName}
+                        {selectedRequest.partnerName
+                          ? `${selectedRequest.fromName} + ${selectedRequest.partnerName}`
+                          : selectedRequest.fromName}
                       </h2>
                     </div>
 
                     <span
-                      className={`status-pill status-pill--${selectedRequest.status}`}
+                      className={`status-pill status-pill--${getStatusClassName(
+                        selectedRequest.status
+                      )}`}
                     >
                       {getStatusLabel(selectedRequest.status)}
                     </span>
@@ -460,51 +586,51 @@ function ProviderInboxPage() {
                     <div className="detail-card__item">
                       <span className="detail-card__label">Invitados</span>
                       <span className="detail-card__value">
-                        {selectedRequest.guests}
+                        {selectedRequest.guests ?? "No especificado"}
                       </span>
                     </div>
 
                     <div className="detail-card__item">
                       <span className="detail-card__label">Zona</span>
                       <span className="detail-card__value">
-                        {selectedRequest.location}
+                        {selectedRequest.location || "No especificada"}
                       </span>
                     </div>
 
                     <div className="detail-card__item">
                       <span className="detail-card__label">
-                        Medio de contacto preferido
+                        Horario para contactar
                       </span>
                       <span className="detail-card__value">
-                        {selectedRequest.preferredContact}
+                        {selectedRequest.preferredContact || "No especificado"}
                       </span>
                     </div>
 
                     <div className="detail-card__item">
                       <span className="detail-card__label">Origen</span>
                       <span className="detail-card__value">
-                        {selectedRequest.source}
+                        {selectedRequest.source || "Solicitud de información"}
                       </span>
                     </div>
 
                     <div className="detail-card__item">
                       <span className="detail-card__label">Correo</span>
                       <span className="detail-card__value">
-                        {selectedRequest.email}
+                        {selectedRequest.email || "Sin correo"}
                       </span>
                     </div>
 
                     <div className="detail-card__item">
                       <span className="detail-card__label">Teléfono</span>
                       <span className="detail-card__value">
-                        {selectedRequest.phone}
+                        {selectedRequest.phone || "Sin teléfono"}
                       </span>
                     </div>
                   </div>
 
                   <div className="detail-card__message">
                     <h3 className="detail-card__section-title">Mensaje</h3>
-                    <p>{selectedRequest.message}</p>
+                    <p>{selectedRequest.message || "Sin mensaje"}</p>
                   </div>
 
                   <div className="detail-card__actions">
@@ -515,6 +641,7 @@ function ProviderInboxPage() {
                         <button
                           key={status.value}
                           type="button"
+                          disabled={savingStatusId === selectedRequest.id}
                           className={
                             selectedRequest.status === status.value
                               ? "detail-card__status-btn detail-card__status-btn--active"
@@ -524,7 +651,9 @@ function ProviderInboxPage() {
                             handleStatusChange(selectedRequest.id, status.value)
                           }
                         >
-                          {status.label}
+                          {savingStatusId === selectedRequest.id
+                            ? "Guardando..."
+                            : status.label}
                         </button>
                       ))}
                     </div>
