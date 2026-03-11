@@ -202,6 +202,14 @@ function VenueDetailPage() {
   const [apiVenue, setApiVenue] = useState(null);
   const [apiError, setApiError] = useState("");
 
+  const [inboxStats, setInboxStats] = useState({
+    total: 0,
+    sin_atender: 0,
+    pendiente: 0,
+    atendida: 0,
+    cerrada: 0,
+  });
+
   // modal modes: null | "request" | "register"
   const [modalMode, setModalMode] = useState(null);
 
@@ -316,6 +324,66 @@ function VenueDetailPage() {
     };
   }, [id, isProviderView, navigate, location.pathname, location.search]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      if (!isProviderView || !apiVenue?.isFeatured) {
+        setInboxStats({
+          total: 0,
+          sin_atender: 0,
+          pendiente: 0,
+          atendida: 0,
+          cerrada: 0,
+        });
+        return;
+      }
+
+      const token = getProviderToken();
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/providers/info-requests/stats`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data?.error || `Error HTTP ${res.status}`);
+        }
+
+        if (cancelled) return;
+
+        setInboxStats({
+          total: Number(data?.total || 0),
+          sin_atender: Number(data?.sin_atender || 0),
+          pendiente: Number(data?.pendiente || 0),
+          atendida: Number(data?.atendida || 0),
+          cerrada: Number(data?.cerrada || 0),
+        });
+      } catch (err) {
+        const msg = String(err?.message || "").toLowerCase();
+
+        if (msg.includes("token") || msg.includes("401") || msg.includes("403")) {
+          clearProviderSession();
+          navigate("/empresas/acceso", {
+            replace: true,
+            state: { from: location.pathname + location.search },
+          });
+        }
+      }
+    };
+
+    run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiVenue?.isFeatured, isProviderView, navigate, location.pathname, location.search]);
+
   const isAnyModalOpen = modalMode !== null;
 
   useEffect(() => {
@@ -343,6 +411,8 @@ function VenueDetailPage() {
     const foundDemo = venuesDetail.find((item) => String(item.id) === String(id));
     return foundDemo || null;
   }, [apiVenue, id]);
+
+  const unreadInboxCount = Number(inboxStats.sin_atender || 0);
 
   const isRequestSubmitDisabled =
     requestSending ||
@@ -567,7 +637,7 @@ function VenueDetailPage() {
                 >
                   La bandeja de solicitudes está disponible solo para{" "}
                   <strong>Proveedor Destacado Kelom</strong>. Si quieres activar ese beneficio,
-                  contacta a tu agente de cuenta kelom.
+                  el cambio se hace desde administración.
                 </div>
               )}
 
@@ -603,6 +673,7 @@ function VenueDetailPage() {
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
+                      position: "relative",
                     }}
                   >
                     <svg
@@ -620,6 +691,31 @@ function VenueDetailPage() {
                       <path d="M4 6h16v12H4z" />
                       <path d="m22 6-10 7L2 6" />
                     </svg>
+
+                    {unreadInboxCount > 0 ? (
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: "-6px",
+                          right: "-6px",
+                          minWidth: "20px",
+                          height: "20px",
+                          padding: "0 5px",
+                          borderRadius: "999px",
+                          background: "#dc2626",
+                          color: "#fff",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          lineHeight: 1,
+                          boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
+                        }}
+                      >
+                        {unreadInboxCount > 99 ? "99+" : unreadInboxCount}
+                      </span>
+                    ) : null}
                   </button>
                 )}
 
