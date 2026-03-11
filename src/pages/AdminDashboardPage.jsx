@@ -58,6 +58,11 @@ function badgeClass(kind, value) {
     return "admin-badge";
   }
 
+  if (kind === "featured") {
+    if (value === true || v === "true") return "admin-badge admin-badge--ok";
+    return "admin-badge admin-badge--muted";
+  }
+
   if (kind === "user-status") {
     if (v === "active") return "admin-badge admin-badge--ok";
     if (v === "blocked") return "admin-badge admin-badge--bad";
@@ -282,6 +287,10 @@ function AdminDashboardPage() {
                 review_status: moderation?.review_status ?? p.review_status,
                 public_visibility: moderation?.public_visibility ?? p.public_visibility,
                 review_notes: moderation?.review_notes ?? p.review_notes,
+                is_featured:
+                  moderation?.is_featured !== undefined
+                    ? moderation.is_featured
+                    : p.is_featured,
                 reviewed_by: moderation?.reviewed_by ?? p.reviewed_by,
                 reviewed_at: moderation?.reviewed_at ?? p.reviewed_at,
                 updated_at: moderation?.reviewed_at ?? p.updated_at,
@@ -846,6 +855,7 @@ function AdminDashboardPage() {
                     <th>Proveedor</th>
                     <th>Estatus</th>
                     <th>Visibilidad</th>
+                    <th>Modalidad</th>
                     <th>Notas</th>
                     <th>Acciones</th>
                   </tr>
@@ -854,6 +864,7 @@ function AdminDashboardPage() {
                 <tbody>
                   {providers.map((p) => {
                     const isBusy = providerBusyId === p.user_id;
+                    const isFeatured = Boolean(p.is_featured);
 
                     return (
                       <tr key={p.user_id}>
@@ -894,6 +905,19 @@ function AdminDashboardPage() {
                           </span>
                         </td>
 
+                        <td style={{ minWidth: 220 }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                            <span className={badgeClass("featured", isFeatured)}>
+                              {isFeatured ? "Proveedor Destacado Kelom" : "Proveedor gratuito"}
+                            </span>
+                            <span style={{ opacity: 0.7, fontSize: "0.9rem" }}>
+                              {isFeatured
+                                ? "Beneficios premium activos"
+                                : "Sin beneficios premium"}
+                            </span>
+                          </div>
+                        </td>
+
                         <td style={{ minWidth: 260 }}>
                           <textarea
                             className="admin-notes"
@@ -910,7 +934,7 @@ function AdminDashboardPage() {
                           <div className="admin-notes__hint">Tip: se guarda al perder foco.</div>
                         </td>
 
-                        <td style={{ minWidth: 260 }}>
+                        <td style={{ minWidth: 340 }}>
                           <div className="admin-actions">
                             <button
                               className="btn btn--primary"
@@ -929,9 +953,27 @@ function AdminDashboardPage() {
                             <button
                               className="btn btn--ghost"
                               disabled={isBusy}
-                              onClick={() => patchProvider(p.user_id, { public_visibility: "hidden" }, "Ocultado ✅")}
+                              onClick={() =>
+                                patchProvider(p.user_id, { public_visibility: "hidden" }, "Ocultado ✅")
+                              }
                             >
                               Ocultar
+                            </button>
+
+                            <button
+                              className="btn btn--ghost"
+                              disabled={isBusy}
+                              onClick={() =>
+                                patchProvider(
+                                  p.user_id,
+                                  { is_featured: !isFeatured },
+                                  isFeatured
+                                    ? "Proveedor marcado como gratuito ✅"
+                                    : "Proveedor marcado como destacado ✅"
+                                )
+                              }
+                            >
+                              {isFeatured ? "Quitar destacado" : "Hacer destacado"}
                             </button>
 
                             <button
@@ -969,7 +1011,7 @@ function AdminDashboardPage() {
 
                   {!providers.length && (
                     <tr>
-                      <td colSpan={5} style={{ padding: "1rem" }}>
+                      <td colSpan={6} style={{ padding: "1rem" }}>
                         {providersLoading ? "Cargando…" : "No hay resultados con estos filtros."}
                       </td>
                     </tr>
@@ -979,7 +1021,9 @@ function AdminDashboardPage() {
             </div>
 
             <div className="admin-footer-note">
-              Nota: el público solo ve proveedores <strong>approved + listed</strong>. Todo lo demás es invisible.
+              Nota: el público solo ve proveedores <strong>approved + listed</strong>. La modalidad
+              <strong> Proveedor Destacado Kelom</strong> se controla por separado con{" "}
+              <strong>is_featured</strong>.
             </div>
           </div>
         ) : activeSection === "users" ? (
@@ -1028,7 +1072,9 @@ function AdminDashboardPage() {
 
                             <div className="admin-provider__meta">
                               <div className="admin-provider__id">ID: {u.id}</div>
-                              <div className="admin-provider__review">Creado: {new Date(u.created_at).toLocaleString()}</div>
+                              <div className="admin-provider__review">
+                                Creado: {new Date(u.created_at).toLocaleString()}
+                              </div>
                             </div>
                           </div>
                         </td>
