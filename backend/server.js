@@ -1334,6 +1334,50 @@ app.get("/providers/info-requests", providerAuthMiddleware, async (req, res) => 
 });
 
 /**
+ * GET /providers/info-requests/stats
+ * Devuelve conteos de solicitudes aprobadas para el proveedor autenticado.
+ */
+app.get("/providers/info-requests/stats", providerAuthMiddleware, async (req, res) => {
+  try {
+    const providerId = req.user.id;
+
+    const rows = await pool.query(
+      `
+      SELECT
+        COALESCE(provider_status, 'sin_atender') AS provider_status,
+        COUNT(*)::int AS count
+      FROM provider_info_requests
+      WHERE provider_id = $1
+        AND moderation_status = 'approved'
+      GROUP BY COALESCE(provider_status, 'sin_atender')
+      ORDER BY provider_status
+      `,
+      [providerId]
+    );
+
+    const map = {};
+    for (const row of rows.rows || []) {
+      map[row.provider_status] = row.count;
+    }
+
+    return res.json({
+      total:
+        (map.sin_atender || 0) +
+        (map.pendiente || 0) +
+        (map.atendida || 0) +
+        (map.cerrada || 0),
+      sin_atender: map.sin_atender || 0,
+      pendiente: map.pendiente || 0,
+      atendida: map.atendida || 0,
+      cerrada: map.cerrada || 0,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+});
+
+/**
  * PATCH /providers/info-requests/:id/status
  * Body: { provider_status }
  */
