@@ -69,6 +69,7 @@ const venuesDetail = [
     opinions: [],
     category: "Jardín",
     mapEmbedUrl: "https://www.google.com/maps?output=embed&q=Tlalpan%2C%20CDMX",
+    isFeatured: false,
   },
 ];
 
@@ -182,6 +183,7 @@ function mapApiProviderToVenue(profile, photos = []) {
       "Ubicación por definir. (Google Maps ya está listo para usarse aquí).",
     opinions: [],
     mapEmbedUrl,
+    isFeatured: Boolean(profile?.is_featured ?? profile?.isFeatured ?? false),
   };
 }
 
@@ -254,6 +256,7 @@ function VenueDetailPage() {
                 priceTo: draft.priceTo,
                 locationLat: draft.locationLat,
                 locationLng: draft.locationLng,
+                isFeatured: false,
               },
               [],
             );
@@ -508,6 +511,34 @@ function VenueDetailPage() {
               <h1 className="venue-hero__name">{venue.name}</h1>
               <p className="venue-hero__location">{venue.location}</p>
 
+              {isProviderView && (
+                <div
+                  style={{
+                    marginTop: "0.85rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    padding: "0.55rem 0.85rem",
+                    borderRadius: "999px",
+                    background: venue.isFeatured
+                      ? "rgba(16,185,129,0.12)"
+                      : "rgba(107,114,128,0.12)",
+                    border: venue.isFeatured
+                      ? "1px solid rgba(16,185,129,0.22)"
+                      : "1px solid rgba(107,114,128,0.2)",
+                    fontSize: "0.92rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>{venue.isFeatured ? "⭐" : "○"}</span>
+                  <span>
+                    {venue.isFeatured
+                      ? "Proveedor Destacado Kelom"
+                      : "Proveedor gratuito"}
+                  </span>
+                </div>
+              )}
+
               <p className="venue-hero__lead">{venue.shortDescription}</p>
 
               <ul className="venue-hero__highlights">
@@ -521,6 +552,23 @@ function VenueDetailPage() {
 
               {requestUiMessage && !isProviderView && (
                 <div className="venue-request-banner">{requestUiMessage}</div>
+              )}
+
+              {isProviderView && !venue.isFeatured && (
+                <div
+                  style={{
+                    marginTop: "0.9rem",
+                    padding: "0.85rem 1rem",
+                    borderRadius: "16px",
+                    background: "rgba(107,114,128,0.08)",
+                    border: "1px solid rgba(107,114,128,0.18)",
+                    lineHeight: 1.45,
+                  }}
+                >
+                  La bandeja de solicitudes está disponible solo para{" "}
+                  <strong>Proveedor Destacado Kelom</strong>. Si quieres activar ese beneficio,
+                  contacta a tu agente de cuenta kelom.
+                </div>
               )}
 
               <div className="venue-hero__ctas">
@@ -541,40 +589,42 @@ function VenueDetailPage() {
                   </button>
                 )}
 
+                {isProviderView && venue.isFeatured && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    title="Solicitudes de información"
+                    aria-label="Solicitudes de información"
+                    onClick={() => navigate("/empresas/solicitudes")}
+                    style={{
+                      width: "46px",
+                      minWidth: "46px",
+                      padding: "0.75rem",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M4 6h16v12H4z" />
+                      <path d="m22 6-10 7L2 6" />
+                    </svg>
+                  </button>
+                )}
+
                 {isProviderView && (
                   <>
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      title="Solicitudes de información"
-                      aria-label="Solicitudes de información"
-                      onClick={() => navigate("/empresas/solicitudes")}
-                      style={{
-                        width: "46px",
-                        minWidth: "46px",
-                        padding: "0.75rem",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M4 6h16v12H4z" />
-                        <path d="m22 6-10 7L2 6" />
-                      </svg>
-                    </button>
-
                     <button type="button" className="btn btn--primary" onClick={handleGoEdit}>
                       Editar mi perfil
                     </button>
