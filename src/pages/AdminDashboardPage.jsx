@@ -3,6 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { adminFetchMe, adminLogout } from "../utils/adminAuth.js";
 import { adminApiFetch } from "../services/adminApi.js";
+import {
+  sendProviderApprovedInfoRequestEmail,
+  sendUserDeclinedInfoRequestEmail,
+} from "../services/emailjsService.js";
 
 const REVIEW_STATUSES = [
   { value: "", label: "Todos" },
@@ -101,6 +105,14 @@ function formatDateTime(v) {
   } catch {
     return "—";
   }
+}
+
+function getProviderLabel(requestItem) {
+  return (
+    requestItem?.provider_venue_name ||
+    requestItem?.provider_company_name ||
+    (requestItem?.provider_id ? `ID: ${requestItem.provider_id}` : "Proveedor")
+  );
 }
 
 // CSV helpers (Excel-friendly)
@@ -434,6 +446,8 @@ function AdminDashboardPage() {
     setRequestsFlash("");
 
     try {
+      const currentRequest = requests.find((r) => r.id === requestId) || null;
+
       const data = await adminApiFetch(`/admin/info-requests/${requestId}/moderate`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -459,8 +473,51 @@ function AdminDashboardPage() {
         )
       );
 
+      let emailWarning = "";
+
+      if (currentRequest) {
+        try {
+          if (moderation_status === "approved") {
+            if (!currentRequest.provider_email) {
+              emailWarning =
+                " La moderación sí se guardó, pero no se envió correo porque el proveedor no tiene email disponible.";
+            } else {
+              await sendProviderApprovedInfoRequestEmail({
+                providerName: getProviderLabel(currentRequest),
+                providerEmail: currentRequest.provider_email,
+                isFeatured: Boolean(currentRequest.provider_is_featured),
+                requesterName: currentRequest.requester_name || "",
+                requesterEmail: currentRequest.requester_email || "",
+                requesterPhone: currentRequest.requester_phone || "",
+                preferredContactSchedule: currentRequest.preferred_contact_schedule || "",
+                message: currentRequest.message || "",
+              });
+            }
+          }
+
+          if (moderation_status === "declined") {
+            if (!currentRequest.requester_email) {
+              emailWarning =
+                " La moderación sí se guardó, pero no se envió correo porque el usuario no tiene email disponible.";
+            } else {
+              await sendUserDeclinedInfoRequestEmail({
+                requesterName: currentRequest.requester_name || "",
+                requesterEmail: currentRequest.requester_email,
+                providerName: getProviderLabel(currentRequest),
+              });
+            }
+          }
+        } catch (emailErr) {
+          emailWarning = ` La moderación sí se guardó, pero falló el correo: ${
+            emailErr?.message || "Error desconocido"
+          }`;
+        }
+      }
+
       setRequestsFlash(
-        moderation_status === "approved" ? "Solicitud aprobada ✅" : "Solicitud declinada ✅"
+        moderation_status === "approved"
+          ? `Solicitud aprobada ✅${emailWarning}`
+          : `Solicitud declinada ✅${emailWarning}`
       );
 
       setTimeout(() => loadRequests(), 150);
