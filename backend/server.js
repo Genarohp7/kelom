@@ -11,6 +11,7 @@ import jwt from "jsonwebtoken";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import multer from "multer";
+import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -193,7 +194,7 @@ function toBooleanOrNull(v) {
   if (v === undefined || v === null || v === "") return null;
   if (typeof v === "boolean") return v;
 
-  const s = String(v).trim().toLowerCase();
+  const s = String(v || "").trim().toLowerCase();
 
   if (["true", "1", "yes", "on"].includes(s)) return true;
   if (["false", "0", "no", "off"].includes(s)) return false;
@@ -225,6 +226,10 @@ function isUuid(v) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(v || "")
   );
+}
+
+function randomHex(size = 8) {
+  return Math.random().toString(16).slice(2, 2 + size);
 }
 
 const PROVIDER_REQUEST_STATUS_VALUES = new Set([
@@ -431,6 +436,9 @@ async function writeAdminAuditLog(req, { action, entityType, entityId, beforeSta
 
 const PROVIDER_UPLOAD_ROOT = path.join(__dirname, "uploads", "providers");
 const ALLOWED_PROVIDER_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const PROVIDER_PHOTO_MAX_WIDTH = 1600;
+const PROVIDER_PHOTO_MAX_HEIGHT = 1600;
+const PROVIDER_PHOTO_WEBP_QUALITY = 82;
 
 try {
   fs.mkdirSync(PROVIDER_UPLOAD_ROOT, { recursive: true });
@@ -438,34 +446,43 @@ try {
   // ignore
 }
 
-function safeImageExt(originalName, mime) {
-  const ext = (path.extname(originalName || "") || "").toLowerCase();
-  if ([".jpg", ".jpeg", ".png", ".webp"].includes(ext)) return ext;
-  if (mime === "image/png") return ".png";
-  if (mime === "image/webp") return ".webp";
-  return ".jpg";
+async function ensureDir(dir) {
+  await fs.promises.mkdir(dir, { recursive: true });
+}
+
+async function processAndStoreProviderPhoto(userId, file) {
+  if (!userId) throw new Error("No autorizado");
+  if (!file?.buffer) throw new Error("Archivo inválido");
+
+  const dir = path.join(PROVIDER_UPLOAD_ROOT, userId);
+  await ensureDir(dir);
+
+  const filename = `${Date.now()}-${randomHex(10)}.webp`;
+  const absPath = path.join(dir, filename);
+
+  await sharp(file.buffer)
+    .rotate()
+    .resize({
+      width: PROVIDER_PHOTO_MAX_WIDTH,
+      height: PROVIDER_PHOTO_MAX_HEIGHT,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({
+      quality: PROVIDER_PHOTO_WEBP_QUALITY,
+      effort: 4,
+    })
+    .toFile(absPath);
+
+  return {
+    filename,
+    absPath,
+    url: `/uploads/providers/${userId}/${filename}`,
+  };
 }
 
 const providerUpload = multer({
-  storage: multer.diskStorage({
-    destination(req, file, cb) {
-      try {
-        const userId = req.user?.id;
-        if (!userId) return cb(new Error("No autorizado"), null);
-
-        const dir = path.join(PROVIDER_UPLOAD_ROOT, userId);
-        fs.mkdirSync(dir, { recursive: true });
-        return cb(null, dir);
-      } catch (err) {
-        return cb(err, null);
-      }
-    },
-    filename(req, file, cb) {
-      const ext = safeImageExt(file.originalname, file.mimetype);
-      const name = `${Date.now()}-${Math.random().toString(16).slice(2)}${ext}`;
-      cb(null, name);
-    },
-  }),
+  storage: multer.memoryStorage(),
   fileFilter(req, file, cb) {
     if (!ALLOWED_PROVIDER_IMAGE_TYPES.has(file.mimetype)) {
       return cb(new Error("Tipo de archivo no permitido. Usa JPG/PNG/WebP."));
@@ -473,7 +490,7 @@ const providerUpload = multer({
     return cb(null, true);
   },
   limits: {
-    fileSize: 6 * 1024 * 1024, // 6MB por imagen
+    fileSize: 6 * 1024 * 1024, // 6MB por imagen antes de optimizar
     files: 12,
   },
 });
@@ -1655,6 +1672,8 @@ app.post(
   providerAuthMiddleware,
   providerUpload.array("photos", 12),
   async (req, res) => {
+    const savedAbsPaths = [];
+
     try {
       const userId = req.user.id;
 
@@ -1683,15 +1702,17 @@ app.post(
 
       const inserted = [];
 
-      for (const f of files) {
+      for (const file of files) {
+        const processed = await processAndStoreProviderPhoto(userId, file);
+        savedAbsPaths.push(processed.absPath);
+
         sort += 1;
-        const url = `/uploads/providers/${userId}/${f.filename}`;
 
         const ins = await pool.query(
           `INSERT INTO provider_photos (user_id, url, sort_order)
            VALUES ($1, $2, $3)
            RETURNING id, url, sort_order, created_at`,
-          [userId, url, sort]
+          [userId, processed.url, sort]
         );
 
         inserted.push(ins.rows[0]);
@@ -1699,6 +1720,10 @@ app.post(
 
       return res.status(201).json({ photos: inserted });
     } catch (err) {
+      await Promise.all(
+        savedAbsPaths.map((absPath) => fs.promises.unlink(absPath).catch(() => {}))
+      );
+
       console.error(err);
       return res.status(500).json({ error: "Error interno" });
     }
@@ -2457,6 +2482,7 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  void req;
   void next;
 
   if (err?.message === "Origen no permitido por CORS") {
@@ -2466,7 +2492,9 @@ app.use((err, req, res, next) => {
   // Multer
   if (err?.name === "MulterError") {
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "Imagen demasiado grande (máx 6MB)." });
+      return res
+        .status(400)
+        .json({ error: "Imagen demasiado grande (máx 6MB antes de optimizar)." });
     }
     if (err.code === "LIMIT_FILE_COUNT") {
       return res.status(400).json({ error: "Demasiadas fotos (máx 12)." });
@@ -2476,6 +2504,12 @@ app.use((err, req, res, next) => {
 
   if (String(err?.message || "").includes("Tipo de archivo no permitido")) {
     return res.status(400).json({ error: "Tipo de archivo no permitido. Usa JPG/PNG/WebP." });
+  }
+
+  if (
+    String(err?.message || "").toLowerCase().includes("input buffer contains unsupported image")
+  ) {
+    return res.status(400).json({ error: "La imagen no se pudo procesar." });
   }
 
   if (err?.type === "entity.too.large") {
