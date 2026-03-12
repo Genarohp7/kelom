@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { clearProviderSession, getProviderToken } from "../services/providerAuth";
 import { getToken } from "../utils/auth.js";
+import { sendAdminNewInfoRequestEmail } from "../services/emailjsService.js";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
@@ -28,6 +29,22 @@ function toAbsoluteApiUrl(url) {
   if (!url) return "";
   if (String(url).startsWith("http")) return url;
   return `${API_BASE}${url}`;
+}
+
+async function fetchJsonWithAuth(url, token) {
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data?.error || `Error HTTP ${res.status}`);
+  }
+
+  return data;
 }
 
 const formatMXN = (value) => {
@@ -485,6 +502,9 @@ function VenueDetailPage() {
       return;
     }
 
+    const finalMessage = String(requestMessage || "").trim();
+    const finalPreferredSchedule = String(preferredSchedule || "").trim();
+
     setRequestSending(true);
     setRequestError("");
 
@@ -497,17 +517,41 @@ function VenueDetailPage() {
         },
         body: JSON.stringify({
           providerId,
-          message: String(requestMessage || "").trim(),
-          preferredContactSchedule: String(preferredSchedule || "").trim(),
+          message: finalMessage,
+          preferredContactSchedule: finalPreferredSchedule,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
+      let internalEmailWarning = false;
+
+      try {
+        const [authData, profileData] = await Promise.all([
+          fetchJsonWithAuth(`${API_BASE}/auth/me`, token),
+          fetchJsonWithAuth(`${API_BASE}/profile/me`, token),
+        ]);
+
+        await sendAdminNewInfoRequestEmail({
+          providerName: venue?.name || "",
+          providerId,
+          requesterName: authData?.user?.name || "",
+          requesterEmail: authData?.user?.email || "",
+          requesterPhone: profileData?.profile?.phone || "",
+          preferredContactSchedule: finalPreferredSchedule,
+          message: finalMessage,
+        });
+      } catch (emailErr) {
+        console.error("No se pudo enviar correo interno de solicitud:", emailErr);
+        internalEmailWarning = true;
+      }
+
       closeModal();
       setRequestUiMessage(
-        "Solicitud enviada ✅ Quedó pendiente de revisión por Kelom antes de llegar al proveedor.",
+        internalEmailWarning
+          ? "Solicitud enviada ✅ Quedó pendiente de revisión por Kelom antes de llegar al proveedor. La solicitud sí se guardó, aunque la notificación interna por correo no pudo enviarse automáticamente."
+          : "Solicitud enviada ✅ Quedó pendiente de revisión por Kelom antes de llegar al proveedor.",
       );
     } catch (err) {
       setRequestError(String(err?.message || "No se pudo enviar la solicitud."));
