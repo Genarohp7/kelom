@@ -1,4 +1,3 @@
-// src/pages/Business/Pages/UserRegisterCompletePage.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -21,7 +20,33 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 const MAX_AVATAR_BYTES = 1024 * 1024; // 1MB
+const MAX_AVATAR_WIDTH = 1600;
+const MAX_AVATAR_HEIGHT = 1600;
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+function getImageDimensions(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      const dimensions = {
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      };
+
+      URL.revokeObjectURL(objectUrl);
+      resolve(dimensions);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("No se pudo leer la imagen."));
+    };
+
+    img.src = objectUrl;
+  });
+}
 
 function toDateInputValue(raw) {
   if (!raw) return "";
@@ -249,35 +274,49 @@ function UserRegisterCompletePage() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   }
 
-  function handleAvatarChange(evt) {
-    const file = evt.target.files?.[0];
+  async function handleAvatarChange(evt) {
+    const input = evt.target;
+    const file = input.files?.[0];
     if (!file) return;
 
     setAvatarError("");
     setSubmitError("");
     setSubmitSuccess("");
 
-    // Validación cliente (para evitar que el backend te “regañe”)
     if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
       setAvatarError("Formato no permitido. Usa JPG, PNG o WebP.");
-      evt.target.value = "";
+      input.value = "";
       return;
     }
 
     if (file.size > MAX_AVATAR_BYTES) {
       setAvatarError("Imagen demasiado grande. Máximo 1MB.");
-      evt.target.value = "";
+      input.value = "";
       return;
     }
 
-    // Limpia objectURL anterior
-    if (avatarObjectUrl) URL.revokeObjectURL(avatarObjectUrl);
+    try {
+      const { width, height } = await getImageDimensions(file);
 
-    const url = URL.createObjectURL(file);
-    setAvatarObjectUrl(url);
-    setAvatarFile(file);
+      if (width > MAX_AVATAR_WIDTH || height > MAX_AVATAR_HEIGHT) {
+        setAvatarError(
+          `La imagen es demasiado grande en dimensiones. Máximo ${MAX_AVATAR_WIDTH}x${MAX_AVATAR_HEIGHT}px.`
+        );
+        input.value = "";
+        return;
+      }
 
-    setFormData((prev) => ({ ...prev, avatar: url }));
+      if (avatarObjectUrl) URL.revokeObjectURL(avatarObjectUrl);
+
+      const url = URL.createObjectURL(file);
+      setAvatarObjectUrl(url);
+      setAvatarFile(file);
+
+      setFormData((prev) => ({ ...prev, avatar: url }));
+    } catch {
+      setAvatarError("No se pudo procesar la imagen. Intenta con otra.");
+      input.value = "";
+    }
   }
 
   function buildProfilePayload() {
@@ -750,7 +789,10 @@ function UserRegisterCompletePage() {
               )}
 
               {submitSuccess && (
-                <div className="form__error" style={{ marginTop: "0.6rem", color: "green" }}>
+                <div
+                  className="form__error"
+                  style={{ marginTop: "0.6rem", color: "green" }}
+                >
                   {submitSuccess}
                 </div>
               )}
@@ -831,7 +873,10 @@ function UserRegisterCompletePage() {
                   )}
 
                   {pwSuccess && (
-                    <div className="form__error" style={{ marginTop: "0.6rem", color: "green" }}>
+                    <div
+                      className="form__error"
+                      style={{ marginTop: "0.6rem", color: "green" }}
+                    >
                       {pwSuccess}
                     </div>
                   )}
@@ -853,7 +898,7 @@ function UserRegisterCompletePage() {
           <aside className="preview-card">
             <h2 className="preview-card__title">Foto de perfil</h2>
             <p className="preview-card__subtitle">
-              JPG/PNG/WebP (máx 1MB). Se guarda en tu cuenta.
+              JPG/PNG/WebP (máx 1MB y hasta 1600x1600 px). Se guarda en tu cuenta.
             </p>
 
             <div className="profile-avatar-upload">

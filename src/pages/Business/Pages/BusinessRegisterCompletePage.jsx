@@ -1,4 +1,3 @@
-// src/pages/Business/Pages/BusinessRegisterCompletePage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import "../../../../Blocks/Business/BusinessAuth.css";
@@ -16,21 +15,25 @@ const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
 
 const EDIT_ROUTE = "/empresas/registro/completar";
 
+const ALLOWED_PROVIDER_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_PROVIDER_PHOTO_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_PROVIDER_PHOTO_WIDTH = 2500;
+const MAX_PROVIDER_PHOTO_HEIGHT = 2500;
+
 const BUSINESS_CATEGORY_OPTIONS = [
   "Jardín",
   "Hacienda",
   "Salón",
-  "Banquetes", // antes "Catering"
+  "Banquetes",
   "Organizador para Bodas",
-  "Vestidos",  // ✅ nuevo
+  "Vestidos",
   "Pasteles",
   "DJ",
   "Florería",
   "Fotógrafo",
 ];
-// ✅ NUEVO: Alcaldías CDMX + Municipios EdoMex (campo obligatorio)
+
 const LOCALITY_AREA_OPTIONS = [
-  // CDMX
   "Álvaro Obregón",
   "Azcapotzalco",
   "Benito Juárez",
@@ -47,7 +50,6 @@ const LOCALITY_AREA_OPTIONS = [
   "Tlalpan",
   "Venustiano Carranza",
   "Xochimilco",
-  // EdoMex
   "Ecatepec",
   "Naucalpan",
   "Tlalnepantla",
@@ -90,6 +92,30 @@ function toAbsoluteApiUrl(url) {
   return `${API_BASE}${url}`;
 }
 
+function getImageDimensions(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      const dimensions = {
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      };
+
+      URL.revokeObjectURL(objectUrl);
+      resolve(dimensions);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("No se pudo leer la imagen."));
+    };
+
+    img.src = objectUrl;
+  });
+}
+
 function mapApiProfileToProfileData(profile) {
   if (!profile) return null;
 
@@ -102,13 +128,9 @@ function mapApiProfileToProfileData(profile) {
   return {
     venueName: profile.venue_name || "",
     venueLocation: profile.venue_location || "",
-
     businessCategory:
       profile.business_category || profile.businessCategory || profile.category || "",
-
-    // ✅ NUEVO
     localityArea: profile.locality_area || profile.localityArea || "",
-
     locationPlaceId: profile.location_place_id || "",
     locationLat:
       profile.location_lat === null || profile.location_lat === undefined
@@ -118,7 +140,6 @@ function mapApiProfileToProfileData(profile) {
       profile.location_lng === null || profile.location_lng === undefined
         ? ""
         : String(profile.location_lng),
-
     capacityMin:
       profile.capacity_min === null || profile.capacity_min === undefined
         ? ""
@@ -127,7 +148,6 @@ function mapApiProfileToProfileData(profile) {
       profile.capacity_max === null || profile.capacity_max === undefined
         ? ""
         : String(profile.capacity_max),
-
     priceFrom:
       profile.price_from === null || profile.price_from === undefined
         ? ""
@@ -136,23 +156,18 @@ function mapApiProfileToProfileData(profile) {
       profile.price_to === null || profile.price_to === undefined
         ? ""
         : String(profile.price_to),
-
     shortDescription: profile.short_description || "",
     description: profile.description || "",
     spaces: profile.spaces || "",
     services: profile.services || "",
     rules: profile.rules || "",
-
     website: profile.website || "",
     instagram: profile.instagram || "",
     facebook: profile.facebook || "",
-
     mapText: profile.map_text || "",
-
     eventTypes: Array.isArray(profile.event_types) ? profile.event_types : [],
     sellingPointsText: sellingPointsArr.length ? sellingPointsArr.join("\n") : "",
-
-    photos: [], // File objects locales (aquí no llegan)
+    photos: [],
   };
 }
 
@@ -170,10 +185,9 @@ function BusinessRegisterCompletePage() {
   const stateBasicData = location.state?.basicData || null;
   const prefillProfileData = location.state?.prefillProfileData || null;
 
-  const authModeFromState = location.state?.authMode || null; // "register" | "edit"
+  const authModeFromState = location.state?.authMode || null;
   const loginEmailFromState = location.state?.loginEmail || "";
 
-  // ============ BASIC DATA (lead) ============
   const [basicData, setBasicData] = useState(() => {
     if (stateBasicData) return stateBasicData;
 
@@ -203,7 +217,6 @@ function BusinessRegisterCompletePage() {
     return "register";
   }, [isLoggedIn, authModeFromState, prefillProfileData]);
 
-  // ✅ GUARD: si estás en EDICIÓN pero NO hay token → login
   useEffect(() => {
     if (authMode !== "edit") return;
 
@@ -216,26 +229,21 @@ function BusinessRegisterCompletePage() {
     }
   }, [authMode, navigate]);
 
-  // ============ PROFILE DATA ============
   const [profileData, setProfileData] = useState(() => {
     if (prefillProfileData) {
       return {
         venueName: prefillProfileData.venueName || "",
         venueLocation: prefillProfileData.venueLocation || "",
-
         businessCategory:
           prefillProfileData.businessCategory ||
           prefillProfileData.business_category ||
           prefillProfileData.category ||
           "",
-
-        // ✅ NUEVO
         localityArea:
           prefillProfileData.localityArea ||
           prefillProfileData.locality_area ||
           prefillProfileData.area ||
           "",
-
         locationPlaceId: prefillProfileData.locationPlaceId || "",
         locationLat:
           prefillProfileData.locationLat ??
@@ -247,7 +255,6 @@ function BusinessRegisterCompletePage() {
           prefillProfileData.lng ??
           prefillProfileData.location?.lng ??
           "",
-
         capacityMin: prefillProfileData.capacityMin || "",
         capacityMax: prefillProfileData.capacityMax || "",
         priceFrom: prefillProfileData.priceFrom || "",
@@ -279,16 +286,11 @@ function BusinessRegisterCompletePage() {
         return {
           venueName: parsed.venueName || "",
           venueLocation: parsed.venueLocation || "",
-
           businessCategory: parsed.businessCategory || "",
-
-          // ✅ NUEVO
           localityArea: parsed.localityArea || "",
-
           locationPlaceId: parsed.locationPlaceId || "",
           locationLat: parsed.locationLat ?? "",
           locationLng: parsed.locationLng ?? "",
-
           capacityMin: parsed.capacityMin || "",
           capacityMax: parsed.capacityMax || "",
           priceFrom: parsed.priceFrom || "",
@@ -314,15 +316,11 @@ function BusinessRegisterCompletePage() {
     return {
       venueName: "",
       venueLocation: "",
-
       businessCategory: "",
-      // ✅ NUEVO
       localityArea: "",
-
       locationPlaceId: "",
       locationLat: "",
       locationLng: "",
-
       capacityMin: "",
       capacityMax: "",
       priceFrom: "",
@@ -342,16 +340,14 @@ function BusinessRegisterCompletePage() {
     };
   });
 
-  // ============ SERVER PHOTOS (backend) ============
   const [serverPhotos, setServerPhotos] = useState([]);
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
-  // ============ UX / API ============
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
+  const [photoError, setPhotoError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // ============ Security ============
   const [securityData, setSecurityData] = useState({
     password: "",
     confirmPassword: "",
@@ -368,16 +364,13 @@ function BusinessRegisterCompletePage() {
     confirmNewPassword: false,
   });
 
-  // ============ Dropzone (local photos) ============
   const fileInputRef = useRef(null);
   const [isDragActive, setIsDragActive] = useState(false);
 
-  // ============ Google Places Autocomplete ============
   const locationInputRef = useRef(null);
   const autocompleteListenerRef = useRef(null);
   const autocompleteRef = useRef(null);
 
-  // ========= API helpers =========
   const apiJson = async (path, { method = "GET", body, token } = {}) => {
     const headers = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -414,7 +407,6 @@ function BusinessRegisterCompletePage() {
     return data;
   };
 
-  // ========= Load provider profile if token exists =========
   useEffect(() => {
     const token = getProviderToken();
     if (!token) return;
@@ -451,7 +443,6 @@ function BusinessRegisterCompletePage() {
 
         console.warn("No se pudo cargar /providers/me:", err);
 
-        // ✅ Token murió / inválido → limpiamos y mandamos al login (modo pro)
         clearProviderSession();
         navigate("/empresas/login", {
           replace: true,
@@ -464,12 +455,53 @@ function BusinessRegisterCompletePage() {
     };
   }, [prefillProfileData, navigate]);
 
-  // ========= Dropzone handlers =========
   const openFilePicker = () => fileInputRef.current?.click();
 
-  const addPhotos = (files) => {
-    const incoming = (files || []).filter((f) => f && f.type?.startsWith("image/"));
+  const addPhotos = async (files) => {
+    const incoming = Array.from(files || []).filter(Boolean);
     if (incoming.length === 0) return;
+
+    setPhotoError("");
+    setSubmitError("");
+    setSubmitSuccess("");
+
+    const validFiles = [];
+    const errors = [];
+
+    for (const file of incoming) {
+      if (!ALLOWED_PROVIDER_PHOTO_TYPES.includes(file.type)) {
+        errors.push(
+          `${file.name}: formato no permitido. Usa JPG, PNG o WebP.`
+        );
+        continue;
+      }
+
+      if (file.size > MAX_PROVIDER_PHOTO_BYTES) {
+        errors.push(`${file.name}: excede 5MB.`);
+        continue;
+      }
+
+      try {
+        const { width, height } = await getImageDimensions(file);
+
+        if (width > MAX_PROVIDER_PHOTO_WIDTH || height > MAX_PROVIDER_PHOTO_HEIGHT) {
+          errors.push(
+            `${file.name}: excede ${MAX_PROVIDER_PHOTO_WIDTH}x${MAX_PROVIDER_PHOTO_HEIGHT}px.`
+          );
+          continue;
+        }
+
+        validFiles.push(file);
+      } catch {
+        errors.push(`${file.name}: no se pudo procesar.`);
+      }
+    }
+
+    if (errors.length > 0) {
+      setPhotoError(errors.join(" "));
+    }
+
+    if (validFiles.length === 0) return;
 
     const keyOf = (f) => `${f.name}-${f.size}-${f.lastModified}`;
 
@@ -478,7 +510,7 @@ function BusinessRegisterCompletePage() {
       const seen = new Set(existing.map(keyOf));
       const merged = [...existing];
 
-      incoming.forEach((f) => {
+      validFiles.forEach((f) => {
         const k = keyOf(f);
         if (!seen.has(k)) {
           merged.push(f);
@@ -490,17 +522,17 @@ function BusinessRegisterCompletePage() {
     });
   };
 
-  const handlePhotoInputChange = (e) => {
+  const handlePhotoInputChange = async (e) => {
     const files = Array.from(e.target.files || []);
-    addPhotos(files);
+    await addPhotos(files);
     e.target.value = "";
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragActive(false);
-    addPhotos(Array.from(e.dataTransfer.files || []));
+    await addPhotos(Array.from(e.dataTransfer.files || []));
   };
 
   const handleDragOver = (e) => {
@@ -528,7 +560,6 @@ function BusinessRegisterCompletePage() {
     });
   };
 
-  // ========= Server photos handlers =========
   const uploadSelectedPhotosToBackend = async (token) => {
     const files = Array.isArray(profileData.photos) ? profileData.photos : [];
     if (!files.length) return;
@@ -549,6 +580,7 @@ function BusinessRegisterCompletePage() {
       if (newPhotos.length) setServerPhotos((prev) => [...prev, ...newPhotos]);
 
       setProfileData((prev) => ({ ...prev, photos: [] }));
+      setPhotoError("");
     } catch (err) {
       setSubmitError(String(err?.message || "No se pudieron subir las fotos."));
       throw err;
@@ -584,7 +616,6 @@ function BusinessRegisterCompletePage() {
     }
   };
 
-  // ========= Security handlers =========
   const handleSecurityChange = (e) => {
     const { name, value } = e.target;
     setSubmitError("");
@@ -596,7 +627,6 @@ function BusinessRegisterCompletePage() {
     setShowSecurity((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // ========= Profile handlers =========
   const handleProfileChange = (e) => {
     const { name, value } = e.target;
     setSubmitError("");
@@ -626,7 +656,6 @@ function BusinessRegisterCompletePage() {
     });
   };
 
-  // ========= Google Places Autocomplete =========
   useEffect(() => {
     let cancelled = false;
 
@@ -728,7 +757,6 @@ function BusinessRegisterCompletePage() {
     };
   }, []);
 
-  // ========= Local previews =========
   const photoPreviews = useMemo(
     () => (profileData.photos || []).map((file) => URL.createObjectURL(file)),
     [profileData.photos]
@@ -762,7 +790,7 @@ function BusinessRegisterCompletePage() {
       !!profileData.venueName.trim(),
       !!profileData.venueLocation.trim(),
       !!profileData.businessCategory.trim(),
-      !!profileData.localityArea.trim(), // ✅ NUEVO
+      !!profileData.localityArea.trim(),
       !!String(profileData.capacityMin).trim(),
       !!String(profileData.priceFrom).trim(),
       !!String(profileData.priceTo).trim(),
@@ -877,7 +905,7 @@ function BusinessRegisterCompletePage() {
       venueName,
       venueLocation,
       businessCategory,
-      localityArea, // ✅ NUEVO
+      localityArea,
       capacityMin,
       capacityMax,
       priceFrom,
@@ -891,7 +919,7 @@ function BusinessRegisterCompletePage() {
       !venueName.trim() ||
       !venueLocation.trim() ||
       !businessCategory.trim() ||
-      !localityArea.trim() || // ✅ NUEVO
+      !localityArea.trim() ||
       !String(priceFrom).trim() ||
       !String(priceTo).trim() ||
       !String(capacityMin).trim() ||
@@ -938,8 +966,6 @@ function BusinessRegisterCompletePage() {
           venueName: profileData.venueName,
           venueLocation: profileData.venueLocation,
           businessCategory: profileData.businessCategory,
-
-          // ✅ NUEVO
           localityArea: profileData.localityArea,
 
           locationPlaceId: profileData.locationPlaceId || null,
@@ -1004,8 +1030,6 @@ function BusinessRegisterCompletePage() {
         venueName: profileData.venueName,
         venueLocation: profileData.venueLocation,
         businessCategory: profileData.businessCategory,
-
-        // ✅ NUEVO
         localityArea: profileData.localityArea,
 
         locationPlaceId: profileData.locationPlaceId || null,
@@ -1140,7 +1164,6 @@ function BusinessRegisterCompletePage() {
                   />
                 </div>
 
-                {/* ✅ CATEGORÍA OBLIGATORIA */}
                 <div className="form__field form__field--full">
                   <label className="form__label" htmlFor="businessCategory">
                     Categoría del negocio *
@@ -1167,7 +1190,6 @@ function BusinessRegisterCompletePage() {
                   </p>
                 </div>
 
-                {/* ✅ NUEVO: ALCALDÍA/MUNICIPIO OBLIGATORIO */}
                 <div className="form__field form__field--full">
                   <label className="form__label" htmlFor="localityArea">
                     Alcaldía o municipio *
@@ -1377,6 +1399,9 @@ function BusinessRegisterCompletePage() {
 
                 <div className="form__field form__field--full">
                   <label className="form__label">Fotografías del lugar</label>
+                  <p className="form__hint" style={{ marginTop: "0.35rem", marginBottom: "0.55rem" }}>
+                    Formatos permitidos: JPG, PNG o WebP. Máximo 5MB por imagen y hasta 2500x2500 px.
+                  </p>
 
                   {(serverPhotos || []).length > 0 && (
                     <div className="dropzone__thumbs" aria-label="Fotos guardadas">
@@ -1445,13 +1470,19 @@ function BusinessRegisterCompletePage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp"
                       multiple
                       className="dropzone__input"
                       onChange={handlePhotoInputChange}
                       disabled={isUploadingPhotos || isSubmitting}
                     />
                   </div>
+
+                  {photoError && (
+                    <div className="form__error" style={{ marginTop: "0.6rem" }}>
+                      {photoError}
+                    </div>
+                  )}
 
                   {photoPreviews.length > 0 && (
                     <div className="dropzone__thumbs" aria-label="Fotos nuevas">

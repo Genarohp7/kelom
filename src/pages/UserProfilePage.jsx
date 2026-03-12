@@ -1,4 +1,3 @@
-// src/pages/UserProfilePage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -11,7 +10,11 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
-// Ejemplos de proveedores seleccionados (modo demo)
+const ALLOWED_IDEA_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_IDEA_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_IDEA_IMAGE_WIDTH = 2500;
+const MAX_IDEA_IMAGE_HEIGHT = 2500;
+
 const sampleProviders = [
   {
     id: 1,
@@ -36,7 +39,6 @@ const sampleProviders = [
   },
 ];
 
-// Ejemplos de ideas (modo demo)
 const sampleIdeas = [
   {
     id: 1,
@@ -54,7 +56,30 @@ const sampleIdeas = [
   },
 ];
 
-// Evita desfases de zona horaria cuando viene "YYYY-MM-DD" o "YYYY-MM-DDT..."
+function getImageDimensions(file) {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      const dimensions = {
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      };
+
+      URL.revokeObjectURL(objectUrl);
+      resolve(dimensions);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("No se pudo leer la imagen."));
+    };
+
+    img.src = objectUrl;
+  });
+}
+
 function parseDateOnly(raw) {
   if (!raw) return null;
   if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
@@ -77,12 +102,10 @@ function parseDateOnly(raw) {
 function UserProfilePage() {
   const navigate = useNavigate();
 
-  // ======== Estado de sesión real (backend) ========
   const [user, setUser] = useState(null);
   const [weddingProfile, setWeddingProfile] = useState(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
 
-  // fallback si el avatar falla (link roto, etc.)
   const [avatarBroken, setAvatarBroken] = useState(false);
 
   useEffect(() => {
@@ -98,11 +121,10 @@ function UserProfilePage() {
       .then(([me, profile]) => {
         if (cancelled) return;
         setUser(me);
-        setWeddingProfile(profile); // puede ser null si aún no hay ficha
+        setWeddingProfile(profile);
         setAvatarBroken(false);
       })
       .catch(() => {
-        // token inválido/expirado o backend no responde
         logout();
         if (cancelled) return;
         navigate("/acceso", { replace: true });
@@ -117,7 +139,6 @@ function UserProfilePage() {
     };
   }, [navigate]);
 
-  // ======== HOOKS DEMO (siempre arriba, sin condicionales) ========
   const [providers, setProviders] = useState(sampleProviders);
 
   const [ideas, setIdeas] = useState(sampleIdeas);
@@ -125,6 +146,7 @@ function UserProfilePage() {
   const [newIdeaNote, setNewIdeaNote] = useState("");
   const [previewImageUrl, setPreviewImageUrl] = useState("");
   const [editingId, setEditingId] = useState(null);
+  const [ideaImageError, setIdeaImageError] = useState("");
 
   const weddingDateLabel = useMemo(() => {
     const d = parseDateOnly(weddingProfile?.wedding_date);
@@ -139,7 +161,6 @@ function UserProfilePage() {
     return `${API_BASE}${user.avatar_url}`;
   }, [user, avatarBroken]);
 
-  // Porcentaje de perfil completado (user + ficha)
   const completion = useMemo(() => {
     if (!user) return 0;
 
@@ -160,7 +181,7 @@ function UserProfilePage() {
       p.contact_preference?.toString().trim(),
     ].filter(Boolean).length;
 
-    const total = 2 + 8; // 2 user + 8 profile
+    const total = 2 + 8;
     const filled = filledUser + filledProfile;
 
     return Math.round((filled / total) * 100);
@@ -171,30 +192,62 @@ function UserProfilePage() {
     navigate("/", { replace: true });
   }
 
-  // ======== Proveedores (demo) ========
   function handleRemoveProvider(id) {
     setProviders((prev) => prev.filter((p) => p.id !== id));
   }
 
-  // ======== Ideas: helpers ========
   function resetIdeaForm() {
     setNewIdeaTitle("");
     setNewIdeaNote("");
     setPreviewImageUrl("");
     setEditingId(null);
+    setIdeaImageError("");
   }
 
-  function handleIdeaImageChange(e) {
-    const file = e.target.files?.[0];
+  async function handleIdeaImageChange(e) {
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === "string") {
-        setPreviewImageUrl(reader.result);
+    setIdeaImageError("");
+
+    if (!ALLOWED_IDEA_IMAGE_TYPES.includes(file.type)) {
+      setIdeaImageError("Formato no permitido. Usa JPG, PNG o WebP.");
+      input.value = "";
+      return;
+    }
+
+    if (file.size > MAX_IDEA_IMAGE_BYTES) {
+      setIdeaImageError("Imagen demasiado grande. Máximo 5MB.");
+      input.value = "";
+      return;
+    }
+
+    try {
+      const { width, height } = await getImageDimensions(file);
+
+      if (width > MAX_IDEA_IMAGE_WIDTH || height > MAX_IDEA_IMAGE_HEIGHT) {
+        setIdeaImageError(
+          `La imagen es demasiado grande en dimensiones. Máximo ${MAX_IDEA_IMAGE_WIDTH}x${MAX_IDEA_IMAGE_HEIGHT}px.`
+        );
+        input.value = "";
+        return;
       }
-    };
-    reader.readAsDataURL(file);
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === "string") {
+          setPreviewImageUrl(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      setIdeaImageError("No se pudo procesar la imagen. Intenta con otra.");
+      input.value = "";
+      return;
+    }
+
+    input.value = "";
   }
 
   function handleAddOrUpdateIdea() {
@@ -238,6 +291,7 @@ function UserProfilePage() {
     setNewIdeaTitle(idea.title || "");
     setNewIdeaNote(idea.note || "");
     setPreviewImageUrl(idea.image || "");
+    setIdeaImageError("");
   }
 
   function handleDeleteIdea(id) {
@@ -247,7 +301,6 @@ function UserProfilePage() {
     }
   }
 
-  // ======== UI: loading / no-user ========
   if (isLoadingUser) {
     return (
       <div className="user-profile">
@@ -264,7 +317,6 @@ function UserProfilePage() {
     <div className="user-profile">
       <div className="user-profile__container">
         <div className="user-profile__grid">
-          {/* Columna izquierda: resumen de perfil */}
           <section className="profile-card">
             <p className="profile-card__eyebrow">Tu resumen</p>
             <h1 className="profile-card__title">Hola, {user.name || "pareja"}</h1>
@@ -325,9 +377,7 @@ function UserProfilePage() {
             </div>
           </section>
 
-          {/* Columna derecha: foto + proveedores + ideas */}
           <aside className="preview-card">
-            {/* Foto de perfil */}
             <section className="user-profile__section user-profile__section--profile">
               <h2 className="preview-card__title">Foto de perfil</h2>
               <p className="preview-card__subtitle preview-card__subtitle--small">
@@ -356,7 +406,6 @@ function UserProfilePage() {
               </div>
             </section>
 
-            {/* Proveedores elegidos */}
             <section className="user-profile__section user-profile__section--providers">
               <h2 className="preview-card__title">
                 Tus proveedores elegidos hasta ahora
@@ -399,7 +448,6 @@ function UserProfilePage() {
               </div>
             </section>
 
-            {/* Galería de ideas para la boda */}
             <section className="user-profile__section">
               <h2 className="preview-card__title">Ideas para mi boda</h2>
               <p className="preview-card__subtitle preview-card__subtitle--small">
@@ -476,12 +524,23 @@ function UserProfilePage() {
                       value={newIdeaNote}
                       onChange={(e) => setNewIdeaNote(e.target.value)}
                     />
+
+                    <p className="form__hint" style={{ marginTop: "0.2rem" }}>
+                      JPG/PNG/WebP. Máximo 5MB y hasta 2500x2500 px.
+                    </p>
+
+                    {ideaImageError && (
+                      <div className="form__error" style={{ marginTop: "0.45rem" }}>
+                        {ideaImageError}
+                      </div>
+                    )}
+
                     <div className="ideas-editor__actions">
                       <label className="ideas-editor__upload-label">
                         Subir imagen
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/jpeg,image/png,image/webp"
                           style={{ display: "none" }}
                           onChange={handleIdeaImageChange}
                         />
