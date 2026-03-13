@@ -1,6 +1,6 @@
 // src/App.jsx
 import { Routes, Route, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import Header from "./Components/Header.jsx";
 import Footer from "./Components/Footer.jsx";
@@ -75,6 +75,393 @@ function loadGoogleMaps(apiKey) {
   return window.__kelomGoogleMapsPromise;
 }
 
+function getCookieConsentApi() {
+  if (typeof window === "undefined") return null;
+  return window.KelomCookieConsent || null;
+}
+
+function readCookieConsentState() {
+  const api = getCookieConsentApi();
+  const stored = api?.get?.() || null;
+
+  return {
+    hasDecision: Boolean(api?.hasDecision?.()),
+    analytics: Boolean(stored?.analytics),
+  };
+}
+
+function CookieConsentManager() {
+  const [hasDecision, setHasDecision] = useState(false);
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(false);
+  const [showBanner, setShowBanner] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+
+  useEffect(() => {
+    const syncFromStorage = () => {
+      const next = readCookieConsentState();
+      setHasDecision(next.hasDecision);
+      setAnalyticsEnabled(next.analytics);
+      setShowBanner(!next.hasDecision);
+    };
+
+    const handleOpenPreferences = () => {
+      const next = readCookieConsentState();
+      setHasDecision(next.hasDecision);
+      setAnalyticsEnabled(next.analytics);
+      setShowPreferences(true);
+    };
+
+    const handleConsentChanged = (event) => {
+      const nextAnalytics = Boolean(event?.detail?.analytics);
+      setHasDecision(true);
+      setAnalyticsEnabled(nextAnalytics);
+      setShowBanner(false);
+      setShowPreferences(false);
+    };
+
+    syncFromStorage();
+
+    window.addEventListener("kelom:open-cookie-preferences", handleOpenPreferences);
+    window.addEventListener("kelom:cookie-consent-changed", handleConsentChanged);
+
+    return () => {
+      window.removeEventListener("kelom:open-cookie-preferences", handleOpenPreferences);
+      window.removeEventListener("kelom:cookie-consent-changed", handleConsentChanged);
+    };
+  }, []);
+
+  const handleAcceptAnalytics = () => {
+    const api = getCookieConsentApi();
+    api?.acceptAnalytics?.();
+
+    setHasDecision(true);
+    setAnalyticsEnabled(true);
+    setShowBanner(false);
+    setShowPreferences(false);
+  };
+
+  const handleRejectAnalytics = () => {
+    const api = getCookieConsentApi();
+    api?.rejectAnalytics?.();
+
+    setHasDecision(true);
+    setAnalyticsEnabled(false);
+    setShowBanner(false);
+    setShowPreferences(false);
+  };
+
+  const handleSavePreferences = () => {
+    if (analyticsEnabled) {
+      handleAcceptAnalytics();
+      return;
+    }
+    handleRejectAnalytics();
+  };
+
+  return (
+    <>
+      {hasDecision && (
+        <button
+          type="button"
+          onClick={() => setShowPreferences(true)}
+          aria-label="Abrir preferencias de cookies"
+          title="Preferencias de cookies"
+          style={{
+            position: "fixed",
+            left: "1rem",
+            bottom: "1rem",
+            zIndex: 1000,
+            border: "1px solid rgba(0,0,0,0.12)",
+            background: "#fff",
+            color: "#222",
+            borderRadius: "999px",
+            padding: "0.75rem 1rem",
+            fontSize: "0.9rem",
+            fontWeight: 600,
+            cursor: "pointer",
+            boxShadow: "0 10px 28px rgba(0,0,0,0.12)",
+          }}
+        >
+          Cookies
+        </button>
+      )}
+
+      {showBanner && (
+        <div
+          role="dialog"
+          aria-live="polite"
+          aria-label="Aviso de cookies"
+          style={{
+            position: "fixed",
+            right: "1rem",
+            bottom: "1rem",
+            zIndex: 1001,
+            width: "min(520px, calc(100vw - 2rem))",
+            background: "#fff",
+            color: "#222",
+            borderRadius: "1rem",
+            padding: "1.1rem",
+            boxShadow: "0 18px 50px rgba(0,0,0,0.18)",
+            border: "1px solid rgba(0,0,0,0.08)",
+          }}
+        >
+          <h3 style={{ margin: 0, marginBottom: "0.55rem", fontSize: "1.05rem" }}>
+            Uso de cookies
+          </h3>
+
+          <p style={{ margin: 0, lineHeight: 1.5, fontSize: "0.95rem" }}>
+            En Kelom usamos cookies necesarias para que el sitio funcione y, si tú lo
+            autorizas, cookies analíticas para entender tráfico, rutas y mejoras del
+            sitio. Las necesarias siempre están activas; las analíticas son opcionales.
+          </p>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.6rem",
+              marginTop: "1rem",
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleAcceptAnalytics}
+              style={{
+                border: "none",
+                background: "#111827",
+                color: "#fff",
+                borderRadius: "0.8rem",
+                padding: "0.8rem 1rem",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Aceptar analítica
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRejectAnalytics}
+              style={{
+                border: "1px solid rgba(0,0,0,0.15)",
+                background: "#fff",
+                color: "#222",
+                borderRadius: "0.8rem",
+                padding: "0.8rem 1rem",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Rechazar
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowPreferences(true)}
+              style={{
+                border: "1px solid rgba(0,0,0,0.15)",
+                background: "#fff",
+                color: "#222",
+                borderRadius: "0.8rem",
+                padding: "0.8rem 1rem",
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Configurar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showPreferences && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Preferencias de cookies"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1002,
+            background: "rgba(17, 24, 39, 0.5)",
+            display: "grid",
+            placeItems: "center",
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              width: "min(680px, 100%)",
+              background: "#fff",
+              borderRadius: "1.1rem",
+              padding: "1.25rem",
+              boxShadow: "0 24px 60px rgba(0,0,0,0.2)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "start",
+                justifyContent: "space-between",
+                gap: "1rem",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, marginBottom: "0.45rem" }}>
+                  Preferencias de cookies
+                </h3>
+                <p style={{ margin: 0, lineHeight: 1.5, color: "#444" }}>
+                  Puedes decidir qué tipo de cookies opcionales permites en Kelom.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowPreferences(false)}
+                aria-label="Cerrar preferencias de cookies"
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  fontSize: "1.4rem",
+                  lineHeight: 1,
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              style={{
+                marginTop: "1rem",
+                border: "1px solid rgba(0,0,0,0.08)",
+                borderRadius: "0.9rem",
+                padding: "1rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                <div>
+                  <strong>Cookies necesarias</strong>
+                  <p style={{ margin: "0.35rem 0 0 0", color: "#555", lineHeight: 1.5 }}>
+                    Permiten funciones esenciales como seguridad, sesión y recordar tu
+                    preferencia de cookies.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    minWidth: "fit-content",
+                    alignSelf: "center",
+                    fontWeight: 700,
+                    color: "#111827",
+                  }}
+                >
+                  Siempre activas
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: "0.8rem",
+                border: "1px solid rgba(0,0,0,0.08)",
+                borderRadius: "0.9rem",
+                padding: "1rem",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                <div>
+                  <strong>Cookies analíticas</strong>
+                  <p style={{ margin: "0.35rem 0 0 0", color: "#555", lineHeight: 1.5 }}>
+                    Nos ayudan a medir tráfico, navegación y comportamiento general para
+                    mejorar la experiencia del sitio.
+                  </p>
+                </div>
+
+                <label
+                  style={{
+                    minWidth: "fit-content",
+                    alignSelf: "center",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.55rem",
+                    cursor: "pointer",
+                    fontWeight: 600,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={analyticsEnabled}
+                    onChange={(e) => setAnalyticsEnabled(e.target.checked)}
+                  />
+                  Activar
+                </label>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "0.65rem",
+                marginTop: "1.2rem",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleSavePreferences}
+                style={{
+                  border: "none",
+                  background: "#111827",
+                  color: "#fff",
+                  borderRadius: "0.8rem",
+                  padding: "0.82rem 1rem",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Guardar preferencias
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAcceptAnalytics}
+                style={{
+                  border: "1px solid rgba(0,0,0,0.15)",
+                  background: "#fff",
+                  color: "#222",
+                  borderRadius: "0.8rem",
+                  padding: "0.82rem 1rem",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Aceptar analítica
+              </button>
+
+              <button
+                type="button"
+                onClick={handleRejectAnalytics}
+                style={{
+                  border: "1px solid rgba(0,0,0,0.15)",
+                  background: "#fff",
+                  color: "#222",
+                  borderRadius: "0.8rem",
+                  padding: "0.82rem 1rem",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Rechazar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function App() {
   const location = useLocation();
   const isBusinessArea = location.pathname.startsWith("/empresas");
@@ -104,6 +491,22 @@ function App() {
       .then(() => console.log("Google Maps JS loaded ✅"))
       .catch((err) => console.error("Google Maps load error:", err));
   }, []);
+
+  // ✅ Pageview virtual para SPA (queda listo para GTM/GA4)
+  useEffect(() => {
+    const api = getCookieConsentApi();
+    const consent = api?.get?.();
+
+    if (!consent?.analytics) return;
+
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: "kelom_virtual_pageview",
+      page_location: window.location.href,
+      page_path: `${location.pathname}${location.search}${location.hash}`,
+      page_title: document.title,
+    });
+  }, [location]);
 
   return (
     <div className="page">
@@ -158,6 +561,8 @@ function App() {
 
       {/* Footer global solo en el sitio "normal" */}
       {!isBusinessArea && !isAdminArea && <Footer />}
+
+      <CookieConsentManager />
     </div>
   );
 }
