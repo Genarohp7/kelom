@@ -1,10 +1,93 @@
 // src/pages/Business/Pages/BusinessAreaPage.jsx
+import { useEffect, useMemo, useState } from "react";
 import "../../../../Blocks/Business/BusinessAreaPage.css";
 import Kelom from "../../../assets/web/logo/logoKelom.png";
 import { NavLink } from "react-router-dom";
 import BusinessArea from "../../../assets/web/pages/empresas/Business/business-1.png";
+import {
+  getProviderToken,
+  getProviderUser,
+  clearProviderSession,
+} from "../../../services/providerAuth";
+
+const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
 function BusinessAreaPage() {
+  const [providerBusinessName, setProviderBusinessName] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProviderSession() {
+      const token = getProviderToken();
+
+      if (!token) {
+        if (!cancelled) setProviderBusinessName("");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/providers/me`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data?.error || `Error HTTP ${res.status}`);
+        }
+
+        if (cancelled) return;
+
+        const companyName = String(data?.profile?.company_name || "").trim();
+        const venueName = String(data?.profile?.venue_name || "").trim();
+        const ownerName = String(data?.provider?.name || "").trim();
+        const email = String(data?.provider?.email || getProviderUser()?.email || "").trim();
+
+        if (companyName) {
+          setProviderBusinessName(companyName);
+          return;
+        }
+
+        if (venueName) {
+          setProviderBusinessName(venueName);
+          return;
+        }
+
+        if (ownerName) {
+          setProviderBusinessName(ownerName);
+          return;
+        }
+
+        if (email) {
+          setProviderBusinessName(email.split("@")[0]);
+          return;
+        }
+
+        setProviderBusinessName("Mi negocio");
+      } catch {
+        clearProviderSession();
+        if (!cancelled) setProviderBusinessName("");
+      }
+    }
+
+    loadProviderSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const providerLabel = useMemo(() => {
+    const clean = String(providerBusinessName || "").trim();
+    return clean || "";
+  }, [providerBusinessName]);
+
+  const isProviderLoggedIn = Boolean(providerLabel);
+
   return (
     <div className="business">
       {/* HEADER ESPECIAL PARA EMPRESAS */}
@@ -36,13 +119,22 @@ function BusinessAreaPage() {
               Beneficios
             </NavLink>
 
-            {/* ✅ Acceder = login */}
-            <NavLink
-              to="/empresas/acceso"
-              className="business__nav-link business__nav-link_button"
-            >
-              Acceder
-            </NavLink>
+            {isProviderLoggedIn ? (
+              <NavLink
+                to="/empresas/registro/completar"
+                className="business__nav-link business__nav-link_button"
+                title={providerLabel}
+              >
+                {providerLabel}
+              </NavLink>
+            ) : (
+              <NavLink
+                to="/empresas/acceso"
+                className="business__nav-link business__nav-link_button"
+              >
+                Acceder
+              </NavLink>
+            )}
           </nav>
         </div>
       </header>
@@ -64,29 +156,75 @@ function BusinessAreaPage() {
                 se toman decisiones importantes.
               </p>
 
-              {/* ✅ Micro embudo directo en hero */}
-              <div style={{ display: "flex", gap: "0.8rem", flexWrap: "wrap", marginBottom: "1.2rem" }}>
-                <NavLink to="/empresas/registro" className="business__cta-button">
-                  Registrar mi negocio
-                </NavLink>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.8rem",
+                  flexWrap: "wrap",
+                  marginBottom: "1.2rem",
+                }}
+              >
+                {isProviderLoggedIn ? (
+                  <>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "0.8rem 1.2rem",
+                        borderRadius: "999px",
+                        border: "1px solid rgba(232,154,169,0.35)",
+                        color: "#7c3f4c",
+                        background: "#fff7fb",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {providerLabel}
+                    </div>
 
-                <NavLink
-                  to="/empresas/acceso"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "0.8rem 1.2rem",
-                    borderRadius: "999px",
-                    border: "1px solid rgba(232,154,169,0.65)",
-                    color: "#a94f63",
-                    textDecoration: "none",
-                    fontWeight: 600,
-                    background: "#fff",
-                  }}
-                >
-                  Ya tengo cuenta
-                </NavLink>
+                    <NavLink
+                      to="/empresas/registro/completar"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "0.8rem 1.2rem",
+                        borderRadius: "999px",
+                        border: "1px solid rgba(232,154,169,0.65)",
+                        color: "#a94f63",
+                        textDecoration: "none",
+                        fontWeight: 600,
+                        background: "#fff",
+                      }}
+                    >
+                      Ir a mi perfil
+                    </NavLink>
+                  </>
+                ) : (
+                  <>
+                    <NavLink to="/empresas/registro" className="business__cta-button">
+                      Registrar mi negocio
+                    </NavLink>
+
+                    <NavLink
+                      to="/empresas/acceso"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "0.8rem 1.2rem",
+                        borderRadius: "999px",
+                        border: "1px solid rgba(232,154,169,0.65)",
+                        color: "#a94f63",
+                        textDecoration: "none",
+                        fontWeight: 600,
+                        background: "#fff",
+                      }}
+                    >
+                      Ya tengo cuenta
+                    </NavLink>
+                  </>
+                )}
               </div>
 
               <div className="business__benefits-grid">
@@ -247,15 +385,27 @@ function BusinessAreaPage() {
                 proveedores seleccionados.
               </p>
 
-              <p className="business__cta-subtitle" style={{ marginTop: "0.4rem" }}>
-                ¿Ya te registraste?{" "}
-                <NavLink to="/empresas/acceso">Entra aquí a tu cuenta</NavLink>.
-              </p>
+              {isProviderLoggedIn ? (
+                <p className="business__cta-subtitle" style={{ marginTop: "0.4rem" }}>
+                  Ya tienes sesión activa como <strong>{providerLabel}</strong>.
+                </p>
+              ) : (
+                <p className="business__cta-subtitle" style={{ marginTop: "0.4rem" }}>
+                  ¿Ya te registraste?{" "}
+                  <NavLink to="/empresas/acceso">Entra aquí a tu cuenta</NavLink>.
+                </p>
+              )}
             </div>
 
-            <NavLink to="/empresas/registro" className="business__cta-button">
-              Registrar mi negocio
-            </NavLink>
+            {isProviderLoggedIn ? (
+              <NavLink to="/empresas/registro/completar" className="business__cta-button">
+                Ir a mi perfil
+              </NavLink>
+            ) : (
+              <NavLink to="/empresas/registro" className="business__cta-button">
+                Registrar mi negocio
+              </NavLink>
+            )}
           </div>
         </section>
       </div>
