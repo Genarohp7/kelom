@@ -67,6 +67,10 @@ function UserLoginPage() {
     }
   }
 
+  const forgotPasswordHref = `/recuperar-contrasena${
+    form.email.trim() ? `?email=${encodeURIComponent(form.email.trim())}` : ""
+  }`;
+
   if (isCheckingSession) {
     return (
       <div className="user-auth">
@@ -141,16 +145,13 @@ function UserLoginPage() {
                   {isSubmitting ? "Accediendo…" : "Acceder"}
                 </button>
 
-                <button
-                  type="button"
+                <Link
+                  to={forgotPasswordHref}
                   className="btn btn--ghost"
-                  disabled={isSubmitting}
-                  onClick={() =>
-                    alert("En la versión actual aún no recuperamos contraseñas.")
-                  }
+                  aria-label="Ir a recuperación de contraseña"
                 >
                   Olvidé mi contraseña
-                </button>
+                </Link>
               </div>
 
               <div className="auth-card__links">

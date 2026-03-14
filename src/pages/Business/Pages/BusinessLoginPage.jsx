@@ -1,275 +1,173 @@
-// src/pages/Business/Pages/BusinessLoginPage.jsx
-import React, { useEffect, useState } from "react";
-import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import "../../../../Blocks/Business/BusinessAuth.css";
-import Kelom from "../../../assets/web/logo/logoKelom.png";
-import {
-  getProviderToken,
-  setProviderSession,
-  clearProviderSession,
-  getProviderUser,
-} from "../../../services/providerAuth";
+// src/pages/UserLoginPage.jsx
+import { useEffect, useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { getToken, login, fetchMe, logout } from "../../../utils/auth";
 
-const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
-
-function BusinessLoginPage() {
+function UserLoginPage() {
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const [formData, setFormData] = useState({ email: "", password: "" });
-
-  const [errors, setErrors] = useState({
-    email: "",
-    password: "",
-    general: "",
-  });
-
-  const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-
-  // ✅ Si ya hay token, no tiene sentido pedir login: te mando directo a edición
   useEffect(() => {
-    const token = getProviderToken();
-    if (!token) return;
+    let cancelled = false;
 
-    navigate("/empresas/registro/completar", {
-      replace: true,
-      state: {
-        authMode: "edit",
-        loginEmail: getProviderUser()?.email || "",
-      },
-    });
+    async function checkSession() {
+      const token = getToken();
+      if (!token) {
+        if (!cancelled) setIsCheckingSession(false);
+        return;
+      }
+
+      try {
+        await fetchMe(); // valida token real contra backend
+        if (!cancelled) navigate("/perfil", { replace: true });
+      } catch {
+        // token inválido/expirado o backend no responde
+        logout(); // 👈 mata token zombie
+      } finally {
+        if (!cancelled) setIsCheckingSession(false);
+      }
+    }
+
+    checkSession();
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
-  const validateForm = () => {
-    const nextErrors = { email: "", password: "", general: "" };
-
-    if (!formData.email.trim()) {
-      nextErrors.email = "Ingresa tu correo electrónico.";
-    } else if (!validateEmail(formData.email.trim())) {
-      nextErrors.email = "El correo no tiene un formato válido.";
-    }
-
-    if (!formData.password.trim()) {
-      nextErrors.password = "Ingresa tu contraseña.";
-    } else if (formData.password.length < 5) {
-      nextErrors.password = "La contraseña debe tener al menos 5 caracteres.";
-    }
-
-    setErrors(nextErrors);
-    return !nextErrors.email && !nextErrors.password;
-  };
-
-  const handleChange = (e) => {
+  function handleChange(e) {
     const { name, value } = e.target;
+    setForm((p) => ({ ...p, [name]: value }));
+    setError("");
+  }
 
-    setFormData((prev) => ({ ...prev, [name]: value }));
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
 
-    setErrors((prev) => ({
-      ...prev,
-      [name]: "",
-      general: "",
-    }));
-  };
+    const email = form.email.trim();
+    const password = form.password;
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    if (isSubmitting) return;
-    if (!validateForm()) return;
-
-    const email = formData.email.trim().toLowerCase();
-    const password = formData.password;
-
-    setErrors((prev) => ({ ...prev, general: "" }));
+    if (!email || !password) {
+      setError("Escribe tu correo y contraseña.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
-
-      const res = await fetch(`${API_BASE}/providers/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        const msg = data?.error || `Error HTTP ${res.status}`;
-        setErrors((prev) => ({ ...prev, general: msg }));
-        return;
-      }
-
-      setProviderSession({ token: data?.token, provider: data?.provider });
-
-      // Si venías rebotado desde una ruta protegida, regresamos ahí.
-      const from = location.state?.from;
-      if (typeof from === "string" && from.startsWith("/")) {
-        navigate(from, { replace: true });
-        return;
-      }
-
-      navigate("/empresas/registro/completar", {
-        replace: true,
-        state: { authMode: "edit", loginEmail: email },
-      });
+      await login(email, password); // POST /auth/login + guarda token
+      navigate("/perfil", { replace: true });
     } catch (err) {
-      setErrors((prev) => ({
-        ...prev,
-        general: String(err?.message || "No se pudo iniciar sesión."),
-      }));
+      setError(err?.message || "No se pudo iniciar sesión.");
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
 
-  const handleForgotPassword = () => {
-    setErrors((prev) => ({ ...prev, general: "" }));
-    alert(
-      "Recuperación de contraseña: pendiente (producto real lo hacemos con email). Por ahora, contáctanos y te ayudamos."
+  const forgotPasswordHref = `/recuperar-contrasena${
+    form.email.trim() ? `?email=${encodeURIComponent(form.email.trim())}` : ""
+  }`;
+
+  if (isCheckingSession) {
+    return (
+      <div className="user-auth">
+        <main className="business-auth__content">
+          <div className="business-auth__container">
+            <section className="auth-card">
+              <p style={{ padding: "1.5rem" }}>Verificando sesión…</p>
+            </section>
+          </div>
+        </main>
+      </div>
     );
-  };
-
-  const handleGoToRegister = () => {
-    navigate("/empresas/registro");
-  };
-
-  const handleLogout = () => {
-    clearProviderSession();
-    setFormData({ email: "", password: "" });
-    setErrors({ email: "", password: "", general: "" });
-    alert("Sesión cerrada.");
-  };
-
-  const hasToken = !!getProviderToken();
+  }
 
   return (
-    <div className="business-auth">
-      <header className="business-auth__header">
-        <div className="container business-auth__header-inner">
-          <NavLink
-            to="/"
-            className="business-auth__logo-link"
-            aria-label="Volver al inicio de Kelom"
-          >
-            <img src={Kelom} alt="Logo Kelom" title="Kelom" />
-          </NavLink>
-
-          <span className="business-auth__logo-text">Acceso de proveedores</span>
-
-          {hasToken && (
-            <button
-              type="button"
-              className="btn btn--ghost"
-              onClick={handleLogout}
-              style={{ marginLeft: "auto" }}
-            >
-              Cerrar sesión
-            </button>
-          )}
-        </div>
-      </header>
-
+    <div className="user-auth">
       <main className="business-auth__content">
         <div className="business-auth__container">
           <section className="auth-card">
-            <h1 className="auth-card__title">Acceso para proveedores</h1>
+            <h1 className="auth-card__title">Inicia sesión</h1>
             <p className="auth-card__subtitle">
-              Ingresa con tu correo y contraseña para administrar tu perfil en Kelom.
+              Entra para ver y completar la información de tu boda.
             </p>
 
             <form className="form" onSubmit={handleSubmit} noValidate>
               <div className="form__field">
-                <label className="form__label" htmlFor="login-email">
+                <label className="form__label" htmlFor="email">
                   Correo electrónico
                 </label>
                 <input
-                  id="login-email"
+                  id="email"
                   name="email"
                   type="email"
                   className="form__input"
-                  placeholder="tucorreo@empresa.com"
-                  value={formData.email}
+                  placeholder="tucorreo@ejemplo.com"
+                  value={form.email}
                   onChange={handleChange}
-                  autoComplete="email"
-                  required
                   disabled={isSubmitting}
+                  autoComplete="email"
                 />
-                <span className="form__error">{errors.email}</span>
               </div>
 
               <div className="form__field">
-                <label className="form__label" htmlFor="login-password">
+                <label className="form__label" htmlFor="password">
                   Contraseña
                 </label>
                 <input
-                  id="login-password"
+                  id="password"
                   name="password"
-                  type={showPassword ? "text" : "password"}
+                  type="password"
                   className="form__input"
                   placeholder="Tu contraseña"
-                  value={formData.password}
+                  value={form.password}
                   onChange={handleChange}
-                  minLength={5}
-                  autoComplete="current-password"
-                  required
                   disabled={isSubmitting}
+                  autoComplete="current-password"
                 />
-                <span className="form__error">{errors.password}</span>
-
-                <label className="form__toggle">
-                  <input
-                    type="checkbox"
-                    checked={showPassword}
-                    onChange={(e) => setShowPassword(e.target.checked)}
-                    disabled={isSubmitting}
-                  />
-                  Mostrar contraseña
-                </label>
               </div>
 
-              {errors.general && (
-                <p className="auth-card__subtitle" style={{ marginBottom: 0 }}>
-                  {errors.general}
-                </p>
+              {error && (
+                <div className="form__error" style={{ marginTop: "0.4rem" }}>
+                  {error}
+                </div>
               )}
 
               <div className="auth-card__actions">
-                <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
-                  {isSubmitting ? "Accediendo..." : "Acceder"}
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Accediendo…" : "Acceder"}
                 </button>
+
+                <Link
+                  to={forgotPasswordHref}
+                  className="btn btn--ghost"
+                  aria-label="Ir a recuperación de contraseña"
+                >
+                  Olvidé mi contraseña
+                </Link>
               </div>
 
               <div className="auth-card__links">
-                <button
-                  type="button"
-                  className="auth-card__link"
-                  onClick={handleForgotPassword}
-                  disabled={isSubmitting}
-                >
-                  Olvidé mi contraseña
-                </button>
-
-                <button
-                  type="button"
-                  className="auth-card__link auth-card__link--muted"
-                  onClick={handleGoToRegister}
-                  disabled={isSubmitting}
-                >
-                  Registrar mi empresa
-                </button>
+                <span className="auth-card__link--muted">
+                  ¿Aún no tienes cuenta?
+                </span>
+                <Link to="/registro" className="auth-card__link">
+                  Crear cuenta
+                </Link>
               </div>
             </form>
           </section>
         </div>
       </main>
-
-      <footer className="business-auth__footer">
-        © {new Date().getFullYear()} Kelom · Área para proveedores.
-      </footer>
     </div>
   );
 }
 
-export default BusinessLoginPage;
+export default UserLoginPage;

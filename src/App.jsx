@@ -24,6 +24,8 @@ import UserLoginPage from "./pages/UserLoginPage.jsx";
 import UserRegisterPage from "./pages/UserRegisterPage.jsx";
 import UserRegisterCompletePage from "./pages/Business/Pages/UserRegisterCompletePage.jsx";
 import UserProfilePage from "./pages/UserProfilePage.jsx";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
+import ResetPasswordPage from "./pages/ResetPasswordPage.jsx";
 
 // ✅ Admin
 import AdminLoginPage from "./pages/AdminLoginPage.jsx";
@@ -533,6 +535,8 @@ function App() {
           <Route path="/registro" element={<UserRegisterPage />} />
           <Route path="/registro/completar" element={<UserRegisterCompletePage />} />
           <Route path="/perfil" element={<UserProfilePage />} />
+          <Route path="/recuperar-contrasena" element={<ForgotPasswordPage />} />
+          <Route path="/restablecer-contrasena" element={<ResetPasswordPage />} />
 
           {/* Área de empresas */}
           <Route path="/empresas" element={<BusinessAreaPage />} />
