@@ -334,36 +334,39 @@ function ProviderInboxPage() {
             aria-label="Volver al área de empresas"
           >
             <img src={Kelom} alt="Kelom" className="provider-inbox__brand-logo" />
+          </NavLink>
+
+          <div className="provider-inbox__header-center">
             <div className="provider-inbox__brand-copy">
               <span className="provider-inbox__brand-title">Kelom</span>
               <span className="provider-inbox__brand-subtitle">
                 Centro de solicitudes
               </span>
             </div>
-          </NavLink>
 
-          <nav className="provider-inbox__nav">
-            <NavLink
-              to="/proveedores/mi-perfil?mode=provider"
-              className="provider-inbox__nav-link"
-            >
-              Mi perfil
-            </NavLink>
+            <nav className="provider-inbox__nav">
+              <NavLink
+                to="/proveedores/mi-perfil?mode=provider"
+                className="provider-inbox__nav-link"
+              >
+                Mi perfil
+              </NavLink>
 
-            <NavLink
-              to="/empresas/registro/completar"
-              className="provider-inbox__nav-link"
-            >
-              Editar ficha
-            </NavLink>
+              <NavLink
+                to="/empresas/registro/completar"
+                className="provider-inbox__nav-link"
+              >
+                Editar ficha
+              </NavLink>
 
-            <NavLink
-              to="/empresas/solicitudes"
-              className="provider-inbox__nav-link provider-inbox__nav-link--active"
-            >
-              Solicitudes
-            </NavLink>
-          </nav>
+              <NavLink
+                to="/empresas/solicitudes"
+                className="provider-inbox__nav-link provider-inbox__nav-link--active"
+              >
+                Solicitudes
+              </NavLink>
+            </nav>
+          </div>
 
           <button
             type="button"
@@ -425,15 +428,7 @@ function ProviderInboxPage() {
           </section>
 
           {errorMessage ? (
-            <div
-              style={{
-                marginBottom: "1rem",
-                padding: "0.85rem 1rem",
-                borderRadius: "12px",
-                background: "rgba(180, 40, 40, 0.08)",
-                border: "1px solid rgba(180, 40, 40, 0.18)",
-              }}
-            >
+            <div className="provider-inbox__error-banner">
               {errorMessage}
             </div>
           ) : null}

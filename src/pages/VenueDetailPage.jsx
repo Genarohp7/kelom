@@ -1,4 +1,3 @@
-// src/pages/VenueDetailPage.jsx
 import "../../Blocks/venues/VenueDetailPage.css";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
@@ -455,10 +454,8 @@ function VenueDetailPage() {
   };
 
   const openRequestFlow = () => {
-    // solo aplica para vista usuario (no proveedor)
     if (isProviderView) return;
 
-    // 1) gating por login/registro
     const token = getToken();
     if (!token) {
       setRequestError("");
@@ -466,7 +463,6 @@ function VenueDetailPage() {
       return;
     }
 
-    // 2) solo permitimos enviar si el proveedor es UUID real
     const providerId = isUuid(id) ? id : isUuid(venue?.id) ? venue.id : "";
     if (!providerId) {
       setRequestUiMessage("Este proveedor es demo; aún no se puede enviar solicitud aquí.");
@@ -627,22 +623,11 @@ function VenueDetailPage() {
 
               {isProviderView && (
                 <div
-                  style={{
-                    marginTop: "0.85rem",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                    padding: "0.55rem 0.85rem",
-                    borderRadius: "999px",
-                    background: venue.isFeatured
-                      ? "rgba(16,185,129,0.12)"
-                      : "rgba(107,114,128,0.12)",
-                    border: venue.isFeatured
-                      ? "1px solid rgba(16,185,129,0.22)"
-                      : "1px solid rgba(107,114,128,0.2)",
-                    fontSize: "0.92rem",
-                    fontWeight: 600,
-                  }}
+                  className={
+                    venue.isFeatured
+                      ? "venue-hero__provider-status venue-hero__provider-status--featured"
+                      : "venue-hero__provider-status venue-hero__provider-status--free"
+                  }
                 >
                   <span>{venue.isFeatured ? "⭐" : "○"}</span>
                   <span>
@@ -650,6 +635,43 @@ function VenueDetailPage() {
                       ? "Proveedor Destacado Kelom"
                       : "Proveedor gratuito"}
                   </span>
+                </div>
+              )}
+
+              {isProviderView && venue.isFeatured && (
+                <div className="venue-hero__provider-tools">
+                  <button
+                    type="button"
+                    className="venue-hero__inbox-btn"
+                    onClick={() => navigate("/empresas/solicitudes")}
+                  >
+                    <span className="venue-hero__inbox-btn-icon" aria-hidden="true">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M4 6h16v12H4z" />
+                        <path d="m22 6-10 7L2 6" />
+                      </svg>
+                    </span>
+
+                    <span className="venue-hero__inbox-btn-text">
+                      Solicitudes de información
+                    </span>
+
+                    {unreadInboxCount > 0 ? (
+                      <span className="venue-hero__inbox-btn-badge">
+                        {unreadInboxCount > 99 ? "99+" : unreadInboxCount}
+                      </span>
+                    ) : null}
+                  </button>
                 </div>
               )}
 
@@ -669,16 +691,7 @@ function VenueDetailPage() {
               )}
 
               {isProviderView && !venue.isFeatured && (
-                <div
-                  style={{
-                    marginTop: "0.9rem",
-                    padding: "0.85rem 1rem",
-                    borderRadius: "16px",
-                    background: "rgba(107,114,128,0.08)",
-                    border: "1px solid rgba(107,114,128,0.18)",
-                    lineHeight: 1.45,
-                  }}
-                >
+                <div className="venue-hero__provider-note">
                   La bandeja de solicitudes está disponible solo para{" "}
                   <strong>Proveedor Destacado Kelom</strong>. Si quieres activar ese beneficio,
                   el cambio se hace desde administración.
@@ -700,66 +713,6 @@ function VenueDetailPage() {
                 {!isProviderView && (
                   <button type="button" className="btn btn--primary" onClick={openRequestFlow}>
                     Solicitar información
-                  </button>
-                )}
-
-                {isProviderView && venue.isFeatured && (
-                  <button
-                    type="button"
-                    className="btn btn--ghost"
-                    title="Solicitudes de información"
-                    aria-label="Solicitudes de información"
-                    onClick={() => navigate("/empresas/solicitudes")}
-                    style={{
-                      width: "46px",
-                      minWidth: "46px",
-                      padding: "0.75rem",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      position: "relative",
-                    }}
-                  >
-                    <svg
-                      aria-hidden="true"
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M4 6h16v12H4z" />
-                      <path d="m22 6-10 7L2 6" />
-                    </svg>
-
-                    {unreadInboxCount > 0 ? (
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: "-6px",
-                          right: "-6px",
-                          minWidth: "20px",
-                          height: "20px",
-                          padding: "0 5px",
-                          borderRadius: "999px",
-                          background: "#dc2626",
-                          color: "#fff",
-                          fontSize: "0.72rem",
-                          fontWeight: 700,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          lineHeight: 1,
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.18)",
-                        }}
-                      >
-                        {unreadInboxCount > 99 ? "99+" : unreadInboxCount}
-                      </span>
-                    ) : null}
                   </button>
                 )}
 
@@ -888,7 +841,6 @@ function VenueDetailPage() {
         </section>
       </div>
 
-      {/* ===== Modal: pedir registro ===== */}
       {!isProviderView && modalMode === "register" && (
         <div
           className="venue-request-modal"
@@ -957,7 +909,6 @@ function VenueDetailPage() {
         </div>
       )}
 
-      {/* ===== Modal: formulario solicitud ===== */}
       {!isProviderView && modalMode === "request" && (
         <div
           className="venue-request-modal"
