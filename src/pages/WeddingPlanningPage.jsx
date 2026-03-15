@@ -1,4 +1,10 @@
 import { NavLink } from "react-router-dom";
+import planningHeroImage from "../assets/web/pages/blog/blog-1.png";
+import planningIntroImage from "../assets/web/pages/blog/blog-2.png";
+import planningStageImage1 from "../assets/web/pages/blog/blog-lugares.png";
+import planningStageImage2 from "../assets/web/pages/blog/blog-presupuesto.png";
+import planningStageImage3 from "../assets/web/pages/blog/blog-banquetes.png";
+import planningStageImage4 from "../assets/web/pages/blog/blog-experiencias.png";
 
 function WeddingPlanningPage() {
   const stages = [
@@ -13,6 +19,7 @@ function WeddingPlanningPage() {
         "Ideas reales para pedir matrimonio",
         "Qué hablar después del “sí” antes de salir corriendo a ver salones",
       ],
+      image: planningStageImage1,
     },
     {
       id: "primeros-pasos",
@@ -25,6 +32,7 @@ function WeddingPlanningPage() {
         "Tener una primera lista de invitados",
         "Evitar decisiones bonitas pero poco útiles",
       ],
+      image: planningStageImage2,
     },
     {
       id: "presupuesto",
@@ -37,6 +45,7 @@ function WeddingPlanningPage() {
         "Detectar gastos que suelen inflarse sin avisar",
         "Tomar decisiones sin perder el control del dinero",
       ],
+      image: planningStageImage3,
     },
     {
       id: "fecha-y-estilo",
@@ -49,6 +58,7 @@ function WeddingPlanningPage() {
         "Qué cambia entre una boda de día, de tarde o de noche",
         "Cómo encontrar un estilo que sí se sienta suyo",
       ],
+      image: planningStageImage4,
     },
     {
       id: "proveedores",
@@ -61,6 +71,7 @@ function WeddingPlanningPage() {
         "Cómo comparar sin perderte entre mil opciones",
         "Qué proveedores conviene buscar primero",
       ],
+      image: planningStageImage1,
     },
     {
       id: "organizacion-previa",
@@ -73,6 +84,7 @@ function WeddingPlanningPage() {
         "Cómo repartir tareas sin pelear por todo",
         "Qué confirmar días antes del evento",
       ],
+      image: planningStageImage2,
     },
     {
       id: "gran-dia",
@@ -85,6 +97,7 @@ function WeddingPlanningPage() {
         "Cómo vivir el día con menos tensión",
         "Pequeños detalles que sí mejoran la experiencia",
       ],
+      image: planningStageImage3,
     },
   ];
 
@@ -106,66 +119,81 @@ function WeddingPlanningPage() {
   return (
     <main className="page__content">
       <section className="planning-guide">
-        <div className="container planning-guide__hero">
-          <div className="planning-guide__hero-content">
-            <span className="planning-guide__badge">Planea tu boda</span>
+        <section className="planning-guide__hero-section">
+          <div className="container planning-guide__hero">
+            <div className="planning-guide__hero-content">
+              <span className="planning-guide__badge">Planea tu boda</span>
 
-            <h1 className="planning-guide__title">
-              Una guía clara para organizar tu boda paso a paso, sin sentir que
-              todo te cayó encima al mismo tiempo
-            </h1>
+              <h1 className="planning-guide__title">
+                Una guía clara para organizar tu boda paso a paso, sin sentir que
+                todo te cayó encima al mismo tiempo
+              </h1>
 
-            <p className="planning-guide__subtitle">
-              Esta sección no está pensada como blog ni como lista infinita de
-              artículos. Es una ruta más estable y ordenada para acompañarlos
-              desde el compromiso hasta el gran día, con contenido útil,
-              aterrizado y hecho para bodas reales.
-            </p>
+              <p className="planning-guide__subtitle">
+                Esta sección no está pensada como blog ni como lista infinita de
+                artículos. Es una ruta más estable y ordenada para acompañarlos
+                desde el compromiso hasta el gran día, con contenido útil,
+                aterrizado y hecho para bodas reales.
+              </p>
 
-            <div className="planning-guide__hero-actions">
-              <a
-                href="#ruta-de-planeacion"
-                className="header__btn header__btn--primary"
-              >
-                Ver ruta de planeación
-              </a>
+              <div className="planning-guide__hero-actions">
+                <a
+                  href="#ruta-de-planeacion"
+                  className="header__btn header__btn--primary"
+                >
+                  Ver ruta de planeación
+                </a>
 
-              <NavLink
-                to="/proveedores"
-                className="header__btn header__btn--outline"
-              >
-                Explorar proveedores
-              </NavLink>
+                <NavLink
+                  to="/proveedores"
+                  className="header__btn header__btn--outline"
+                >
+                  Explorar proveedores
+                </NavLink>
+              </div>
             </div>
-          </div>
 
-          <div className="planning-guide__hero-card">
-            <div className="planning-guide__hero-card-inner">
-              <span className="planning-guide__hero-card-kicker">
-                Qué encontrarás aquí
-              </span>
+            <div className="planning-guide__hero-visual">
+              <div className="planning-guide__hero-image-wrap">
+                <img
+                  src={planningHeroImage}
+                  alt="Pareja planeando su boda"
+                  className="planning-guide__hero-image"
+                />
+              </div>
 
-              <div className="planning-guide__hero-list">
-                {quickGuides.map((item) => (
-                  <article className="planning-guide__mini-card" key={item.title}>
-                    <h2 className="planning-guide__mini-title">{item.title}</h2>
-                    <p className="planning-guide__mini-text">{item.text}</p>
-                  </article>
-                ))}
+              <div className="planning-guide__hero-card">
+                <div className="planning-guide__hero-card-inner">
+                  <span className="planning-guide__hero-card-kicker">
+                    Qué encontrarás aquí
+                  </span>
+
+                  <div className="planning-guide__hero-list">
+                    {quickGuides.map((item) => (
+                      <article
+                        className="planning-guide__mini-card"
+                        key={item.title}
+                      >
+                        <h2 className="planning-guide__mini-title">{item.title}</h2>
+                        <p className="planning-guide__mini-text">{item.text}</p>
+                      </article>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <section className="planning-guide__intro">
           <div className="container">
-            <div className="planning-guide__intro-grid">
-              <article className="planning-guide__intro-card">
+            <div className="planning-guide__intro-shell">
+              <div className="planning-guide__intro-copy">
                 <span className="planning-guide__section-badge">
                   El enfoque de esta sección
                 </span>
                 <h2 className="planning-guide__section-title">
-                  Menos ruido, más claridad
+                  Esto no es un blog disfrazado
                 </h2>
                 <p className="planning-guide__section-text">
                   “Planea tu boda” existe para acompañar a la pareja en un orden
@@ -173,22 +201,47 @@ function WeddingPlanningPage() {
                   experiencia con una estructura más evergreen, más estable y
                   más útil para quienes necesitan mapa, no solo inspiración.
                 </p>
-              </article>
 
-              <article className="planning-guide__intro-card">
-                <span className="planning-guide__section-badge">
-                  Por qué empieza antes
-                </span>
-                <h2 className="planning-guide__section-title">
-                  La historia no arranca el día que buscas el venue
-                </h2>
-                <p className="planning-guide__section-text">
-                  Muchas decisiones importantes empiezan desde la propuesta de
-                  matrimonio. Por eso aquí también vive la etapa de antes del
-                  “sí”: el anillo, el momento, la conversación y el inicio real
-                  de una nueva etapa.
-                </p>
-              </article>
+                <div className="planning-guide__intro-points">
+                  <div className="planning-guide__intro-point">
+                    <strong>Más secuencia</strong>
+                    <span>Menos artículos sueltos, más claridad sobre qué viene primero.</span>
+                  </div>
+                  <div className="planning-guide__intro-point">
+                    <strong>Más contexto</strong>
+                    <span>Para entender decisiones, no solo copiar ideas bonitas.</span>
+                  </div>
+                  <div className="planning-guide__intro-point">
+                    <strong>Más orden real</strong>
+                    <span>Porque una boda no se organiza bien a punta de impulso.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="planning-guide__intro-media">
+                <div className="planning-guide__intro-image-wrap">
+                  <img
+                    src={planningIntroImage}
+                    alt="Pareja revisando detalles de su boda"
+                    className="planning-guide__intro-image"
+                  />
+                </div>
+
+                <article className="planning-guide__intro-floating-card">
+                  <span className="planning-guide__section-badge">
+                    Por qué empieza antes
+                  </span>
+                  <h3 className="planning-guide__floating-title">
+                    La historia no arranca cuando buscas el venue
+                  </h3>
+                  <p className="planning-guide__section-text">
+                    Muchas decisiones importantes empiezan desde la propuesta de
+                    matrimonio. Por eso aquí también vive la etapa de antes del
+                    “sí”: el anillo, el momento, la conversación y el inicio real
+                    de una nueva etapa.
+                  </p>
+                </article>
+              </div>
             </div>
           </div>
         </section>
@@ -213,33 +266,49 @@ function WeddingPlanningPage() {
               </p>
             </div>
 
+            <div className="planning-guide__timeline-line" aria-hidden="true"></div>
+
             <div className="planning-guide__stages">
-              {stages.map((stage) => (
+              {stages.map((stage, index) => (
                 <article
-                  className="planning-guide__stage-card"
+                  className={`planning-guide__stage-card ${
+                    index % 2 === 0
+                      ? "planning-guide__stage-card--left"
+                      : "planning-guide__stage-card--right"
+                  }`}
                   id={stage.id}
                   key={stage.id}
                 >
-                  <div className="planning-guide__stage-top">
-                    <span className="planning-guide__stage-eyebrow">
-                      {stage.eyebrow}
-                    </span>
-                    <h3 className="planning-guide__stage-title">
-                      {stage.title}
-                    </h3>
+                  <div className="planning-guide__stage-media">
+                    <img
+                      src={stage.image}
+                      alt={stage.title}
+                      className="planning-guide__stage-image"
+                    />
                   </div>
 
-                  <p className="planning-guide__stage-description">
-                    {stage.description}
-                  </p>
+                  <div className="planning-guide__stage-body">
+                    <div className="planning-guide__stage-top">
+                      <span className="planning-guide__stage-eyebrow">
+                        {stage.eyebrow}
+                      </span>
+                      <h3 className="planning-guide__stage-title">
+                        {stage.title}
+                      </h3>
+                    </div>
 
-                  <ul className="planning-guide__stage-list">
-                    {stage.bullets.map((bullet) => (
-                      <li className="planning-guide__stage-item" key={bullet}>
-                        {bullet}
-                      </li>
-                    ))}
-                  </ul>
+                    <p className="planning-guide__stage-description">
+                      {stage.description}
+                    </p>
+
+                    <ul className="planning-guide__stage-list">
+                      {stage.bullets.map((bullet) => (
+                        <li className="planning-guide__stage-item" key={bullet}>
+                          {bullet}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </article>
               ))}
             </div>
@@ -247,35 +316,37 @@ function WeddingPlanningPage() {
         </section>
 
         <section className="planning-guide__cta">
-          <div className="container planning-guide__cta-card">
-            <div className="planning-guide__cta-copy">
-              <span className="planning-guide__section-badge">
-                Sigue explorando
-              </span>
-              <h2 className="planning-guide__section-title">
-                Cuando tengas más claro el panorama, lo demás empieza a acomodarse
-              </h2>
-              <p className="planning-guide__section-text">
-                Puedes complementar esta guía con el Blog de Kelom o empezar a
-                explorar proveedores reales según la etapa en la que van. La
-                idea no es saturarte, sino ayudarte a decidir mejor.
-              </p>
-            </div>
+          <div className="container">
+            <div className="planning-guide__cta-card">
+              <div className="planning-guide__cta-copy">
+                <span className="planning-guide__section-badge">
+                  Sigue explorando
+                </span>
+                <h2 className="planning-guide__section-title">
+                  Cuando tienes más claro el panorama, lo demás empieza a acomodarse
+                </h2>
+                <p className="planning-guide__section-text">
+                  Puedes complementar esta guía con el Blog de Kelom o empezar a
+                  explorar proveedores reales según la etapa en la que van. La
+                  idea no es saturarte, sino ayudarte a decidir mejor.
+                </p>
+              </div>
 
-            <div className="planning-guide__cta-actions">
-              <NavLink
-                to="/blog"
-                className="header__btn header__btn--outline"
-              >
-                Ir al Blog
-              </NavLink>
+              <div className="planning-guide__cta-actions">
+                <NavLink
+                  to="/blog"
+                  className="header__btn header__btn--outline"
+                >
+                  Ir al Blog
+                </NavLink>
 
-              <NavLink
-                to="/proveedores"
-                className="header__btn header__btn--primary"
-              >
-                Ver proveedores
-              </NavLink>
+                <NavLink
+                  to="/proveedores"
+                  className="header__btn header__btn--primary"
+                >
+                  Ver proveedores
+                </NavLink>
+              </div>
             </div>
           </div>
         </section>
