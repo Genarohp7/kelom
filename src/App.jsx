@@ -7,6 +7,7 @@ import Footer from "./Components/Footer.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import BlogPage from "./pages/BlogPage.jsx";
 import NosotrosPage from "./pages/AboutPage.jsx";
+import WeddingPlanningPage from "./pages/WeddingPlanningPage.jsx";
 import BusinessAreaPage from "./pages/Business/Pages/BusinessAreaPage.jsx";
 import BusinessBenefitsPage from "./pages/Business/Pages/BusinessBenefitsPage.jsx";
 
@@ -514,23 +515,19 @@ function App() {
     <div className="page">
       <ScrollToTop />
 
-      {/* Header global solo en el sitio "normal" */}
       {!isBusinessArea && !isAdminArea && <Header />}
 
       <main className="page__content">
         <Routes>
-          {/* Home por defecto */}
           <Route path="/" element={<HomePage />} />
 
-          {/* Otras páginas públicas */}
           <Route path="/nosotros" element={<NosotrosPage />} />
           <Route path="/blog" element={<BlogPage />} />
+          <Route path="/planea-tu-boda" element={<WeddingPlanningPage />} />
 
-          {/* ✅ Admin */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
           <Route path="/admin" element={<AdminDashboardPage />} />
 
-          {/* Flujo parejas (usuarios finales) */}
           <Route path="/acceso" element={<UserLoginPage />} />
           <Route path="/registro" element={<UserRegisterPage />} />
           <Route path="/registro/completar" element={<UserRegisterCompletePage />} />
@@ -538,32 +535,22 @@ function App() {
           <Route path="/recuperar-contrasena" element={<ForgotPasswordPage />} />
           <Route path="/restablecer-contrasena" element={<ResetPasswordPage />} />
 
-          {/* Área de empresas */}
           <Route path="/empresas" element={<BusinessAreaPage />} />
           <Route path="/empresas/beneficios" element={<BusinessBenefitsPage />} />
           <Route path="/empresas/acceso" element={<BusinessLoginPage />} />
-
-          {/* Registro corto (lead) */}
           <Route path="/empresas/registro" element={<BusinessRegisterPage />} />
-
-          {/* Registro completo (ficha proveedor) */}
           <Route
             path="/empresas/registro/completar"
             element={<BusinessRegisterCompletePage />}
           />
-
-          {/* Bandeja de solicitudes del proveedor */}
           <Route path="/empresas/solicitudes" element={<ProviderInboxPage />} />
 
-          {/* Detalle de proveedor */}
           <Route path="/proveedores/:id" element={<VenueDetailPage />} />
 
-          {/* Catch-all */}
           <Route path="*" element={<HomePage />} />
         </Routes>
       </main>
 
-      {/* Footer global solo en el sitio "normal" */}
       {!isBusinessArea && !isAdminArea && <Footer />}
 
       <CookieConsentManager />

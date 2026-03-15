@@ -1,4 +1,3 @@
-// src/Header/Header.jsx
 import { useEffect, useMemo, useState } from "react";
 import Kelom from "../assets/web/logo/logoKelom.png";
 import { NavLink, useLocation } from "react-router-dom";
@@ -9,10 +8,7 @@ function Header() {
 
   const [userName, setUserName] = useState("");
 
-  // Normalizamos el path a minúsculas
   const path = location.pathname.toLowerCase();
-
-  // Cualquier ruta que contenga "empresa" (empresa, empresas, area-empresas, etc.)
   const isBusinessArea = path.includes("empresa");
 
   useEffect(() => {
@@ -66,14 +62,12 @@ function Header() {
   return (
     <header className={`header ${isBusinessArea ? "header--business" : ""}`}>
       <div className="container header__inner">
-        {/* Logo */}
         <div className="header__logo">
           <NavLink to="/" aria-label="Kelom">
             <img src={Kelom} alt="Logo Kelom" title="Kelom" />
           </NavLink>
         </div>
 
-        {/* Menú centrado */}
         <nav className="header__nav" aria-label="Navegación principal">
           <NavLink className="header__nav-link" to="/nosotros">
             Nosotros
@@ -81,9 +75,11 @@ function Header() {
           <NavLink className="header__nav-link" to="/blog">
             Blog
           </NavLink>
+          <NavLink className="header__nav-link" to="/planea-tu-boda">
+            Planea tu boda
+          </NavLink>
         </nav>
 
-        {/* Acciones + redes */}
         <div className="header__right">
           <div className="header__actions">
             {greetingLabel ? (
