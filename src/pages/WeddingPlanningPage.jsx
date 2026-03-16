@@ -52,7 +52,7 @@ function WeddingPlanningPage() {
       eyebrow: "Etapa 04",
       title: "Elegir fecha y estilo",
       description:
-        "Fecha, temporada, clima, tipo de venue y estilo visual empiezan a acomodar el resto del rompecabezas. Esto ayuda muchísimo a filtrar opciones desde el principio.",
+        "Fecha, temporada, clima, tipo de sede y estilo visual empiezan a acomodar el resto del rompecabezas. Esto ayuda muchísimo a filtrar opciones desde el principio.",
       bullets: [
         "Cómo elegir una fecha con lógica y no solo con emoción",
         "Qué cambia entre una boda de día, de tarde o de noche",
@@ -232,7 +232,7 @@ function WeddingPlanningPage() {
                     Por qué empieza antes
                   </span>
                   <h3 className="planning-guide__floating-title">
-                    La historia no arranca cuando buscas el venue
+                    La historia no arranca cuando buscas el espacio ideal
                   </h3>
                   <p className="planning-guide__section-text">
                     Muchas decisiones importantes empiezan desde la propuesta de

@@ -121,7 +121,7 @@ function BlogPage() {
           title:
             "Cómo elegir el lugar ideal sin enamorarte de uno que no te conviene",
           excerpt:
-            "Un venue puede verse espectacular en fotos, pero si no encaja con tu número de invitados, horario, logística y presupuesto, solo te está guiñando el ojo para meterte en problemas.",
+            "Un espacio puede verse espectacular en fotos, pero si no encaja con tu número de invitados, horario, logística y presupuesto, solo te está guiñando el ojo para meterte en problemas.",
           readTime: "6 min",
           image: blogPostImage1,
         },
