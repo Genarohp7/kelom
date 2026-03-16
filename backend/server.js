@@ -27,7 +27,7 @@ const __dirname = path.dirname(__filename);
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
-// ✅ Recomendado para que recursos (fotos, etc.) se puedan usar cross-origin sin bronca
+// ✅ Recomendado para que recursos (fotos, avatares, etc.) se puedan usar cross-origin sin bronca
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -66,6 +66,14 @@ const changePasswordLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Demasiados intentos. Intenta más tarde." },
+});
+
+const avatarLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas solicitudes. Intenta más tarde." },
 });
 
 // Providers
@@ -124,10 +132,29 @@ app.use(
   })
 );
 
+// JSON limitado (avatars y fotos se envían por multipart/form-data)
 app.use(express.json({ limit: "500kb" }));
 
-// Servir uploads
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// ===================== PATHS / UPLOADS ROOT =====================
+
+const uploadsDir = path.join(__dirname, "uploads");
+const avatarsDir = path.join(uploadsDir, "avatars");
+const PROVIDER_UPLOAD_ROOT = path.join(uploadsDir, "providers");
+
+try {
+  fs.mkdirSync(avatarsDir, { recursive: true });
+  fs.mkdirSync(PROVIDER_UPLOAD_ROOT, { recursive: true });
+} catch {
+  // ignore
+}
+
+app.use(
+  "/uploads",
+  express.static(uploadsDir, {
+    maxAge: "7d",
+    etag: true,
+  })
+);
 
 // ===================== HELPERS =====================
 
@@ -194,7 +221,7 @@ function toBooleanOrNull(v) {
   if (v === undefined || v === null || v === "") return null;
   if (typeof v === "boolean") return v;
 
-  const s = String(v || "").trim().toLowerCase();
+  const s = String(v).trim().toLowerCase();
 
   if (["true", "1", "yes", "on"].includes(s)) return true;
   if (["false", "0", "no", "off"].includes(s)) return false;
@@ -290,10 +317,10 @@ function requirePermission(perm) {
 // ===================== AUTH MIDDLEWARES =====================
 
 async function loadUserFromDbById(id) {
-  // Intentamos leer columnas nuevas; si aún no existen, hacemos fallback.
   try {
     const found = await pool.query(
       `SELECT id, email, name, role, created_at,
+              avatar_url,
               account_status, admin_tier, blocked_at, blocked_reason
        FROM users
        WHERE id = $1
@@ -302,10 +329,9 @@ async function loadUserFromDbById(id) {
     );
     return found.rows[0] || null;
   } catch (err) {
-    // 42703 undefined_column
     if (err?.code === "42703") {
       const found = await pool.query(
-        `SELECT id, email, name, role, created_at
+        `SELECT id, email, name, role, created_at, avatar_url
          FROM users
          WHERE id = $1
          LIMIT 1`,
@@ -340,7 +366,6 @@ async function authMiddleware(req, res, next) {
     const dbUser = await loadUserFromDbById(decoded.id);
     if (!dbUser) return res.status(401).json({ error: "No autorizado" });
 
-    // bloqueo (soft)
     if (dbUser.account_status && dbUser.account_status !== "active") {
       return res.status(403).json({ error: "Cuenta bloqueada" });
     }
@@ -426,25 +451,66 @@ async function writeAdminAuditLog(req, { action, entityType, entityId, beforeSta
       ]
     );
   } catch (err) {
-    // si la tabla aún no existe, no rompemos el flujo
     if (err?.code === "42P01") return;
     console.warn("Audit log error:", err?.message || err);
   }
 }
 
+// ===================== UPLOADS (AVATAR) =====================
+
+const ALLOWED_AVATAR_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const AVATAR_MAX_WIDTH = 800;
+const AVATAR_MAX_HEIGHT = 800;
+const AVATAR_WEBP_QUALITY = 82;
+
+async function processAndStoreAvatar(userId, file) {
+  if (!userId) throw new Error("No autorizado");
+  if (!file?.buffer) throw new Error("Archivo inválido");
+
+  const filename = `${userId}-${Date.now()}-${randomHex(8)}.webp`;
+  const absPath = path.join(avatarsDir, filename);
+
+  await sharp(file.buffer)
+    .rotate()
+    .resize({
+      width: AVATAR_MAX_WIDTH,
+      height: AVATAR_MAX_HEIGHT,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({
+      quality: AVATAR_WEBP_QUALITY,
+      effort: 4,
+    })
+    .toFile(absPath);
+
+  return {
+    filename,
+    absPath,
+    url: `/uploads/avatars/${filename}`,
+  };
+}
+
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 1024 * 1024, // 1MB antes de optimizar
+  },
+  fileFilter(req, file, cb) {
+    if (!ALLOWED_AVATAR_IMAGE_TYPES.has(file.mimetype)) {
+      cb(new Error("Tipo de archivo no permitido (usa JPG/PNG/WebP)"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
 // ===================== UPLOADS (PROVIDERS PHOTOS) =====================
 
-const PROVIDER_UPLOAD_ROOT = path.join(__dirname, "uploads", "providers");
 const ALLOWED_PROVIDER_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const PROVIDER_PHOTO_MAX_WIDTH = 1600;
 const PROVIDER_PHOTO_MAX_HEIGHT = 1600;
 const PROVIDER_PHOTO_WEBP_QUALITY = 82;
-
-try {
-  fs.mkdirSync(PROVIDER_UPLOAD_ROOT, { recursive: true });
-} catch {
-  // ignore
-}
 
 async function ensureDir(dir) {
   await fs.promises.mkdir(dir, { recursive: true });
@@ -530,7 +596,7 @@ app.post("/users", registerLimiter, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO users (email, password_hash, name)
        VALUES ($1, $2, $3)
-       RETURNING id, email, name, role, created_at`,
+       RETURNING id, email, name, role, created_at, avatar_url`,
       [emailNorm, password_hash, name || null]
     );
 
@@ -555,11 +621,10 @@ app.post("/auth/login", authLimiter, async (req, res) => {
       return res.status(400).json({ error: "email y password son obligatorios" });
     }
 
-    // Intentamos incluir account_status/admin_tier; fallback si no existen columnas aún
     let found;
     try {
       found = await pool.query(
-        `SELECT id, email, password_hash, name, role, admin_tier, account_status, blocked_at, blocked_reason, created_at
+        `SELECT id, email, password_hash, name, role, admin_tier, account_status, blocked_at, blocked_reason, created_at, avatar_url
          FROM users
          WHERE email = $1
          LIMIT 1`,
@@ -568,7 +633,7 @@ app.post("/auth/login", authLimiter, async (req, res) => {
     } catch (err) {
       if (err?.code === "42703") {
         found = await pool.query(
-          `SELECT id, email, password_hash, name, role, created_at
+          `SELECT id, email, password_hash, name, role, created_at, avatar_url
            FROM users
            WHERE email = $1
            LIMIT 1`,
@@ -599,6 +664,7 @@ app.post("/auth/login", authLimiter, async (req, res) => {
       admin_tier: user.role === "admin" ? normalizeAdminTier(user.admin_tier) : null,
       account_status: user.account_status || "active",
       created_at: user.created_at,
+      avatar_url: user.avatar_url || null,
     };
 
     return res.json({ token, user: safeUser });
@@ -621,6 +687,7 @@ app.get("/auth/me", authMiddleware, async (req, res) => {
       admin_tier: user.role === "admin" ? user.admin_tier : null,
       account_status: user.account_status || "active",
       created_at: user.created_at,
+      avatar_url: user.avatar_url || null,
     };
 
     return res.json({ user: safeUser });
@@ -781,11 +848,66 @@ app.put("/profile/me", authMiddleware, async (req, res) => {
   }
 });
 
+// ===================== AVATAR (UPLOAD) =====================
+
+app.put(
+  "/profile/avatar",
+  avatarLimiter,
+  authMiddleware,
+  avatarUpload.single("avatar"),
+  async (req, res) => {
+    let newAvatarAbsPath = null;
+
+    try {
+      const { id: userId } = req.user;
+
+      if (!req.file) {
+        return res.status(400).json({ error: "No se recibió archivo avatar" });
+      }
+
+      const processed = await processAndStoreAvatar(userId, req.file);
+      newAvatarAbsPath = processed.absPath;
+
+      const prev = await pool.query(
+        `SELECT avatar_url FROM users WHERE id = $1 LIMIT 1`,
+        [userId]
+      );
+      const prevUrl = prev.rows[0]?.avatar_url || null;
+
+      await pool.query(`UPDATE users SET avatar_url = $1 WHERE id = $2`, [
+        processed.url,
+        userId,
+      ]);
+
+      if (prevUrl && prevUrl.startsWith("/uploads/avatars/")) {
+        const prevPath = path.join(__dirname, prevUrl.replace(/^\//, ""));
+        fs.promises.unlink(prevPath).catch(() => {});
+      }
+
+      const found = await pool.query(
+        `SELECT id, email, name, role, created_at, avatar_url
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [userId]
+      );
+
+      return res.json({ user: found.rows[0] });
+    } catch (err) {
+      if (newAvatarAbsPath) {
+        fs.promises.unlink(newAvatarAbsPath).catch(() => {});
+      }
+
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
 // ===================== INFO REQUESTS (USUARIO -> PROVEEDOR) =====================
 // Crea solicitud y queda pendiente de moderación. Aún NO envía correos.
 app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) => {
   try {
-    // Solo usuarios finales (parejas)
     if (req.user?.role !== "user") {
       return res.status(403).json({ error: "Acceso solo para usuarios" });
     }
@@ -810,11 +932,9 @@ app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) 
       return res.status(400).json({ error: "preferredContactSchedule es obligatorio" });
     }
 
-    // límites anti-pergamino
     const messageSafe = message.slice(0, 2000);
     const scheduleSafe = preferredContactSchedule.slice(0, 220);
 
-    // Validar que el proveedor exista y esté publicado
     const prov = await pool.query(
       `
       SELECT p.user_id
@@ -834,7 +954,6 @@ app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) 
       return res.status(404).json({ error: "Proveedor no encontrado" });
     }
 
-    // Snapshot del usuario (nombre/email) + teléfono de wedding_profiles si existe
     const requester = await pool.query(
       `
       SELECT u.id, u.name, u.email, wp.phone
@@ -889,10 +1008,6 @@ app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) 
 
 // ===================== PROVIDERS =====================
 
-/**
- * Paso 1 (lead): registro corto
- * Body: { companyName, ownerName, phone, email }
- */
 app.post("/providers/leads", providerLeadsLimiter, async (req, res) => {
   try {
     const { companyName, ownerName, phone, email } = req.body || {};
@@ -931,11 +1046,6 @@ app.post("/providers/leads", providerLeadsLimiter, async (req, res) => {
   }
 });
 
-/**
- * Paso 2: crear cuenta proveedor + perfil
- * IMPORTANTE:
- * - Ahora nace en pending_review + hidden (no se publica hasta aprobación)
- */
 app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
   const client = await pool.connect();
   try {
@@ -956,7 +1066,6 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
 
     await client.query("BEGIN");
 
-    // Lead si existe
     const leadFound = await client.query(
       `SELECT company_name, owner_name, phone, status
        FROM provider_leads
@@ -981,7 +1090,6 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
       return res.status(400).json({ error: "Teléfono inválido (10 dígitos)" });
     }
 
-    // Evita duplicado en users
     const exists = await client.query(`SELECT id, role FROM users WHERE email = $1 LIMIT 1`, [
       emailNorm,
     ]);
@@ -990,12 +1098,9 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
       return res.status(409).json({ error: "Ese email ya existe" });
     }
 
-    // Perfil requerido
     const venueName = String(body.venueName || "").trim();
     const venueLocation = String(body.venueLocation || "").trim();
     const businessCategory = String(body.businessCategory || "").trim();
-
-    // ✅ alcaldía/municipio obligatorio
     const localityArea = String(body.localityArea || "").trim();
 
     const capacityMin = toIntOrNull(body.capacityMin);
@@ -1068,7 +1173,6 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     const provider = userIns.rows[0];
     const userId = provider.id;
 
-    // Marcar lead como convertido si existe
     if (lead && lead.status === "lead") {
       await client.query(
         `UPDATE provider_leads SET status = 'converted', updated_at = now() WHERE email = $1`,
@@ -1076,7 +1180,6 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
       );
     }
 
-    // Moderación: nace como "pending_review" + "hidden"
     const reviewStatus = "pending_review";
     const publicVisibility = "hidden";
 
@@ -1160,10 +1263,6 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
   }
 });
 
-/**
- * Login proveedor
- * Body: { email, password }
- */
 app.post("/providers/login", providerLoginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -1227,10 +1326,6 @@ app.post("/providers/login", providerLoginLimiter, async (req, res) => {
   }
 });
 
-/**
- * Perfil proveedor actual (privado)
- * GET /providers/me
- */
 app.get("/providers/me", providerAuthMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -1269,11 +1364,6 @@ app.get("/providers/me", providerAuthMiddleware, async (req, res) => {
 
 // ===================== PROVIDER INBOX (SOLICITUDES REALES) =====================
 
-/**
- * GET /providers/info-requests
- * Devuelve SOLO solicitudes aprobadas para el proveedor autenticado.
- * Query: provider_status, q, limit, offset
- */
 app.get("/providers/info-requests", providerAuthMiddleware, async (req, res) => {
   try {
     const providerId = req.user.id;
@@ -1350,10 +1440,6 @@ app.get("/providers/info-requests", providerAuthMiddleware, async (req, res) => 
   }
 });
 
-/**
- * GET /providers/info-requests/stats
- * Devuelve conteos de solicitudes aprobadas para el proveedor autenticado.
- */
 app.get("/providers/info-requests/stats", providerAuthMiddleware, async (req, res) => {
   try {
     const providerId = req.user.id;
@@ -1394,10 +1480,6 @@ app.get("/providers/info-requests/stats", providerAuthMiddleware, async (req, re
   }
 });
 
-/**
- * PATCH /providers/info-requests/:id/status
- * Body: { provider_status }
- */
 app.patch("/providers/info-requests/:id/status", providerAuthMiddleware, async (req, res) => {
   try {
     const providerId = req.user.id;
@@ -1469,27 +1551,19 @@ app.patch("/providers/info-requests/:id/status", providerAuthMiddleware, async (
   }
 });
 
-/**
- * Actualizar perfil proveedor (privado)
- * PUT /providers/me
- */
 app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     const userId = req.user.id;
     const body = req.body || {};
 
-    // Datos base opcionales
     const companyName = toNullIfEmpty(body.companyName);
     const ownerName = toNullIfEmpty(body.ownerName);
     const phoneDigits = body.phone ? normalizePhoneDigits(body.phone) : null;
 
-    // Perfil requerido
     const venueName = String(body.venueName || "").trim();
     const venueLocation = String(body.venueLocation || "").trim();
     const businessCategory = String(body.businessCategory || "").trim();
-
-    // ✅ alcaldía/municipio obligatorio
     const localityArea = String(body.localityArea || "").trim();
 
     const capacityMin = toIntOrNull(body.capacityMin);
@@ -1563,7 +1637,6 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
         ? sellingPointsTextFromBody
         : current?.selling_points || [];
 
-    // Actualizar name del usuario si viene ownerName (opcional)
     if (ownerName) {
       await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [ownerName, userId]);
     }
@@ -1662,11 +1735,6 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
   }
 });
 
-/**
- * Subir fotos del proveedor (multipart)
- * POST /providers/photos
- * FormData: photos (multiple)
- */
 app.post(
   "/providers/photos",
   providerAuthMiddleware,
@@ -1730,10 +1798,6 @@ app.post(
   }
 );
 
-/**
- * Borrar una foto del proveedor
- * DELETE /providers/photos/:photoId
- */
 app.delete("/providers/photos/:photoId", providerAuthMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -1756,7 +1820,6 @@ app.delete("/providers/photos/:photoId", providerAuthMiddleware, async (req, res
 
     const url = del.rows[0].url;
 
-    // borrar archivo físico (best-effort)
     if (url && typeof url === "string" && url.startsWith("/uploads/")) {
       const abs = path.join(__dirname, url.replace(/^\//, ""));
       fs.promises.unlink(abs).catch(() => {});
@@ -1770,11 +1833,10 @@ app.delete("/providers/photos/:photoId", providerAuthMiddleware, async (req, res
 });
 
 // ===================== PUBLIC PROVIDERS LIST (Home + Search) =====================
-// GET /providers?q=&category=&where=&limit=&offset=
-// Devuelve SOLO approved + listed (visible públicamente)
+
 app.get("/providers", async (req, res) => {
   try {
-    const q = toNullIfEmpty(req.query.q); // compat
+    const q = toNullIfEmpty(req.query.q);
     const category = toNullIfEmpty(req.query.category);
     const whereText = toNullIfEmpty(req.query.where);
 
@@ -1862,11 +1924,6 @@ app.get("/providers", async (req, res) => {
   }
 });
 
-/**
- * Vista pública por id (uuid)
- * GET /providers/:id
- * Regla: solo mostrar si está approved + listed (a menos que sea admin)
- */
 app.get("/providers/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -1897,7 +1954,6 @@ app.get("/providers/:id", async (req, res) => {
     const profile = found.rows[0] || null;
     if (!profile) return res.status(404).json({ error: "Proveedor no encontrado" });
 
-    // Si no es admin, solo approved + listed
     if (!isAdmin) {
       const rs = String(profile.review_status || "");
       const pv = String(profile.public_visibility || "");
@@ -1923,10 +1979,6 @@ app.get("/providers/:id", async (req, res) => {
 
 // ===================== ADMIN INFO REQUESTS (MODERACIÓN) =====================
 
-/**
- * GET /admin/info-requests
- * Query: moderation_status (pending|approved|declined), q, limit, offset
- */
 app.get(
   "/admin/info-requests",
   adminAuthMiddleware,
@@ -2005,10 +2057,6 @@ app.get(
   }
 );
 
-/**
- * GET /admin/info-requests/stats
- * Devuelve conteos por moderation_status
- */
 app.get(
   "/admin/info-requests/stats",
   adminAuthMiddleware,
@@ -2094,10 +2142,6 @@ async function moderateInfoRequest(req, res) {
   }
 }
 
-/**
- * ✅ NUEVA: la que tu AdminDashboard usa
- * PATCH /admin/info-requests/:id
- */
 app.patch(
   "/admin/info-requests/:id",
   adminAuthMiddleware,
@@ -2105,10 +2149,6 @@ app.patch(
   moderateInfoRequest
 );
 
-/**
- * ✅ Backward compatibility:
- * PATCH /admin/info-requests/:id/moderate
- */
 app.patch(
   "/admin/info-requests/:id/moderate",
   adminAuthMiddleware,
@@ -2118,10 +2158,6 @@ app.patch(
 
 // ===================== ADMIN API =====================
 
-/**
- * GET /admin/users
- * Query: role, status, q, limit, offset
- */
 app.get(
   "/admin/users",
   adminAuthMiddleware,
@@ -2172,10 +2208,6 @@ app.get(
   }
 );
 
-/**
- * PATCH /admin/users/:id/block
- * Body: { reason }
- */
 app.patch(
   "/admin/users/:id/block",
   adminAuthMiddleware,
@@ -2224,9 +2256,6 @@ app.patch(
   }
 );
 
-/**
- * PATCH /admin/users/:id/unblock
- */
 app.patch(
   "/admin/users/:id/unblock",
   adminAuthMiddleware,
@@ -2271,10 +2300,6 @@ app.patch(
   }
 );
 
-/**
- * GET /admin/providers
- * Query: review_status, visibility, q, limit, offset
- */
 app.get(
   "/admin/providers",
   adminAuthMiddleware,
@@ -2336,10 +2361,6 @@ app.get(
   }
 );
 
-/**
- * PATCH /admin/providers/:id/status
- * Body: { review_status, public_visibility, review_notes, is_featured }
- */
 app.patch(
   "/admin/providers/:id/status",
   adminAuthMiddleware,
@@ -2419,15 +2440,10 @@ app.patch(
   }
 );
 
-/**
- * GET /admin/audit (mínimo)
- * Query: entity_type, entity_id, limit
- */
 app.get(
   "/admin/audit",
   adminAuthMiddleware,
   (req, res, next) => {
-    // solo super por ahora
     if (req.authUser?.admin_tier !== "super") {
       return res.status(403).json({ error: "No tienes permisos para ver auditoría" });
     }
@@ -2482,23 +2498,26 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-  void req;
   void next;
 
   if (err?.message === "Origen no permitido por CORS") {
     return res.status(403).json({ error: "Origen no permitido por CORS" });
   }
 
-  // Multer
   if (err?.name === "MulterError") {
     if (err.code === "LIMIT_FILE_SIZE") {
+      if (req.originalUrl === "/profile/avatar") {
+        return res.status(400).json({ error: "Imagen demasiado grande (máx 1MB)." });
+      }
       return res
         .status(400)
         .json({ error: "Imagen demasiado grande (máx 6MB antes de optimizar)." });
     }
+
     if (err.code === "LIMIT_FILE_COUNT") {
       return res.status(400).json({ error: "Demasiadas fotos (máx 12)." });
     }
+
     return res.status(400).json({ error: "Error al subir archivos." });
   }
 
