@@ -43,7 +43,7 @@ function BlogPage() {
   const featuredPost = {
     id: "featured-1",
     tag: "Guías de boda",
-    title: "Qué sí debes definir primero para que la planeación no te coma viva",
+    title: "Qué sí debes definir primero para que la planeación no te abrume",
     excerpt:
       "Antes de hablar de flores, vestidos o playlist, hay tres decisiones que te ahorran estrés de verdad: presupuesto real, número aproximado de invitados y tipo de boda que sí encaja con ustedes. Empezar por ahí cambia todo.",
     readTime: "7 min de lectura",
