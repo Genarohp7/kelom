@@ -8,6 +8,7 @@ import HomePage from "./pages/HomePage.jsx";
 import BlogPage from "./pages/BlogPage.jsx";
 import NosotrosPage from "./pages/AboutPage.jsx";
 import WeddingPlanningPage from "./pages/WeddingPlanningPage.jsx";
+import LegalDocumentPage from "./pages/LegalDocumentPage.jsx";
 import BusinessAreaPage from "./pages/Business/Pages/BusinessAreaPage.jsx";
 import BusinessBenefitsPage from "./pages/Business/Pages/BusinessBenefitsPage.jsx";
 
@@ -524,6 +525,7 @@ function App() {
           <Route path="/nosotros" element={<NosotrosPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/planea-tu-boda" element={<WeddingPlanningPage />} />
+          <Route path="/legal/:slug" element={<LegalDocumentPage />} />
 
           <Route path="/admin/login" element={<AdminLoginPage />} />
           <Route path="/admin" element={<AdminDashboardPage />} />

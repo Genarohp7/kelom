@@ -8,6 +8,7 @@
 @import url("../../Blocks/WeddingPlanningPage.css");
 @import url("../../Blocks/User/UserRegisterPage.css");
 @import url("../../Blocks/Business/BusinessRegisterPage.css");
+@import url("../../Blocks/LegalDocumentPage.css");
 /* Fuentes */
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Nunito:wght@300;400;500;600;700&display=swap");
 
@@ -594,17 +595,21 @@ select:focus {
   box-shadow: var(--shadow-xs);
 }
 
+
 /* ========== FOOTER ========== */
 
 .footer {
   position: relative;
   margin-top: 3rem;
-  padding: 1.8rem 0 2.2rem;
-  text-align: center;
-  font-size: 0.84rem;
+  padding: 2.2rem 0 2.5rem;
   color: var(--color-text-soft);
   background:
-    linear-gradient(180deg, rgba(255, 250, 248, 0) 0%, rgba(255, 243, 241, 0.75) 35%, rgba(255, 250, 248, 0.95) 100%);
+    linear-gradient(
+      180deg,
+      rgba(255, 250, 248, 0) 0%,
+      rgba(255, 243, 241, 0.75) 35%,
+      rgba(255, 250, 248, 0.96) 100%
+    );
   border-top: 1px solid rgba(186, 102, 120, 0.1);
 }
 
@@ -620,6 +625,85 @@ select:focus {
     rgba(242, 197, 114, 0.22) 70%,
     transparent 100%
   );
+}
+
+.footer__inner {
+  display: grid;
+  gap: 1.2rem;
+  justify-items: center;
+  text-align: center;
+}
+
+.footer__brand {
+  max-width: 760px;
+}
+
+.footer__copy {
+  margin: 0;
+  font-size: 0.96rem;
+  line-height: 1.7;
+  color: var(--color-text-soft);
+}
+
+.footer__legal {
+  display: grid;
+  gap: 0.85rem;
+  justify-items: center;
+}
+
+.footer__legal-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.42rem 0.9rem;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #fff, var(--color-primary-ultra-soft));
+  border: 1px solid rgba(186, 102, 120, 0.14);
+  color: var(--color-primary-deep);
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: var(--shadow-xs);
+}
+
+.footer__legal-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  max-width: 960px;
+}
+
+.footer__legal-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.62rem 0.95rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(186, 102, 120, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 248, 247, 0.88));
+  color: var(--color-text-main);
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: var(--shadow-xs);
+  transition:
+    transform var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.footer__legal-link:hover {
+  transform: translateY(-2px);
+  color: var(--color-primary-deep);
+  border-color: rgba(186, 102, 120, 0.24);
+  background: linear-gradient(180deg, #fff, var(--color-primary-ultra-soft));
+  box-shadow: 0 14px 28px rgba(222, 138, 156, 0.14);
 }
 
 /* ========== RESPONSIVE ========== */
@@ -696,5 +780,23 @@ select:focus {
   .header--business .header__inner {
     padding-top: 1.2rem;
     padding-bottom: 1.28rem;
+  }
+
+    .footer {
+    padding: 2rem 0 2.2rem;
+  }
+
+  .footer__copy {
+    font-size: 0.9rem;
+  }
+
+  .footer__legal-links {
+    gap: 0.6rem;
+  }
+
+  .footer__legal-link {
+    width: 100%;
+    max-width: 320px;
+    padding: 0.72rem 0.95rem;
   }
 }
