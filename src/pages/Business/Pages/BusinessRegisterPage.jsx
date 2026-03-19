@@ -155,12 +155,14 @@ function BusinessRegisterPage() {
       return;
     }
 
-    const cleanPayload = {
-      companyName,
-      ownerName,
-      email: email.toLowerCase(),
-      phone: phoneRaw.replace(/\D/g, ""),
-    };
+  const cleanPayload = {
+  companyName,
+  ownerName,
+  email: email.toLowerCase(),
+  phone: phoneRaw.replace(/\D/g, ""),
+  acceptedPrivacy: isPrivacyChecked,
+  acceptedTermsDeclaration: isTermsChecked,
+};
 
     saveBasicDraft(cleanPayload);
     setBasicData(cleanPayload);
