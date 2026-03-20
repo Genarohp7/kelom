@@ -470,6 +470,9 @@ function App() {
   const location = useLocation();
   const isBusinessArea = location.pathname.startsWith("/empresas");
   const isAdminArea = location.pathname.startsWith("/admin");
+  const isProviderInvitationArea = location.pathname.startsWith("/proveedores/invitacion");
+
+  const hideGlobalChrome = isBusinessArea || isAdminArea || isProviderInvitationArea;
 
   // Health check (opcional)
   useEffect(() => {
@@ -516,7 +519,7 @@ function App() {
     <div className="page">
       <ScrollToTop />
 
-      {!isBusinessArea && !isAdminArea && <Header />}
+      {!hideGlobalChrome && <Header />}
 
       <main className="page__content">
         <Routes>
@@ -547,13 +550,18 @@ function App() {
           />
           <Route path="/empresas/solicitudes" element={<ProviderInboxPage />} />
 
+          <Route
+            path="/proveedores/invitacion/:token"
+            element={<BusinessRegisterPage />}
+          />
+
           <Route path="/proveedores/:id" element={<VenueDetailPage />} />
 
           <Route path="*" element={<HomePage />} />
         </Routes>
       </main>
 
-      {!isBusinessArea && !isAdminArea && <Footer />}
+      {!hideGlobalChrome && <Footer />}
 
       <CookieConsentManager />
     </div>

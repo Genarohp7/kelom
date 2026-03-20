@@ -1,4 +1,3 @@
-// src/pages/AdminDashboardPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { adminFetchMe, adminLogout } from "../utils/adminAuth.js";
@@ -42,6 +41,14 @@ const REQUEST_MOD_STATUSES = [
   { value: "pending", label: "Pendientes" },
   { value: "approved", label: "Aprobadas" },
   { value: "declined", label: "Declinadas" },
+  { value: "", label: "Todas" },
+];
+
+const INVITATION_STATUSES = [
+  { value: "issued", label: "Emitidas" },
+  { value: "used", label: "Usadas" },
+  { value: "cancelled", label: "Canceladas" },
+  { value: "expired", label: "Expiradas" },
   { value: "", label: "Todas" },
 ];
 
@@ -95,6 +102,14 @@ function badgeClass(kind, value) {
     return "admin-badge";
   }
 
+  if (kind === "invitation-status") {
+    if (v === "issued") return "admin-badge admin-badge--warn";
+    if (v === "used") return "admin-badge admin-badge--ok";
+    if (v === "cancelled") return "admin-badge admin-badge--bad";
+    if (v === "expired") return "admin-badge admin-badge--muted";
+    return "admin-badge";
+  }
+
   return "admin-badge";
 }
 
@@ -115,7 +130,6 @@ function getProviderLabel(requestItem) {
   );
 }
 
-// CSV helpers (Excel-friendly)
 function csvEscape(value) {
   const s = value === null || value === undefined ? "" : String(value);
   const needsQuotes = /[",\n\r]/.test(s);
@@ -124,7 +138,6 @@ function csvEscape(value) {
 }
 
 function downloadTextFile({ filename, content, mime = "text/csv;charset=utf-8;" }) {
-  // BOM para que Excel respete UTF-8 (acentos/ñ)
   const bom = "\ufeff";
   const blob = new Blob([bom + content], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -145,7 +158,7 @@ function AdminDashboardPage() {
   const [adminUser, setAdminUser] = useState(null);
   const [isChecking, setIsChecking] = useState(true);
 
-  // providers | users | requests
+  // providers | users | requests | invitations
   const [activeSection, setActiveSection] = useState("providers");
 
   // =========================
@@ -197,7 +210,7 @@ function AdminDashboardPage() {
   }, [userFilters]);
 
   // =========================
-  // Requests (Info Requests) state
+  // Requests state
   // =========================
   const [requestFilters, setRequestFilters] = useState({
     moderation_status: "pending",
@@ -226,6 +239,35 @@ function AdminDashboardPage() {
     p.set("limit", "100");
     return p.toString();
   }, [requestFilters]);
+
+  // =========================
+  // Invitations state
+  // =========================
+  const [invitationFilters, setInvitationFilters] = useState({
+    status: "issued",
+    q: "",
+  });
+
+  const [invitations, setInvitations] = useState([]);
+  const [invitationsLoading, setInvitationsLoading] = useState(false);
+  const [invitationBusyId, setInvitationBusyId] = useState(null);
+  const [invitationsError, setInvitationsError] = useState("");
+  const [invitationsFlash, setInvitationsFlash] = useState("");
+  const [isCreatingInvitation, setIsCreatingInvitation] = useState(false);
+  const [lastGeneratedInvitationLink, setLastGeneratedInvitationLink] = useState("");
+
+  const [invitationForm, setInvitationForm] = useState({
+    notes: "",
+    expires_in_days: "",
+  });
+
+  const invitationsQueryString = useMemo(() => {
+    const p = new URLSearchParams();
+    if (invitationFilters.status) p.set("status", invitationFilters.status);
+    if (invitationFilters.q.trim()) p.set("q", invitationFilters.q.trim());
+    p.set("limit", "100");
+    return p.toString();
+  }, [invitationFilters]);
 
   // =========================
   // Boot
@@ -528,18 +570,15 @@ function AdminDashboardPage() {
     }
   }
 
-  // Export: trae todo paginado y descarga CSV (Excel)
   async function fetchAllRequestsForExport() {
     const limit = 200;
     let offset = 0;
     const all = [];
 
-    // armamos query con filtros actuales
     const baseParams = new URLSearchParams();
     if (requestFilters.moderation_status) baseParams.set("moderation_status", requestFilters.moderation_status);
     if (requestFilters.q.trim()) baseParams.set("q", requestFilters.q.trim());
 
-    // guardrail para no ciclar infinito
     const MAX_ROWS = 20000;
 
     while (true) {
@@ -639,6 +678,146 @@ function AdminDashboardPage() {
   }
 
   // =========================
+  // Invitations helpers
+  // =========================
+  function updateInvitationFilter(name, value) {
+    setInvitationFilters((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function updateInvitationForm(name, value) {
+    setInvitationForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function loadInvitations() {
+    setInvitationsError("");
+    setInvitationsFlash("");
+    setInvitationsLoading(true);
+
+    try {
+      const data = await adminApiFetch(`/admin/provider-invitations?${invitationsQueryString}`, {
+        method: "GET",
+      });
+      setInvitations(Array.isArray(data?.invitations) ? data.invitations : []);
+    } catch (err) {
+      setInvitationsError(err?.message || "No se pudo cargar la lista de invitaciones.");
+    } finally {
+      setInvitationsLoading(false);
+    }
+  }
+
+  async function handleCreateInvitation(e) {
+    e.preventDefault();
+    if (isCreatingInvitation) return;
+
+    setInvitationsError("");
+    setInvitationsFlash("");
+    setLastGeneratedInvitationLink("");
+
+    const notes = String(invitationForm.notes || "").trim();
+    const expiresRaw = String(invitationForm.expires_in_days || "").trim();
+
+    let expires_in_days = null;
+    if (expiresRaw) {
+      const parsed = Number(expiresRaw);
+      if (!Number.isFinite(parsed) || parsed < 1 || parsed > 365) {
+        setInvitationsError("La expiración debe ser un número entre 1 y 365 días.");
+        return;
+      }
+      expires_in_days = parsed;
+    }
+
+    setIsCreatingInvitation(true);
+
+    try {
+      const data = await adminApiFetch("/admin/provider-invitations", {
+        method: "POST",
+        body: JSON.stringify({
+          notes: notes || null,
+          expires_in_days,
+        }),
+      });
+
+      const invitation = data?.invitation || null;
+      const rawToken =
+        data?.raw_token || data?.token || data?.plain_token || data?.invitation_token || "";
+
+      const nextLink = rawToken
+        ? `${window.location.origin}/proveedores/invitacion/${rawToken}`
+        : "";
+
+      if (invitation) {
+        setInvitations((prev) => [invitation, ...prev]);
+      }
+
+      setInvitationForm({
+        notes: "",
+        expires_in_days: "",
+      });
+
+      setLastGeneratedInvitationLink(nextLink);
+      setInvitationsFlash(
+        nextLink
+          ? "Invitación creada ✅ Copia el enlace ahora, porque el token no volverá a mostrarse."
+          : "Invitación creada ✅"
+      );
+
+      setTimeout(() => loadInvitations(), 150);
+    } catch (err) {
+      setInvitationsError(err?.message || "No se pudo crear la invitación.");
+    } finally {
+      setIsCreatingInvitation(false);
+    }
+  }
+
+  async function handleCancelInvitation(invitationId) {
+    const ok = window.confirm("¿Cancelar esta invitación? El enlace dejará de servir.");
+    if (!ok) return;
+
+    setInvitationBusyId(invitationId);
+    setInvitationsError("");
+    setInvitationsFlash("");
+
+    try {
+      const data = await adminApiFetch(`/admin/provider-invitations/${invitationId}/cancel`, {
+        method: "PATCH",
+        body: JSON.stringify({}),
+      });
+
+      const updatedInvitation = data?.invitation || null;
+
+      setInvitations((prev) =>
+        prev.map((inv) =>
+          inv.id === invitationId
+            ? {
+                ...inv,
+                status: updatedInvitation?.status ?? "cancelled",
+                updated_at: updatedInvitation?.updated_at ?? inv.updated_at,
+              }
+            : inv
+        )
+      );
+
+      setInvitationsFlash("Invitación cancelada ✅");
+      setTimeout(() => loadInvitations(), 150);
+    } catch (err) {
+      setInvitationsError(err?.message || "No se pudo cancelar la invitación.");
+    } finally {
+      setInvitationBusyId(null);
+    }
+  }
+
+  async function handleCopyInvitationLink() {
+    if (!lastGeneratedInvitationLink) return;
+
+    try {
+      await navigator.clipboard.writeText(lastGeneratedInvitationLink);
+      setInvitationsFlash("Enlace copiado ✅");
+    } catch {
+      setInvitationsFlash("No se pudo copiar automáticamente. Copia el enlace manualmente.");
+    }
+  }
+
+  // =========================
   // Effects by section
   // =========================
   useEffect(() => {
@@ -661,6 +840,13 @@ function AdminDashboardPage() {
     loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isChecking, activeSection, requestsQueryString]);
+
+  useEffect(() => {
+    if (isChecking) return;
+    if (activeSection !== "invitations") return;
+    loadInvitations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isChecking, activeSection, invitationsQueryString]);
 
   function handleLogout() {
     adminLogout();
@@ -701,9 +887,13 @@ function AdminDashboardPage() {
               <button className="btn btn--ghost" onClick={loadUsers} disabled={usersLoading}>
                 {usersLoading ? "Cargando…" : "Refrescar"}
               </button>
-            ) : (
+            ) : activeSection === "requests" ? (
               <button className="btn btn--ghost" onClick={loadRequests} disabled={requestsLoading}>
                 {requestsLoading ? "Cargando…" : "Refrescar"}
+              </button>
+            ) : (
+              <button className="btn btn--ghost" onClick={loadInvitations} disabled={invitationsLoading}>
+                {invitationsLoading ? "Cargando…" : "Refrescar"}
               </button>
             )}
 
@@ -742,7 +932,14 @@ function AdminDashboardPage() {
             </button>
 
             <button
-              className={activeSection === "requests" ? "btn btn--ghost" : "btn btn--ghost"}
+              className={activeSection === "invitations" ? "btn btn--primary" : "btn btn--ghost"}
+              onClick={() => setActiveSection("invitations")}
+            >
+              Invitaciones
+            </button>
+
+            <button
+              className="btn btn--ghost"
               onClick={handleExportExcel}
               disabled={activeSection !== "requests" || isExporting || requestsLoading}
               title={
@@ -850,7 +1047,7 @@ function AdminDashboardPage() {
               {usersError && <div className="admin-alert admin-alert--error">{usersError}</div>}
               {usersFlash && <div className="admin-alert admin-alert--ok">{usersFlash}</div>}
             </>
-          ) : (
+          ) : activeSection === "requests" ? (
             <>
               <div className="admin-filters">
                 <div className="admin-filters__group">
@@ -892,6 +1089,129 @@ function AdminDashboardPage() {
 
               {requestsError && <div className="admin-alert admin-alert--error">{requestsError}</div>}
               {requestsFlash && <div className="admin-alert admin-alert--ok">{requestsFlash}</div>}
+            </>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: "grid",
+                  gap: "1rem",
+                }}
+              >
+                <div className="admin-filters">
+                  <div className="admin-filters__group">
+                    <label className="admin-filters__label">Estatus</label>
+                    <select
+                      className="admin-filters__select"
+                      value={invitationFilters.status}
+                      onChange={(e) => updateInvitationFilter("status", e.target.value)}
+                    >
+                      {INVITATION_STATUSES.map((s) => (
+                        <option key={s.value} value={s.value}>
+                          {s.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="admin-filters__group admin-filters__group--search">
+                    <label className="admin-filters__label">Buscar</label>
+                    <input
+                      className="admin-filters__input"
+                      value={invitationFilters.q}
+                      onChange={(e) => updateInvitationFilter("q", e.target.value)}
+                      placeholder="id / notas / lead"
+                    />
+                  </div>
+                </div>
+
+                <form
+                  onSubmit={handleCreateInvitation}
+                  style={{
+                    display: "grid",
+                    gap: "0.9rem",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    alignItems: "end",
+                  }}
+                >
+                  <div>
+                    <label className="admin-filters__label">Expira en días</label>
+                    <input
+                      className="admin-filters__input"
+                      type="number"
+                      min="1"
+                      max="365"
+                      value={invitationForm.expires_in_days}
+                      onChange={(e) => updateInvitationForm("expires_in_days", e.target.value)}
+                      placeholder="Opcional"
+                    />
+                  </div>
+
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label className="admin-filters__label">Notas internas</label>
+                    <input
+                      className="admin-filters__input"
+                      value={invitationForm.notes}
+                      onChange={(e) => updateInvitationForm("notes", e.target.value)}
+                      placeholder="Ej. invitación para proveedor capturado por seguimiento manual"
+                    />
+                  </div>
+
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div
+                      style={{
+                        border: "1px solid rgba(186, 102, 120, 0.18)",
+                        borderRadius: "16px",
+                        padding: "0.9rem 1rem",
+                        background: "rgba(255,255,255,0.75)",
+                        lineHeight: 1.5,
+                        fontSize: "0.95rem",
+                      }}
+                    >
+                      Esta invitación solo genera un <strong>link con token</strong>. El proveedor
+                      capturará por sí mismo su correo, empresa, responsable, teléfono y aceptación
+                      legal dentro del formulario real.
+                    </div>
+                  </div>
+
+                  <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+                    <button className="btn btn--primary" type="submit" disabled={isCreatingInvitation}>
+                      {isCreatingInvitation ? "Generando…" : "Generar invitación"}
+                    </button>
+                  </div>
+                </form>
+
+                {lastGeneratedInvitationLink ? (
+                  <div
+                    style={{
+                      border: "1px solid rgba(186, 102, 120, 0.18)",
+                      borderRadius: "16px",
+                      padding: "1rem",
+                      background: "rgba(255,255,255,0.75)",
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, marginBottom: "0.5rem" }}>Enlace generado</div>
+                    <div
+                      style={{
+                        wordBreak: "break-all",
+                        fontSize: "0.95rem",
+                        marginBottom: "0.75rem",
+                        opacity: 0.9,
+                      }}
+                    >
+                      {lastGeneratedInvitationLink}
+                    </div>
+                    <div className="admin-actions">
+                      <button className="btn btn--ghost" type="button" onClick={handleCopyInvitationLink}>
+                        Copiar enlace
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {invitationsError && <div className="admin-alert admin-alert--error">{invitationsError}</div>}
+                {invitationsFlash && <div className="admin-alert admin-alert--ok">{invitationsFlash}</div>}
+              </div>
             </>
           )}
         </div>
@@ -1197,7 +1517,7 @@ function AdminDashboardPage() {
               <strong>account_status</strong> sea <strong>blocked</strong>.
             </div>
           </div>
-        ) : (
+        ) : activeSection === "requests" ? (
           <div className="admin-card">
             <div className="admin-table__header">
               <h1 className="admin-table__title">Solicitudes de información</h1>
@@ -1325,6 +1645,123 @@ function AdminDashboardPage() {
 
             <div className="admin-footer-note">
               Nota: “Total moderadas” = aprobadas + declinadas. Exportar descarga un CSV compatible con Excel.
+            </div>
+          </div>
+        ) : (
+          <div className="admin-card">
+            <div className="admin-table__header">
+              <h1 className="admin-table__title">Invitaciones a proveedores</h1>
+              <div className="admin-table__meta">
+                Mostrando: <strong>{invitations.length}</strong>
+              </div>
+            </div>
+
+            <div className="admin-table__wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Invitación</th>
+                    <th>Estatus</th>
+                    <th>Creación</th>
+                    <th>Vencimiento</th>
+                    <th>Uso</th>
+                    <th>Notas</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {invitations.map((inv) => {
+                    const isBusy = invitationBusyId === inv.id;
+                    const canCancel = inv.status === "issued";
+
+                    return (
+                      <tr key={inv.id}>
+                        <td style={{ minWidth: 260 }}>
+                          <div className="admin-provider">
+                            <div className="admin-provider__main">
+                              <div className="admin-provider__name">
+                                {inv.invited_company_name || "Invitación abierta"}
+                              </div>
+                              <div className="admin-provider__sub">
+                                <span>{inv.invited_email || "El proveedor capturará sus datos en el formulario"}</span>
+                                {inv.invited_owner_name ? (
+                                  <>
+                                    <span className="admin-provider__dot">•</span>
+                                    <span>{inv.invited_owner_name}</span>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            <div className="admin-provider__meta">
+                              <div className="admin-provider__id">ID: {inv.id}</div>
+                              {inv.created_by_admin_id ? (
+                                <div className="admin-provider__review">
+                                  Admin: {inv.created_by_admin_id}
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+
+                        <td>
+                          <span className={badgeClass("invitation-status", inv.status)}>
+                            {inv.status}
+                          </span>
+                        </td>
+
+                        <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(inv.created_at)}</td>
+
+                        <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(inv.expires_at)}</td>
+
+                        <td style={{ minWidth: 220 }}>
+                          {inv.used_at ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                              <span>Usada: {formatDateTime(inv.used_at)}</span>
+                              <span style={{ opacity: 0.7, fontSize: "0.85rem" }}>
+                                Lead: {inv.used_by_lead_id || "—"}
+                              </span>
+                            </div>
+                          ) : (
+                            <span style={{ opacity: 0.7 }}>Aún no utilizada</span>
+                          )}
+                        </td>
+
+                        <td style={{ minWidth: 260 }}>
+                          <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>
+                            {inv.notes || "—"}
+                          </div>
+                        </td>
+
+                        <td style={{ minWidth: 200 }}>
+                          <div className="admin-actions">
+                            <button
+                              className="btn btn--ghost"
+                              disabled={isBusy || !canCancel}
+                              onClick={() => handleCancelInvitation(inv.id)}
+                            >
+                              {isBusy ? "…" : "Cancelar"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {!invitations.length && (
+                    <tr>
+                      <td colSpan={7} style={{ padding: "1rem" }}>
+                        {invitationsLoading ? "Cargando…" : "No hay invitaciones con estos filtros."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="admin-footer-note">
+              Nota: esta invitación solo habilita el acceso al formulario inicial. El proveedor captura sus propios datos y el token solo debe mostrarse al momento de crear la invitación.
             </div>
           </div>
         )}
