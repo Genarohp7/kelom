@@ -1,10 +1,13 @@
 import { NavLink } from "react-router-dom";
-import planningHeroImage from "../assets/web/pages/blog/blog-1.png";
-import planningIntroImage from "../assets/web/pages/blog/blog-2.png";
-import planningStageImage1 from "../assets/web/pages/blog/blog-lugares.png";
-import planningStageImage2 from "../assets/web/pages/blog/blog-presupuesto.png";
-import planningStageImage3 from "../assets/web/pages/blog/blog-banquetes.png";
-import planningStageImage4 from "../assets/web/pages/blog/blog-experiencias.png";
+import planningHeroImage from "../assets/web/pages/weddingplaningpage/mainone.webp";
+import planningIntroImage from "../assets/web/pages/weddingplaningpage/secundaria.webp";
+import planningStageImage1 from "../assets/web/pages/weddingplaningpage/compromiso.webp";
+import planningStageImage2 from "../assets/web/pages/weddingplaningpage/pasos.webp";
+import planningStageImage3 from "../assets/web/pages/weddingplaningpage/presupuesto.webp";
+import planningStageImage4 from "../assets/web/pages/weddingplaningpage/calendario.webp";
+import planningStageImage5 from "../assets/web/pages/weddingplaningpage/expertos.webp";
+import planningStageImage6 from "../assets/web/pages/weddingplaningpage/pareja2.webp";
+import planningStageImage7 from "../assets/web/pages/weddingplaningpage/consejos.webp";
 
 function WeddingPlanningPage() {
   const stages = [
@@ -19,7 +22,7 @@ function WeddingPlanningPage() {
         "Ideas reales para pedir matrimonio",
         "Qué hablar después del “sí” antes de salir corriendo a ver salones",
       ],
-      image: planningStageImage1,
+      image: planningStageImage1, 
     },
     {
       id: "primeros-pasos",
@@ -58,7 +61,7 @@ function WeddingPlanningPage() {
         "Qué cambia entre una boda de día, de tarde o de noche",
         "Cómo encontrar un estilo que sí se sienta suyo",
       ],
-      image: planningStageImage4,
+      image: planningStageImage4, 
     },
     {
       id: "proveedores",
@@ -71,7 +74,7 @@ function WeddingPlanningPage() {
         "Cómo comparar sin perderte entre mil opciones",
         "Qué proveedores conviene buscar primero",
       ],
-      image: planningStageImage1,
+      image: planningStageImage5, 
     },
     {
       id: "organizacion-previa",
@@ -84,7 +87,7 @@ function WeddingPlanningPage() {
         "Cómo repartir tareas sin pelear por todo",
         "Qué confirmar días antes del evento",
       ],
-      image: planningStageImage2,
+      image: planningStageImage6, 
     },
     {
       id: "gran-dia",
@@ -97,7 +100,7 @@ function WeddingPlanningPage() {
         "Cómo vivir el día con menos tensión",
         "Pequeños detalles que sí mejoran la experiencia",
       ],
-      image: planningStageImage3,
+      image: planningStageImage7, 
     },
   ];
 
@@ -156,7 +159,7 @@ function WeddingPlanningPage() {
             <div className="planning-guide__hero-visual">
               <div className="planning-guide__hero-image-wrap">
                 <img
-                  src={planningHeroImage}
+                  src={planningHeroImage}//cambiar pior mainone//
                   alt="Pareja planeando su boda"
                   className="planning-guide__hero-image"
                 />
@@ -221,7 +224,7 @@ function WeddingPlanningPage() {
               <div className="planning-guide__intro-media">
                 <div className="planning-guide__intro-image-wrap">
                   <img
-                    src={planningIntroImage}
+                    src={planningIntroImage} //secundaria//
                     alt="Pareja revisando detalles de su boda"
                     className="planning-guide__intro-image"
                   />
