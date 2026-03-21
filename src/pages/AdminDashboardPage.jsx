@@ -52,6 +52,29 @@ const INVITATION_STATUSES = [
   { value: "", label: "Todas" },
 ];
 
+const SECTION_ITEMS = [
+  {
+    key: "providers",
+    title: "Proveedores",
+    description: "Moderación, visibilidad y modalidad premium.",
+  },
+  {
+    key: "users",
+    title: "Usuarios",
+    description: "Roles, estado de cuenta y bloqueos.",
+  },
+  {
+    key: "requests",
+    title: "Solicitudes",
+    description: "Moderación y seguimiento de leads.",
+  },
+  {
+    key: "invitations",
+    title: "Invitaciones",
+    description: "Accesos controlados para proveedores.",
+  },
+];
+
 function badgeClass(kind, value) {
   const v = String(value || "");
 
@@ -158,12 +181,8 @@ function AdminDashboardPage() {
   const [adminUser, setAdminUser] = useState(null);
   const [isChecking, setIsChecking] = useState(true);
 
-  // providers | users | requests | invitations
   const [activeSection, setActiveSection] = useState("providers");
 
-  // =========================
-  // Providers state
-  // =========================
   const [providerFilters, setProviderFilters] = useState({
     review_status: "pending_review",
     visibility: "",
@@ -185,9 +204,6 @@ function AdminDashboardPage() {
     return p.toString();
   }, [providerFilters]);
 
-  // =========================
-  // Users state
-  // =========================
   const [userFilters, setUserFilters] = useState({
     role: "",
     status: "",
@@ -209,9 +225,6 @@ function AdminDashboardPage() {
     return p.toString();
   }, [userFilters]);
 
-  // =========================
-  // Requests state
-  // =========================
   const [requestFilters, setRequestFilters] = useState({
     moderation_status: "pending",
     q: "",
@@ -240,9 +253,6 @@ function AdminDashboardPage() {
     return p.toString();
   }, [requestFilters]);
 
-  // =========================
-  // Invitations state
-  // =========================
   const [invitationFilters, setInvitationFilters] = useState({
     status: "issued",
     q: "",
@@ -270,9 +280,6 @@ function AdminDashboardPage() {
     return p.toString();
   }, [invitationFilters]);
 
-  // =========================
-  // Boot
-  // =========================
   useEffect(() => {
     let cancelled = false;
 
@@ -297,9 +304,6 @@ function AdminDashboardPage() {
     };
   }, [navigate]);
 
-  // =========================
-  // Providers helpers
-  // =========================
   async function loadProviders() {
     setProvidersError("");
     setProvidersFlash("");
@@ -363,9 +367,6 @@ function AdminDashboardPage() {
     }
   }
 
-  // =========================
-  // Users helpers
-  // =========================
   async function loadUsers() {
     setUsersError("");
     setUsersFlash("");
@@ -435,9 +436,6 @@ function AdminDashboardPage() {
     patchUserStatus(userId, "unblock", "", "Usuario desbloqueado ✅");
   }
 
-  // =========================
-  // Requests helpers
-  // =========================
   function updateRequestFilter(name, value) {
     setRequestFilters((prev) => ({ ...prev, [name]: value }));
   }
@@ -678,9 +676,6 @@ function AdminDashboardPage() {
     }
   }
 
-  // =========================
-  // Invitations helpers
-  // =========================
   function updateInvitationFilter(name, value) {
     setInvitationFilters((prev) => ({ ...prev, [name]: value }));
   }
@@ -861,9 +856,6 @@ function AdminDashboardPage() {
     }
   }
 
-  // =========================
-  // Effects by section
-  // =========================
   useEffect(() => {
     if (isChecking) return;
     if (activeSection !== "providers") return;
@@ -897,7 +889,81 @@ function AdminDashboardPage() {
     navigate("/", { replace: true });
   }
 
+  function handleRefresh() {
+    if (activeSection === "providers") return loadProviders();
+    if (activeSection === "users") return loadUsers();
+    if (activeSection === "requests") return loadRequests();
+    return loadInvitations();
+  }
+
   const moderatedTotal = (requestStats.approved || 0) + (requestStats.declined || 0);
+  const activeSectionMeta =
+    SECTION_ITEMS.find((item) => item.key === activeSection) || SECTION_ITEMS[0];
+
+  const overviewCards =
+    activeSection === "providers"
+      ? [
+          { label: "Mostrando", value: providers.length, tone: "default" },
+          {
+            label: "Pendientes",
+            value: providers.filter((p) => p.review_status === "pending_review").length,
+            tone: "warn",
+          },
+          {
+            label: "Visibles",
+            value: providers.filter((p) => p.public_visibility === "listed").length,
+            tone: "ok",
+          },
+          {
+            label: "Destacados",
+            value: providers.filter((p) => Boolean(p.is_featured)).length,
+            tone: "info",
+          },
+        ]
+      : activeSection === "users"
+      ? [
+          { label: "Mostrando", value: users.length, tone: "default" },
+          {
+            label: "Admins",
+            value: users.filter((u) => u.role === "admin").length,
+            tone: "warn",
+          },
+          {
+            label: "Proveedores",
+            value: users.filter((u) => u.role === "provider").length,
+            tone: "info",
+          },
+          {
+            label: "Bloqueados",
+            value: users.filter((u) => u.account_status === "blocked").length,
+            tone: "bad",
+          },
+        ]
+      : activeSection === "requests"
+      ? [
+          { label: "Total", value: requestStats.total, tone: "default" },
+          { label: "Pendientes", value: requestStats.pending, tone: "warn" },
+          { label: "Aprobadas", value: requestStats.approved, tone: "ok" },
+          { label: "Declinadas", value: requestStats.declined, tone: "bad" },
+        ]
+      : [
+          { label: "Mostrando", value: invitations.length, tone: "default" },
+          {
+            label: "Emitidas",
+            value: invitations.filter((i) => i.status === "issued").length,
+            tone: "warn",
+          },
+          {
+            label: "Usadas",
+            value: invitations.filter((i) => i.status === "used").length,
+            tone: "ok",
+          },
+          {
+            label: "Canceladas / expiradas",
+            value: invitations.filter((i) => i.status === "cancelled" || i.status === "expired").length,
+            tone: "muted",
+          },
+        ];
 
   if (isChecking) {
     return (
@@ -913,917 +979,904 @@ function AdminDashboardPage() {
 
   return (
     <div className="admin">
-      <div className="admin__topbar">
+      <header className="admin__topbar">
         <div className="admin__topbar-inner">
           <div className="admin__brand">
+            <div className="admin__eyebrow">Centro de control</div>
             <div className="admin__title">Kelom Admin</div>
             <div className="admin__subtitle">
-              Sesión: <strong>{adminUser?.email}</strong> ({adminUser?.admin_tier})
+              Sesión: <strong>{adminUser?.email}</strong>
+              <span className="admin__subtitle-dot">•</span>
+              tier <strong>{adminUser?.admin_tier}</strong>
             </div>
           </div>
 
           <div className="admin__topbar-actions">
-            {activeSection === "providers" ? (
-              <button className="btn btn--ghost" onClick={loadProviders} disabled={providersLoading}>
-                {providersLoading ? "Cargando…" : "Refrescar"}
-              </button>
-            ) : activeSection === "users" ? (
-              <button className="btn btn--ghost" onClick={loadUsers} disabled={usersLoading}>
-                {usersLoading ? "Cargando…" : "Refrescar"}
-              </button>
-            ) : activeSection === "requests" ? (
-              <button className="btn btn--ghost" onClick={loadRequests} disabled={requestsLoading}>
-                {requestsLoading ? "Cargando…" : "Refrescar"}
-              </button>
-            ) : (
-              <button className="btn btn--ghost" onClick={loadInvitations} disabled={invitationsLoading}>
-                {invitationsLoading ? "Cargando…" : "Refrescar"}
-              </button>
-            )}
+            <button className="btn btn--ghost" onClick={handleRefresh}>
+              Refrescar
+            </button>
+
+            <button className="btn btn--ghost" onClick={handleExportExcel} disabled={activeSection !== "requests" || isExporting || requestsLoading}>
+              {isExporting ? "Exportando…" : "Exportar Excel"}
+            </button>
 
             <button className="btn btn--primary" onClick={handleLogout}>
               Salir
             </button>
           </div>
         </div>
-      </div>
+      </header>
 
       <div className="admin__container">
-        <div className="admin-card admin-card--filters">
-          <div
-            className="admin-actions"
-            style={{ marginBottom: "1rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}
-          >
-            <button
-              className={activeSection === "providers" ? "btn btn--primary" : "btn btn--ghost"}
-              onClick={() => setActiveSection("providers")}
-            >
-              Proveedores
-            </button>
-
-            <button
-              className={activeSection === "users" ? "btn btn--primary" : "btn btn--ghost"}
-              onClick={() => setActiveSection("users")}
-            >
-              Usuarios
-            </button>
-
-            <button
-              className={activeSection === "requests" ? "btn btn--primary" : "btn btn--ghost"}
-              onClick={() => setActiveSection("requests")}
-            >
-              Solicitudes
-            </button>
-
-            <button
-              className={activeSection === "invitations" ? "btn btn--primary" : "btn btn--ghost"}
-              onClick={() => setActiveSection("invitations")}
-            >
-              Invitaciones
-            </button>
-
-            <button
-              className="btn btn--ghost"
-              onClick={handleExportExcel}
-              disabled={activeSection !== "requests" || isExporting || requestsLoading}
-              title={
-                activeSection !== "requests"
-                  ? "Ve a la sección Solicitudes para exportar"
-                  : "Descarga un CSV compatible con Excel"
-              }
-              style={activeSection !== "requests" ? { opacity: 0.7 } : undefined}
-            >
-              {isExporting ? "Exportando…" : "Exportar Excel"}
-            </button>
-          </div>
-
-          {activeSection === "providers" ? (
-            <>
-              <div className="admin-filters">
-                <div className="admin-filters__group">
-                  <label className="admin-filters__label">Estatus</label>
-                  <select
-                    className="admin-filters__select"
-                    value={providerFilters.review_status}
-                    onChange={(e) => updateProviderFilter("review_status", e.target.value)}
-                  >
-                    {REVIEW_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="admin-filters__group">
-                  <label className="admin-filters__label">Visibilidad</label>
-                  <select
-                    className="admin-filters__select"
-                    value={providerFilters.visibility}
-                    onChange={(e) => updateProviderFilter("visibility", e.target.value)}
-                  >
-                    {VISIBILITIES.map((v) => (
-                      <option key={v.value} value={v.value}>
-                        {v.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="admin-filters__group admin-filters__group--search">
-                  <label className="admin-filters__label">Buscar</label>
-                  <input
-                    className="admin-filters__input"
-                    value={providerFilters.q}
-                    onChange={(e) => updateProviderFilter("q", e.target.value)}
-                    placeholder="email / venue / company"
-                  />
+        <div className="admin__shell">
+          <aside className="admin__sidebar">
+            <div className="admin-card admin-card--sidebar">
+              <div className="admin-sidebar__heading">
+                <div className="admin-sidebar__title">Módulos</div>
+                <div className="admin-sidebar__text">
+                  Navega por áreas sin revolver todo en una sola mesa.
                 </div>
               </div>
 
-              {providersError && <div className="admin-alert admin-alert--error">{providersError}</div>}
-              {providersFlash && <div className="admin-alert admin-alert--ok">{providersFlash}</div>}
-            </>
-          ) : activeSection === "users" ? (
-            <>
-              <div className="admin-filters">
-                <div className="admin-filters__group">
-                  <label className="admin-filters__label">Rol</label>
-                  <select
-                    className="admin-filters__select"
-                    value={userFilters.role}
-                    onChange={(e) => updateUserFilter("role", e.target.value)}
+              <nav className="admin-sidebar__nav">
+                {SECTION_ITEMS.map((item) => (
+                  <button
+                    key={item.key}
+                    className={
+                      activeSection === item.key
+                        ? "admin-sidebar__link admin-sidebar__link--active"
+                        : "admin-sidebar__link"
+                    }
+                    onClick={() => setActiveSection(item.key)}
                   >
-                    {USER_ROLES.map((r) => (
-                      <option key={r.value} value={r.value}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="admin-filters__group">
-                  <label className="admin-filters__label">Estado</label>
-                  <select
-                    className="admin-filters__select"
-                    value={userFilters.status}
-                    onChange={(e) => updateUserFilter("status", e.target.value)}
-                  >
-                    {USER_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="admin-filters__group admin-filters__group--search">
-                  <label className="admin-filters__label">Buscar</label>
-                  <input
-                    className="admin-filters__input"
-                    value={userFilters.q}
-                    onChange={(e) => updateUserFilter("q", e.target.value)}
-                    placeholder="email / nombre"
-                  />
-                </div>
-              </div>
-
-              {usersError && <div className="admin-alert admin-alert--error">{usersError}</div>}
-              {usersFlash && <div className="admin-alert admin-alert--ok">{usersFlash}</div>}
-            </>
-          ) : activeSection === "requests" ? (
-            <>
-              <div className="admin-filters">
-                <div className="admin-filters__group">
-                  <label className="admin-filters__label">Estatus</label>
-                  <select
-                    className="admin-filters__select"
-                    value={requestFilters.moderation_status}
-                    onChange={(e) => updateRequestFilter("moderation_status", e.target.value)}
-                  >
-                    {REQUEST_MOD_STATUSES.map((s) => (
-                      <option key={s.value} value={s.value}>
-                        {s.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="admin-filters__group admin-filters__group--search">
-                  <label className="admin-filters__label">Buscar</label>
-                  <input
-                    className="admin-filters__input"
-                    value={requestFilters.q}
-                    onChange={(e) => updateRequestFilter("q", e.target.value)}
-                    placeholder="correo / nombre / mensaje / proveedor"
-                  />
-                </div>
-
-                <div className="admin-filters__group" style={{ minWidth: 340 }}>
-                  <label className="admin-filters__label">Métricas</label>
-                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                    <span className="admin-badge admin-badge--muted">Total: {requestStats.total}</span>
-                    <span className="admin-badge admin-badge--muted">Moderadas: {moderatedTotal}</span>
-                    <span className="admin-badge admin-badge--warn">Pend: {requestStats.pending}</span>
-                    <span className="admin-badge admin-badge--ok">Apr: {requestStats.approved}</span>
-                    <span className="admin-badge admin-badge--bad">Dec: {requestStats.declined}</span>
-                  </div>
-                </div>
-              </div>
-
-              {requestsError && <div className="admin-alert admin-alert--error">{requestsError}</div>}
-              {requestsFlash && <div className="admin-alert admin-alert--ok">{requestsFlash}</div>}
-            </>
-          ) : (
-            <>
-              <div
-                style={{
-                  display: "grid",
-                  gap: "1rem",
-                }}
-              >
-                <div className="admin-filters">
-                  <div className="admin-filters__group">
-                    <label className="admin-filters__label">Estatus</label>
-                    <select
-                      className="admin-filters__select"
-                      value={invitationFilters.status}
-                      onChange={(e) => updateInvitationFilter("status", e.target.value)}
-                    >
-                      {INVITATION_STATUSES.map((s) => (
-                        <option key={s.value} value={s.value}>
-                          {s.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="admin-filters__group admin-filters__group--search">
-                    <label className="admin-filters__label">Buscar</label>
-                    <input
-                      className="admin-filters__input"
-                      value={invitationFilters.q}
-                      onChange={(e) => updateInvitationFilter("q", e.target.value)}
-                      placeholder="id / notas / lead"
-                    />
-                  </div>
-                </div>
-
-                <form
-                  onSubmit={handleCreateInvitation}
-                  style={{
-                    display: "grid",
-                    gap: "0.9rem",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                    alignItems: "end",
-                  }}
-                >
-                  <div>
-                    <label className="admin-filters__label">Expira en días</label>
-                    <input
-                      className="admin-filters__input"
-                      type="number"
-                      min="1"
-                      max="365"
-                      value={invitationForm.expires_in_days}
-                      onChange={(e) => updateInvitationForm("expires_in_days", e.target.value)}
-                      placeholder="Opcional"
-                    />
-                  </div>
-
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <label className="admin-filters__label">Notas internas</label>
-                    <input
-                      className="admin-filters__input"
-                      value={invitationForm.notes}
-                      onChange={(e) => updateInvitationForm("notes", e.target.value)}
-                      placeholder="Ej. invitación para proveedor capturado por seguimiento manual"
-                    />
-                  </div>
-
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    <div
-                      style={{
-                        border: "1px solid rgba(186, 102, 120, 0.18)",
-                        borderRadius: "16px",
-                        padding: "0.9rem 1rem",
-                        background: "rgba(255,255,255,0.75)",
-                        lineHeight: 1.5,
-                        fontSize: "0.95rem",
-                      }}
-                    >
-                      Esta invitación solo genera un <strong>link con token</strong>. El proveedor
-                      capturará por sí mismo su correo, empresa, responsable, teléfono y aceptación
-                      legal dentro del formulario real.
-                    </div>
-                  </div>
-
-                  <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-                    <button className="btn btn--primary" type="submit" disabled={isCreatingInvitation}>
-                      {isCreatingInvitation ? "Generando…" : "Generar invitación"}
-                    </button>
-                  </div>
-                </form>
-
-                {lastGeneratedInvitationLink ? (
-                  <div
-                    style={{
-                      border: "1px solid rgba(186, 102, 120, 0.18)",
-                      borderRadius: "16px",
-                      padding: "1rem",
-                      background: "rgba(255,255,255,0.75)",
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, marginBottom: "0.5rem" }}>Enlace generado</div>
-                    <div
-                      style={{
-                        wordBreak: "break-all",
-                        fontSize: "0.95rem",
-                        marginBottom: "0.75rem",
-                        opacity: 0.9,
-                      }}
-                    >
-                      {lastGeneratedInvitationLink}
-                    </div>
-                    <div className="admin-actions">
-                      <button className="btn btn--ghost" type="button" onClick={handleCopyInvitationLink}>
-                        Copiar enlace
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {invitationsError && <div className="admin-alert admin-alert--error">{invitationsError}</div>}
-                {invitationsFlash && <div className="admin-alert admin-alert--ok">{invitationsFlash}</div>}
-              </div>
-            </>
-          )}
-        </div>
-
-        {activeSection === "providers" ? (
-          <div className="admin-card">
-            <div className="admin-table__header">
-              <h1 className="admin-table__title">Proveedores</h1>
-              <div className="admin-table__meta">
-                Mostrando: <strong>{providers.length}</strong>
-              </div>
+                    <span className="admin-sidebar__link-title">{item.title}</span>
+                    <span className="admin-sidebar__link-text">{item.description}</span>
+                  </button>
+                ))}
+              </nav>
             </div>
+          </aside>
 
-            <div className="admin-table__wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Proveedor</th>
-                    <th>Estatus</th>
-                    <th>Visibilidad</th>
-                    <th>Modalidad</th>
-                    <th>Notas</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
+          <main className="admin__main">
+            <section className="admin-card admin-card--hero">
+              <div className="admin-hero">
+                <div className="admin-hero__copy">
+                  <span className="admin-hero__badge">{activeSectionMeta.title}</span>
+                  <h1 className="admin-hero__title">{activeSectionMeta.title}</h1>
+                  <p className="admin-hero__text">{activeSectionMeta.description}</p>
+                </div>
 
-                <tbody>
-                  {providers.map((p) => {
-                    const isBusy = providerBusyId === p.user_id;
-                    const isFeatured = Boolean(p.is_featured);
+                <div className="admin-hero__stats">
+                  {overviewCards.map((card) => (
+                    <article
+                      key={card.label}
+                      className={`admin-kpi admin-kpi--${card.tone}`}
+                    >
+                      <div className="admin-kpi__value">{card.value}</div>
+                      <div className="admin-kpi__label">{card.label}</div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </section>
 
-                    return (
-                      <tr key={p.user_id}>
-                        <td>
-                          <div className="admin-provider">
-                            <div className="admin-provider__main">
-                              <div className="admin-provider__name">
-                                {p.venue_name || p.company_name || "—"}
+            <section className="admin-card admin-card--filters">
+              {activeSection === "providers" ? (
+                <>
+                  <div className="admin-toolbar">
+                    <div className="admin-toolbar__main">
+                      <div className="admin-filters">
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Estatus</label>
+                          <select
+                            className="admin-filters__select"
+                            value={providerFilters.review_status}
+                            onChange={(e) => updateProviderFilter("review_status", e.target.value)}
+                          >
+                            {REVIEW_STATUSES.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Visibilidad</label>
+                          <select
+                            className="admin-filters__select"
+                            value={providerFilters.visibility}
+                            onChange={(e) => updateProviderFilter("visibility", e.target.value)}
+                          >
+                            {VISIBILITIES.map((v) => (
+                              <option key={v.value} value={v.value}>
+                                {v.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="admin-filters__group admin-filters__group--search">
+                          <label className="admin-filters__label">Buscar</label>
+                          <input
+                            className="admin-filters__input"
+                            value={providerFilters.q}
+                            onChange={(e) => updateProviderFilter("q", e.target.value)}
+                            placeholder="email / venue / company"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {providersError && <div className="admin-alert admin-alert--error">{providersError}</div>}
+                  {providersFlash && <div className="admin-alert admin-alert--ok">{providersFlash}</div>}
+                </>
+              ) : activeSection === "users" ? (
+                <>
+                  <div className="admin-toolbar">
+                    <div className="admin-toolbar__main">
+                      <div className="admin-filters">
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Rol</label>
+                          <select
+                            className="admin-filters__select"
+                            value={userFilters.role}
+                            onChange={(e) => updateUserFilter("role", e.target.value)}
+                          >
+                            {USER_ROLES.map((r) => (
+                              <option key={r.value} value={r.value}>
+                                {r.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Estado</label>
+                          <select
+                            className="admin-filters__select"
+                            value={userFilters.status}
+                            onChange={(e) => updateUserFilter("status", e.target.value)}
+                          >
+                            {USER_STATUSES.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="admin-filters__group admin-filters__group--search">
+                          <label className="admin-filters__label">Buscar</label>
+                          <input
+                            className="admin-filters__input"
+                            value={userFilters.q}
+                            onChange={(e) => updateUserFilter("q", e.target.value)}
+                            placeholder="email / nombre"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {usersError && <div className="admin-alert admin-alert--error">{usersError}</div>}
+                  {usersFlash && <div className="admin-alert admin-alert--ok">{usersFlash}</div>}
+                </>
+              ) : activeSection === "requests" ? (
+                <>
+                  <div className="admin-toolbar">
+                    <div className="admin-toolbar__main">
+                      <div className="admin-filters admin-filters--requests">
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Estatus</label>
+                          <select
+                            className="admin-filters__select"
+                            value={requestFilters.moderation_status}
+                            onChange={(e) => updateRequestFilter("moderation_status", e.target.value)}
+                          >
+                            {REQUEST_MOD_STATUSES.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="admin-filters__group admin-filters__group--search">
+                          <label className="admin-filters__label">Buscar</label>
+                          <input
+                            className="admin-filters__input"
+                            value={requestFilters.q}
+                            onChange={(e) => updateRequestFilter("q", e.target.value)}
+                            placeholder="correo / nombre / mensaje / proveedor"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="admin-toolbar__aside">
+                      <div className="admin-chip-group">
+                        <span className="admin-badge admin-badge--muted">Total: {requestStats.total}</span>
+                        <span className="admin-badge admin-badge--muted">Moderadas: {moderatedTotal}</span>
+                        <span className="admin-badge admin-badge--warn">Pend: {requestStats.pending}</span>
+                        <span className="admin-badge admin-badge--ok">Apr: {requestStats.approved}</span>
+                        <span className="admin-badge admin-badge--bad">Dec: {requestStats.declined}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {requestsError && <div className="admin-alert admin-alert--error">{requestsError}</div>}
+                  {requestsFlash && <div className="admin-alert admin-alert--ok">{requestsFlash}</div>}
+                </>
+              ) : (
+                <>
+                  <div className="admin-toolbar">
+                    <div className="admin-toolbar__main">
+                      <div className="admin-filters">
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Estatus</label>
+                          <select
+                            className="admin-filters__select"
+                            value={invitationFilters.status}
+                            onChange={(e) => updateInvitationFilter("status", e.target.value)}
+                          >
+                            {INVITATION_STATUSES.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="admin-filters__group admin-filters__group--search">
+                          <label className="admin-filters__label">Buscar</label>
+                          <input
+                            className="admin-filters__input"
+                            value={invitationFilters.q}
+                            onChange={(e) => updateInvitationFilter("q", e.target.value)}
+                            placeholder="id / notas / lead"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="admin-stack">
+                    <form className="admin-card admin-card--subform" onSubmit={handleCreateInvitation}>
+                      <div className="admin-subform__header">
+                        <h2 className="admin-subform__title">Generar invitación</h2>
+                        <p className="admin-subform__text">
+                          Crea accesos controlados para nuevos proveedores sin mezclar esto con el resto del panel.
+                        </p>
+                      </div>
+
+                      <div className="admin-subform__grid">
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Expira en días</label>
+                          <input
+                            className="admin-filters__input"
+                            type="number"
+                            min="1"
+                            max="365"
+                            value={invitationForm.expires_in_days}
+                            onChange={(e) => updateInvitationForm("expires_in_days", e.target.value)}
+                            placeholder="Opcional"
+                          />
+                        </div>
+
+                        <div className="admin-filters__group admin-subform__full">
+                          <label className="admin-filters__label">Notas internas</label>
+                          <input
+                            className="admin-filters__input"
+                            value={invitationForm.notes}
+                            onChange={(e) => updateInvitationForm("notes", e.target.value)}
+                            placeholder="Ej. invitación para proveedor capturado por seguimiento manual"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="admin-info-box">
+                        Esta invitación solo genera un <strong>link con token</strong>. El proveedor
+                        capturará por sí mismo su correo, empresa, responsable, teléfono y aceptación
+                        legal dentro del formulario real.
+                      </div>
+
+                      <div className="admin-subform__actions">
+                        <button className="btn btn--primary" type="submit" disabled={isCreatingInvitation}>
+                          {isCreatingInvitation ? "Generando…" : "Generar invitación"}
+                        </button>
+                      </div>
+                    </form>
+
+                    {lastGeneratedInvitationLink ? (
+                      <div className="admin-card admin-card--subform">
+                        <div className="admin-subform__header">
+                          <h2 className="admin-subform__title">Enlace generado</h2>
+                          <p className="admin-subform__text">
+                            Cópialo ahora. Luego ya no vas a poder recuperarlo por arte de magia.
+                          </p>
+                        </div>
+
+                        <div className="admin-generated-link">{lastGeneratedInvitationLink}</div>
+
+                        <div className="admin-subform__actions">
+                          <button className="btn btn--ghost" type="button" onClick={handleCopyInvitationLink}>
+                            Copiar enlace
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {invitationsError && <div className="admin-alert admin-alert--error">{invitationsError}</div>}
+                    {invitationsFlash && <div className="admin-alert admin-alert--ok">{invitationsFlash}</div>}
+                  </div>
+                </>
+              )}
+            </section>
+
+            {activeSection === "providers" ? (
+              <section className="admin-card admin-card--table">
+                <div className="admin-table__header">
+                  <h2 className="admin-table__title">Proveedores</h2>
+                  <div className="admin-table__meta">
+                    Mostrando: <strong>{providers.length}</strong>
+                  </div>
+                </div>
+
+                <div className="admin-table__wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Proveedor</th>
+                        <th>Estatus</th>
+                        <th>Visibilidad</th>
+                        <th>Modalidad</th>
+                        <th>Notas</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {providers.map((p) => {
+                        const isBusy = providerBusyId === p.user_id;
+                        const isFeatured = Boolean(p.is_featured);
+
+                        return (
+                          <tr key={p.user_id}>
+                            <td>
+                              <div className="admin-provider">
+                                <div className="admin-provider__main">
+                                  <div className="admin-provider__name">
+                                    {p.venue_name || p.company_name || "—"}
+                                  </div>
+
+                                  <div className="admin-provider__sub">
+                                    <span>{p.email}</span>
+                                    {p.phone ? <span className="admin-provider__dot">•</span> : null}
+                                    {p.phone ? <span>{p.phone}</span> : null}
+                                  </div>
+                                </div>
+
+                                <div className="admin-provider__meta">
+                                  <div className="admin-provider__id">ID: {p.user_id}</div>
+                                  {p.reviewed_at ? (
+                                    <div className="admin-provider__review">
+                                      Revisado: {new Date(p.reviewed_at).toLocaleString()}
+                                    </div>
+                                  ) : (
+                                    <div className="admin-provider__review">Aún no revisado</div>
+                                  )}
+                                </div>
                               </div>
+                            </td>
 
-                              <div className="admin-provider__sub">
-                                <span>{p.email}</span>
-                                {p.phone ? <span className="admin-provider__dot">•</span> : null}
-                                {p.phone ? <span>{p.phone}</span> : null}
+                            <td>
+                              <span className={badgeClass("review", p.review_status)}>{p.review_status}</span>
+                            </td>
+
+                            <td>
+                              <span className={badgeClass("visibility", p.public_visibility)}>
+                                {p.public_visibility}
+                              </span>
+                            </td>
+
+                            <td>
+                              <div className="admin-inline-stack">
+                                <span className={badgeClass("featured", isFeatured)}>
+                                  {isFeatured ? "Proveedor Destacado Kelom" : "Proveedor gratuito"}
+                                </span>
+                                <span className="admin-inline-help">
+                                  {isFeatured
+                                    ? "Beneficios premium activos"
+                                    : "Sin beneficios premium"}
+                                </span>
                               </div>
-                            </div>
+                            </td>
 
-                            <div className="admin-provider__meta">
-                              <div className="admin-provider__id">ID: {p.user_id}</div>
-                              {p.reviewed_at ? (
-                                <div className="admin-provider__review">
-                                  Revisado: {new Date(p.reviewed_at).toLocaleString()}
+                            <td className="admin-table__notes-cell">
+                              <textarea
+                                className="admin-notes"
+                                defaultValue={p.review_notes || ""}
+                                placeholder="Notas internas…"
+                                disabled={isBusy}
+                                onBlur={(e) => {
+                                  const next = e.target.value.trim();
+                                  if ((p.review_notes || "") !== next) {
+                                    patchProvider(p.user_id, { review_notes: next }, "Notas guardadas ✅");
+                                  }
+                                }}
+                              />
+                              <div className="admin-notes__hint">Tip: se guarda al perder foco.</div>
+                            </td>
+
+                            <td className="admin-table__actions-cell">
+                              <div className="admin-actions">
+                                <button
+                                  className="btn btn--primary"
+                                  disabled={isBusy}
+                                  onClick={() =>
+                                    patchProvider(
+                                      p.user_id,
+                                      { review_status: "approved", public_visibility: "listed" },
+                                      "Aprobado y publicado ✅"
+                                    )
+                                  }
+                                >
+                                  {isBusy ? "…" : "Aprobar + publicar"}
+                                </button>
+
+                                <button
+                                  className="btn btn--ghost"
+                                  disabled={isBusy}
+                                  onClick={() =>
+                                    patchProvider(p.user_id, { public_visibility: "hidden" }, "Ocultado ✅")
+                                  }
+                                >
+                                  Ocultar
+                                </button>
+
+                                <button
+                                  className="btn btn--ghost"
+                                  disabled={isBusy}
+                                  onClick={() =>
+                                    patchProvider(
+                                      p.user_id,
+                                      { is_featured: !isFeatured },
+                                      isFeatured
+                                        ? "Proveedor marcado como gratuito ✅"
+                                        : "Proveedor marcado como destacado ✅"
+                                    )
+                                  }
+                                >
+                                  {isFeatured ? "Quitar destacado" : "Hacer destacado"}
+                                </button>
+
+                                <button
+                                  className="btn btn--ghost"
+                                  disabled={isBusy}
+                                  onClick={() =>
+                                    patchProvider(
+                                      p.user_id,
+                                      { review_status: "needs_changes", public_visibility: "hidden" },
+                                      "Marcado: necesita cambios ✅"
+                                    )
+                                  }
+                                >
+                                  Pedir cambios
+                                </button>
+
+                                <button
+                                  className="btn btn--ghost"
+                                  disabled={isBusy}
+                                  onClick={() =>
+                                    patchProvider(
+                                      p.user_id,
+                                      { review_status: "suspended", public_visibility: "hidden" },
+                                      "Suspendido ✅"
+                                    )
+                                  }
+                                >
+                                  Suspender
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {!providers.length && (
+                        <tr>
+                          <td colSpan={6} className="admin-table__empty">
+                            {providersLoading ? "Cargando…" : "No hay resultados con estos filtros."}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="admin-footer-note">
+                  Nota: el público solo ve proveedores <strong>approved + listed</strong>. La modalidad
+                  <strong> Proveedor Destacado Kelom</strong> se controla por separado con <strong>is_featured</strong>.
+                </div>
+              </section>
+            ) : activeSection === "users" ? (
+              <section className="admin-card admin-card--table">
+                <div className="admin-table__header">
+                  <h2 className="admin-table__title">Usuarios</h2>
+                  <div className="admin-table__meta">
+                    Mostrando: <strong>{users.length}</strong>
+                  </div>
+                </div>
+
+                <div className="admin-table__wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Usuario</th>
+                        <th>Rol</th>
+                        <th>Estado</th>
+                        <th>Bloqueo</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {users.map((u) => {
+                        const isBusy = userBusyId === u.id;
+                        const isSelf = u.id === adminUser?.id;
+                        const isBlocked = u.account_status === "blocked";
+
+                        return (
+                          <tr key={u.id}>
+                            <td>
+                              <div className="admin-provider">
+                                <div className="admin-provider__main">
+                                  <div className="admin-provider__name">{u.name || "Sin nombre"}</div>
+                                  <div className="admin-provider__sub">
+                                    <span>{u.email}</span>
+                                    {u.admin_tier ? (
+                                      <>
+                                        <span className="admin-provider__dot">•</span>
+                                        <span>tier: {u.admin_tier}</span>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                </div>
+
+                                <div className="admin-provider__meta">
+                                  <div className="admin-provider__id">ID: {u.id}</div>
+                                  <div className="admin-provider__review">
+                                    Creado: {new Date(u.created_at).toLocaleString()}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td>
+                              <span className={badgeClass("role", u.role)}>{u.role}</span>
+                            </td>
+
+                            <td>
+                              <span className={badgeClass("user-status", u.account_status)}>{u.account_status}</span>
+                            </td>
+
+                            <td>
+                              {u.account_status === "blocked" ? (
+                                <div className="admin-inline-stack">
+                                  <div>
+                                    <strong>Motivo:</strong> {u.blocked_reason || "—"}
+                                  </div>
+                                  <div className="admin-inline-help">
+                                    {u.blocked_at ? `Bloqueado: ${new Date(u.blocked_at).toLocaleString()}` : "Bloqueado"}
+                                  </div>
                                 </div>
                               ) : (
-                                <div className="admin-provider__review">Aún no revisado</div>
+                                <span className="admin-inline-help">Sin bloqueo</span>
                               )}
-                            </div>
-                          </div>
-                        </td>
+                            </td>
 
-                        <td>
-                          <span className={badgeClass("review", p.review_status)}>{p.review_status}</span>
-                        </td>
+                            <td className="admin-table__actions-cell">
+                              <div className="admin-actions">
+                                {!isBlocked ? (
+                                  <button
+                                    className="btn btn--ghost"
+                                    disabled={isBusy || isSelf}
+                                    onClick={() => handleBlockUser(u.id)}
+                                    title={isSelf ? "No puedes bloquearte a ti mismo" : ""}
+                                  >
+                                    {isBusy ? "…" : "Bloquear"}
+                                  </button>
+                                ) : (
+                                  <button className="btn btn--primary" disabled={isBusy} onClick={() => handleUnblockUser(u.id)}>
+                                    {isBusy ? "…" : "Desbloquear"}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
 
-                        <td>
-                          <span className={badgeClass("visibility", p.public_visibility)}>
-                            {p.public_visibility}
-                          </span>
-                        </td>
+                      {!users.length && (
+                        <tr>
+                          <td colSpan={5} className="admin-table__empty">
+                            {usersLoading ? "Cargando…" : "No hay resultados con estos filtros."}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
-                        <td style={{ minWidth: 220 }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                            <span className={badgeClass("featured", isFeatured)}>
-                              {isFeatured ? "Proveedor Destacado Kelom" : "Proveedor gratuito"}
-                            </span>
-                            <span style={{ opacity: 0.7, fontSize: "0.9rem" }}>
-                              {isFeatured
-                                ? "Beneficios premium activos"
-                                : "Sin beneficios premium"}
-                            </span>
-                          </div>
-                        </td>
+                <div className="admin-footer-note">
+                  Nota: bloquear un usuario evita su acceso autenticado mientras su <strong>account_status</strong> sea <strong>blocked</strong>.
+                </div>
+              </section>
+            ) : activeSection === "requests" ? (
+              <section className="admin-card admin-card--table">
+                <div className="admin-table__header">
+                  <h2 className="admin-table__title">Solicitudes de información</h2>
+                  <div className="admin-table__meta">
+                    Mostrando: <strong>{requests.length}</strong>
+                  </div>
+                </div>
 
-                        <td style={{ minWidth: 260 }}>
-                          <textarea
-                            className="admin-notes"
-                            defaultValue={p.review_notes || ""}
-                            placeholder="Notas internas…"
-                            disabled={isBusy}
-                            onBlur={(e) => {
-                              const next = e.target.value.trim();
-                              if ((p.review_notes || "") !== next) {
-                                patchProvider(p.user_id, { review_notes: next }, "Notas guardadas ✅");
-                              }
-                            }}
-                          />
-                          <div className="admin-notes__hint">Tip: se guarda al perder foco.</div>
-                        </td>
-
-                        <td style={{ minWidth: 340 }}>
-                          <div className="admin-actions">
-                            <button
-                              className="btn btn--primary"
-                              disabled={isBusy}
-                              onClick={() =>
-                                patchProvider(
-                                  p.user_id,
-                                  { review_status: "approved", public_visibility: "listed" },
-                                  "Aprobado y publicado ✅"
-                                )
-                              }
-                            >
-                              {isBusy ? "…" : "Aprobar + publicar"}
-                            </button>
-
-                            <button
-                              className="btn btn--ghost"
-                              disabled={isBusy}
-                              onClick={() =>
-                                patchProvider(p.user_id, { public_visibility: "hidden" }, "Ocultado ✅")
-                              }
-                            >
-                              Ocultar
-                            </button>
-
-                            <button
-                              className="btn btn--ghost"
-                              disabled={isBusy}
-                              onClick={() =>
-                                patchProvider(
-                                  p.user_id,
-                                  { is_featured: !isFeatured },
-                                  isFeatured
-                                    ? "Proveedor marcado como gratuito ✅"
-                                    : "Proveedor marcado como destacado ✅"
-                                )
-                              }
-                            >
-                              {isFeatured ? "Quitar destacado" : "Hacer destacado"}
-                            </button>
-
-                            <button
-                              className="btn btn--ghost"
-                              disabled={isBusy}
-                              onClick={() =>
-                                patchProvider(
-                                  p.user_id,
-                                  { review_status: "needs_changes", public_visibility: "hidden" },
-                                  "Marcado: necesita cambios ✅"
-                                )
-                              }
-                            >
-                              Pedir cambios
-                            </button>
-
-                            <button
-                              className="btn btn--ghost"
-                              disabled={isBusy}
-                              onClick={() =>
-                                patchProvider(
-                                  p.user_id,
-                                  { review_status: "suspended", public_visibility: "hidden" },
-                                  "Suspendido ✅"
-                                )
-                              }
-                            >
-                              Suspender
-                            </button>
-                          </div>
-                        </td>
+                <div className="admin-table__wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Proveedor</th>
+                        <th>Solicitante</th>
+                        <th>Moderación</th>
+                        <th>Estado proveedor</th>
+                        <th>Mensaje</th>
+                        <th>Acciones</th>
                       </tr>
-                    );
-                  })}
+                    </thead>
 
-                  {!providers.length && (
-                    <tr>
-                      <td colSpan={6} style={{ padding: "1rem" }}>
-                        {providersLoading ? "Cargando…" : "No hay resultados con estos filtros."}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    <tbody>
+                      {requests.map((r) => {
+                        const isBusy = requestBusyId === r.id;
 
-            <div className="admin-footer-note">
-              Nota: el público solo ve proveedores <strong>approved + listed</strong>. La modalidad
-              <strong> Proveedor Destacado Kelom</strong> se controla por separado con{" "}
-              <strong>is_featured</strong>.
-            </div>
-          </div>
-        ) : activeSection === "users" ? (
-          <div className="admin-card">
-            <div className="admin-table__header">
-              <h1 className="admin-table__title">Usuarios</h1>
-              <div className="admin-table__meta">
-                Mostrando: <strong>{users.length}</strong>
-              </div>
-            </div>
+                        const providerLabel =
+                          r.provider_venue_name ||
+                          r.provider_company_name ||
+                          (r.provider_id ? `ID: ${r.provider_id}` : "—");
 
-            <div className="admin-table__wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Usuario</th>
-                    <th>Rol</th>
-                    <th>Estado</th>
-                    <th>Bloqueo</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
+                        const requesterLabel = r.requester_name || "Sin nombre";
+                        const requesterEmail = r.requester_email || "—";
 
-                <tbody>
-                  {users.map((u) => {
-                    const isBusy = userBusyId === u.id;
-                    const isSelf = u.id === adminUser?.id;
-                    const isBlocked = u.account_status === "blocked";
+                        return (
+                          <tr key={r.id}>
+                            <td className="admin-nowrap">{formatDateTime(r.created_at)}</td>
 
-                    return (
-                      <tr key={u.id}>
-                        <td>
-                          <div className="admin-provider">
-                            <div className="admin-provider__main">
-                              <div className="admin-provider__name">{u.name || "Sin nombre"}</div>
-                              <div className="admin-provider__sub">
-                                <span>{u.email}</span>
-                                {u.admin_tier ? (
-                                  <>
-                                    <span className="admin-provider__dot">•</span>
-                                    <span>tier: {u.admin_tier}</span>
-                                  </>
+                            <td>
+                              <div className="admin-inline-stack">
+                                <strong>{providerLabel}</strong>
+                                <span className="admin-inline-help">
+                                  {r.provider_is_featured ? "⭐ Destacado" : "Gratis"}
+                                </span>
+                                <span className="admin-inline-help">ID: {r.provider_id}</span>
+                              </div>
+                            </td>
+
+                            <td>
+                              <div className="admin-inline-stack">
+                                <strong>{requesterLabel}</strong>
+                                <span className="admin-inline-help">{requesterEmail}</span>
+                                {r.requester_phone ? (
+                                  <span className="admin-inline-help">{r.requester_phone}</span>
                                 ) : null}
+                                <span className="admin-inline-help">
+                                  Horario: {r.preferred_contact_schedule || "—"}
+                                </span>
                               </div>
-                            </div>
+                            </td>
 
-                            <div className="admin-provider__meta">
-                              <div className="admin-provider__id">ID: {u.id}</div>
-                              <div className="admin-provider__review">
-                                Creado: {new Date(u.created_at).toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td>
-                          <span className={badgeClass("role", u.role)}>{u.role}</span>
-                        </td>
-
-                        <td>
-                          <span className={badgeClass("user-status", u.account_status)}>{u.account_status}</span>
-                        </td>
-
-                        <td style={{ minWidth: 240 }}>
-                          {u.account_status === "blocked" ? (
-                            <div>
-                              <div>
-                                <strong>Motivo:</strong> {u.blocked_reason || "—"}
-                              </div>
-                              <div className="admin-provider__review">
-                                {u.blocked_at ? `Bloqueado: ${new Date(u.blocked_at).toLocaleString()}` : "Bloqueado"}
-                              </div>
-                            </div>
-                          ) : (
-                            <span style={{ opacity: 0.7 }}>Sin bloqueo</span>
-                          )}
-                        </td>
-
-                        <td style={{ minWidth: 220 }}>
-                          <div className="admin-actions">
-                            {!isBlocked ? (
-                              <button
-                                className="btn btn--ghost"
-                                disabled={isBusy || isSelf}
-                                onClick={() => handleBlockUser(u.id)}
-                                title={isSelf ? "No puedes bloquearte a ti mismo" : ""}
-                              >
-                                {isBusy ? "…" : "Bloquear"}
-                              </button>
-                            ) : (
-                              <button className="btn btn--primary" disabled={isBusy} onClick={() => handleUnblockUser(u.id)}>
-                                {isBusy ? "…" : "Desbloquear"}
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {!users.length && (
-                    <tr>
-                      <td colSpan={5} style={{ padding: "1rem" }}>
-                        {usersLoading ? "Cargando…" : "No hay resultados con estos filtros."}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="admin-footer-note">
-              Nota: bloquear un usuario evita su acceso autenticado mientras su{" "}
-              <strong>account_status</strong> sea <strong>blocked</strong>.
-            </div>
-          </div>
-        ) : activeSection === "requests" ? (
-          <div className="admin-card">
-            <div className="admin-table__header">
-              <h1 className="admin-table__title">Solicitudes de información</h1>
-              <div className="admin-table__meta">
-                Mostrando: <strong>{requests.length}</strong>
-              </div>
-            </div>
-
-            <div className="admin-table__wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Proveedor</th>
-                    <th>Solicitante</th>
-                    <th>Moderación</th>
-                    <th>Estado proveedor</th>
-                    <th>Mensaje</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {requests.map((r) => {
-                    const isBusy = requestBusyId === r.id;
-
-                    const providerLabel =
-                      r.provider_venue_name ||
-                      r.provider_company_name ||
-                      (r.provider_id ? `ID: ${r.provider_id}` : "—");
-
-                    const requesterLabel = r.requester_name || "Sin nombre";
-                    const requesterEmail = r.requester_email || "—";
-
-                    return (
-                      <tr key={r.id}>
-                        <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(r.created_at)}</td>
-
-                        <td style={{ minWidth: 220 }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                            <strong>{providerLabel}</strong>
-                            <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>
-                              {r.provider_is_featured ? "⭐ Destacado" : "Gratis"}
-                            </span>
-                            <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>ID: {r.provider_id}</span>
-                          </div>
-                        </td>
-
-                        <td style={{ minWidth: 220 }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                            <strong>{requesterLabel}</strong>
-                            <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>{requesterEmail}</span>
-                            {r.requester_phone ? (
-                              <span style={{ opacity: 0.75, fontSize: "0.9rem" }}>{r.requester_phone}</span>
-                            ) : null}
-                            <span style={{ opacity: 0.65, fontSize: "0.85rem" }}>
-                              Horario: {r.preferred_contact_schedule || "—"}
-                            </span>
-                          </div>
-                        </td>
-
-                        <td>
-                          <span className={badgeClass("moderation", r.moderation_status)}>
-                            {r.moderation_status}
-                          </span>
-                          {r.moderation_notes ? (
-                            <div style={{ marginTop: "0.35rem", opacity: 0.75, fontSize: "0.85rem" }}>
-                              Nota: {r.moderation_notes}
-                            </div>
-                          ) : null}
-                        </td>
-
-                        <td>
-                          <span className={badgeClass("provider-status", r.provider_status)}>
-                            {r.provider_status}
-                          </span>
-                        </td>
-
-                        <td style={{ minWidth: 320 }}>
-                          <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>
-                            {String(r.message || "").slice(0, 320)}
-                            {String(r.message || "").length > 320 ? "…" : ""}
-                          </div>
-                        </td>
-
-                        <td style={{ minWidth: 260 }}>
-                          <div className="admin-actions">
-                            <button
-                              className="btn btn--primary"
-                              disabled={isBusy || r.moderation_status === "approved"}
-                              onClick={() => moderateRequest(r.id, "approved")}
-                            >
-                              {isBusy ? "…" : "Aprobar"}
-                            </button>
-
-                            <button
-                              className="btn btn--ghost"
-                              disabled={isBusy || r.moderation_status === "declined"}
-                              onClick={() => moderateRequest(r.id, "declined")}
-                            >
-                              Declinar
-                            </button>
-                          </div>
-
-                          {r.moderated_at ? (
-                            <div style={{ marginTop: "0.5rem", opacity: 0.65, fontSize: "0.85rem" }}>
-                              Moderado: {formatDateTime(r.moderated_at)}
-                            </div>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {!requests.length && (
-                    <tr>
-                      <td colSpan={7} style={{ padding: "1rem" }}>
-                        {requestsLoading ? "Cargando…" : "No hay solicitudes con estos filtros."}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="admin-footer-note">
-              Nota: “Total moderadas” = aprobadas + declinadas. Exportar descarga un CSV compatible con Excel.
-            </div>
-          </div>
-        ) : (
-          <div className="admin-card">
-            <div className="admin-table__header">
-              <h1 className="admin-table__title">Invitaciones a proveedores</h1>
-              <div className="admin-table__meta">
-                Mostrando: <strong>{invitations.length}</strong>
-              </div>
-            </div>
-
-            <div className="admin-table__wrap">
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th>Invitación</th>
-                    <th>Estatus</th>
-                    <th>Creación</th>
-                    <th>Vencimiento</th>
-                    <th>Uso</th>
-                    <th>Notas</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {invitations.map((inv) => {
-                    const isBusy = invitationBusyId === inv.id;
-                    const isLoadingContext = invitationContextBusyId === inv.id;
-                    const canCancel = inv.status === "issued";
-                    const canCompleteProfile = Boolean(inv.used_at && inv.used_by_lead_id);
-
-                    return (
-                      <tr key={inv.id}>
-                        <td style={{ minWidth: 260 }}>
-                          <div className="admin-provider">
-                            <div className="admin-provider__main">
-                              <div className="admin-provider__name">
-                                {inv.invited_company_name || "Invitación abierta"}
-                              </div>
-                              <div className="admin-provider__sub">
-                                <span>{inv.invited_email || "El proveedor capturará sus datos en el formulario"}</span>
-                                {inv.invited_owner_name ? (
-                                  <>
-                                    <span className="admin-provider__dot">•</span>
-                                    <span>{inv.invited_owner_name}</span>
-                                  </>
-                                ) : null}
-                              </div>
-                            </div>
-
-                            <div className="admin-provider__meta">
-                              <div className="admin-provider__id">ID: {inv.id}</div>
-                              {inv.created_by_admin_id ? (
-                                <div className="admin-provider__review">
-                                  Admin: {inv.created_by_admin_id}
+                            <td>
+                              <span className={badgeClass("moderation", r.moderation_status)}>
+                                {r.moderation_status}
+                              </span>
+                              {r.moderation_notes ? (
+                                <div className="admin-inline-help admin-inline-help--spaced">
+                                  Nota: {r.moderation_notes}
                                 </div>
                               ) : null}
-                            </div>
-                          </div>
-                        </td>
+                            </td>
 
-                        <td>
-                          <span className={badgeClass("invitation-status", inv.status)}>
-                            {inv.status}
-                          </span>
-                        </td>
-
-                        <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(inv.created_at)}</td>
-
-                        <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(inv.expires_at)}</td>
-
-                        <td style={{ minWidth: 220 }}>
-                          {inv.used_at ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-                              <span>Usada: {formatDateTime(inv.used_at)}</span>
-                              <span style={{ opacity: 0.7, fontSize: "0.85rem" }}>
-                                Lead: {inv.used_by_lead_id || "—"}
+                            <td>
+                              <span className={badgeClass("provider-status", r.provider_status)}>
+                                {r.provider_status}
                               </span>
-                            </div>
-                          ) : (
-                            <span style={{ opacity: 0.7 }}>Aún no utilizada</span>
-                          )}
-                        </td>
+                            </td>
 
-                        <td style={{ minWidth: 260 }}>
-                          <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>
-                            {inv.notes || "—"}
-                          </div>
-                        </td>
+                            <td className="admin-table__message-cell">
+                              <div className="admin-message-preview">
+                                {String(r.message || "").slice(0, 320)}
+                                {String(r.message || "").length > 320 ? "…" : ""}
+                              </div>
+                            </td>
 
-                        <td style={{ minWidth: 280 }}>
-                          <div className="admin-actions">
-                            <button
-                              className="btn btn--ghost"
-                              disabled={isBusy || !canCancel}
-                              onClick={() => handleCancelInvitation(inv.id)}
-                            >
-                              {isBusy ? "…" : "Cancelar"}
-                            </button>
+                            <td className="admin-table__actions-cell">
+                              <div className="admin-actions">
+                                <button
+                                  className="btn btn--primary"
+                                  disabled={isBusy || r.moderation_status === "approved"}
+                                  onClick={() => moderateRequest(r.id, "approved")}
+                                >
+                                  {isBusy ? "…" : "Aprobar"}
+                                </button>
 
-                            <button
-                              className="btn btn--primary"
-                              disabled={!canCompleteProfile || isLoadingContext}
-                              onClick={() => handleContinueProviderProfile(inv.id)}
-                              title={
-                                canCompleteProfile
-                                  ? "Continuar con el llenado del perfil"
-                                  : "Se habilita cuando el proveedor ya envió el formulario inicial"
-                              }
-                            >
-                              {isLoadingContext ? "Cargando…" : "Completar perfil"}
-                            </button>
-                          </div>
-                        </td>
+                                <button
+                                  className="btn btn--ghost"
+                                  disabled={isBusy || r.moderation_status === "declined"}
+                                  onClick={() => moderateRequest(r.id, "declined")}
+                                >
+                                  Declinar
+                                </button>
+                              </div>
+
+                              {r.moderated_at ? (
+                                <div className="admin-inline-help admin-inline-help--spaced">
+                                  Moderado: {formatDateTime(r.moderated_at)}
+                                </div>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {!requests.length && (
+                        <tr>
+                          <td colSpan={7} className="admin-table__empty">
+                            {requestsLoading ? "Cargando…" : "No hay solicitudes con estos filtros."}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="admin-footer-note">
+                  Nota: “Total moderadas” = aprobadas + declinadas. Exportar descarga un CSV compatible con Excel.
+                </div>
+              </section>
+            ) : (
+              <section className="admin-card admin-card--table">
+                <div className="admin-table__header">
+                  <h2 className="admin-table__title">Invitaciones a proveedores</h2>
+                  <div className="admin-table__meta">
+                    Mostrando: <strong>{invitations.length}</strong>
+                  </div>
+                </div>
+
+                <div className="admin-table__wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Invitación</th>
+                        <th>Estatus</th>
+                        <th>Creación</th>
+                        <th>Vencimiento</th>
+                        <th>Uso</th>
+                        <th>Notas</th>
+                        <th>Acciones</th>
                       </tr>
-                    );
-                  })}
+                    </thead>
 
-                  {!invitations.length && (
-                    <tr>
-                      <td colSpan={7} style={{ padding: "1rem" }}>
-                        {invitationsLoading ? "Cargando…" : "No hay invitaciones con estos filtros."}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    <tbody>
+                      {invitations.map((inv) => {
+                        const isBusy = invitationBusyId === inv.id;
+                        const isLoadingContext = invitationContextBusyId === inv.id;
+                        const canCancel = inv.status === "issued";
+                        const canCompleteProfile = Boolean(inv.used_at && inv.used_by_lead_id);
 
-            <div className="admin-footer-note">
-              Nota: esta invitación solo habilita el acceso al formulario inicial. Cuando el proveedor ya lo envía, se activa <strong>Completar perfil</strong> para que continúes el proceso desde admin.
-            </div>
-          </div>
-        )}
+                        return (
+                          <tr key={inv.id}>
+                            <td>
+                              <div className="admin-provider">
+                                <div className="admin-provider__main">
+                                  <div className="admin-provider__name">
+                                    {inv.invited_company_name || "Invitación abierta"}
+                                  </div>
+                                  <div className="admin-provider__sub">
+                                    <span>{inv.invited_email || "El proveedor capturará sus datos en el formulario"}</span>
+                                    {inv.invited_owner_name ? (
+                                      <>
+                                        <span className="admin-provider__dot">•</span>
+                                        <span>{inv.invited_owner_name}</span>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                </div>
+
+                                <div className="admin-provider__meta">
+                                  <div className="admin-provider__id">ID: {inv.id}</div>
+                                  {inv.created_by_admin_id ? (
+                                    <div className="admin-provider__review">
+                                      Admin: {inv.created_by_admin_id}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </td>
+
+                            <td>
+                              <span className={badgeClass("invitation-status", inv.status)}>
+                                {inv.status}
+                              </span>
+                            </td>
+
+                            <td className="admin-nowrap">{formatDateTime(inv.created_at)}</td>
+
+                            <td className="admin-nowrap">{formatDateTime(inv.expires_at)}</td>
+
+                            <td>
+                              {inv.used_at ? (
+                                <div className="admin-inline-stack">
+                                  <span>Usada: {formatDateTime(inv.used_at)}</span>
+                                  <span className="admin-inline-help">
+                                    Lead: {inv.used_by_lead_id || "—"}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="admin-inline-help">Aún no utilizada</span>
+                              )}
+                            </td>
+
+                            <td className="admin-table__message-cell">
+                              <div className="admin-message-preview">{inv.notes || "—"}</div>
+                            </td>
+
+                            <td className="admin-table__actions-cell">
+                              <div className="admin-actions">
+                                <button
+                                  className="btn btn--ghost"
+                                  disabled={isBusy || !canCancel}
+                                  onClick={() => handleCancelInvitation(inv.id)}
+                                >
+                                  {isBusy ? "…" : "Cancelar"}
+                                </button>
+
+                                <button
+                                  className="btn btn--primary"
+                                  disabled={!canCompleteProfile || isLoadingContext}
+                                  onClick={() => handleContinueProviderProfile(inv.id)}
+                                  title={
+                                    canCompleteProfile
+                                      ? "Continuar con el llenado del perfil"
+                                      : "Se habilita cuando el proveedor ya envió el formulario inicial"
+                                  }
+                                >
+                                  {isLoadingContext ? "Cargando…" : "Completar perfil"}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {!invitations.length && (
+                        <tr>
+                          <td colSpan={7} className="admin-table__empty">
+                            {invitationsLoading ? "Cargando…" : "No hay invitaciones con estos filtros."}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="admin-footer-note">
+                  Nota: esta invitación solo habilita el acceso al formulario inicial. Cuando el proveedor ya lo envía, se activa <strong>Completar perfil</strong> para que continúes el proceso desde admin.
+                </div>
+              </section>
+            )}
+          </main>
+        </div>
       </div>
     </div>
   );
