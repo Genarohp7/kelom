@@ -10,16 +10,22 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
 function BusinessRegisterPage() {
   const navigate = useNavigate();
-  const { token: invitationToken = "" } = useParams();
+  const { token } = useParams();
 
-  const isInvitationFlow = Boolean(invitationToken);
-  const currentDraftKey = isInvitationFlow
-    ? `${PROVIDER_BASIC_DRAFT_KEY}_${invitationToken}`
-    : PROVIDER_BASIC_DRAFT_KEY;
+  const isInvitationFlow = Boolean(token);
+
+  console.log("INVITATION DEBUG", {
+    token,
+    isInvitationFlow,
+    apiBase: API_BASE,
+    validateUrl: `${API_BASE}/providers/invitations/${encodeURIComponent(
+      token || ""
+    )}/validate`,
+  });
 
   const [basicData, setBasicData] = useState(() => {
     try {
-      const draft = sessionStorage.getItem(currentDraftKey);
+      const draft = sessionStorage.getItem(PROVIDER_BASIC_DRAFT_KEY);
 
       if (!draft) {
         return {
@@ -56,22 +62,24 @@ function BusinessRegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const [invitationLoading, setInvitationLoading] = useState(isInvitationFlow);
+  const [isValidatingInvitation, setIsValidatingInvitation] = useState(isInvitationFlow);
   const [invitationError, setInvitationError] = useState("");
-  const [invitationData, setInvitationData] = useState(null);
+  const [invitationMeta, setInvitationMeta] = useState(null);
 
   useEffect(() => {
-    if (!isInvitationFlow) return;
+    if (!isInvitationFlow || !token) return;
 
-    let cancelled = false;
+    let ignore = false;
 
     async function validateInvitation() {
-      setInvitationLoading(true);
+      setIsValidatingInvitation(true);
       setInvitationError("");
+
+      console.log("VALIDATING INVITATION NOW...");
 
       try {
         const resp = await fetch(
-          `${API_BASE}/provider-invitations/${encodeURIComponent(invitationToken)}`,
+          `${API_BASE}/providers/invitations/${encodeURIComponent(token)}/validate`,
           {
             method: "GET",
           }
@@ -84,45 +92,43 @@ function BusinessRegisterPage() {
           // ignore
         }
 
+        console.log("INVITATION RESPONSE", {
+          ok: resp.ok,
+          status: resp.status,
+          data,
+        });
+
         if (!resp.ok) {
-          const apiMsg = data?.error || data?.message || "";
-          if (!cancelled) {
-            setInvitationError(
-              apiMsg || "Esta invitación no es válida, ya fue utilizada o ya expiró."
-            );
-          }
+          if (ignore) return;
+          setInvitationError(
+            data?.error ||
+              "Esta invitación no es válida, ya fue utilizada o ya expiró."
+          );
           return;
         }
 
         const invitation = data?.invitation || null;
 
-        if (!invitation) {
-          if (!cancelled) {
-            setInvitationError("No fue posible validar esta invitación.");
-          }
-          return;
+        if (!ignore) {
+          setInvitationMeta(invitation);
+
+          setBasicData((prev) => ({
+            companyName: prev.companyName || invitation?.invited_company_name || "",
+            ownerName: prev.ownerName || invitation?.invited_owner_name || "",
+            phone: prev.phone || "",
+            email: prev.email || invitation?.invited_email || "",
+          }));
         }
-
-        if (cancelled) return;
-
-        setInvitationData(invitation);
-        setBasicData((prev) => ({
-          companyName:
-            prev.companyName || invitation.invited_company_name || "",
-          ownerName: prev.ownerName || invitation.invited_owner_name || "",
-          phone: prev.phone || "",
-          email: invitation.invited_email || prev.email || "",
-        }));
       } catch (error) {
-        console.error("Error validando invitación:", error);
-        if (!cancelled) {
+        console.error("Error al validar invitación:", error);
+        if (!ignore) {
           setInvitationError(
-            "No se pudo validar la invitación en este momento. Intenta de nuevo más tarde."
+            "No se pudo validar la invitación en este momento. Intenta de nuevo."
           );
         }
       } finally {
-        if (!cancelled) {
-          setInvitationLoading(false);
+        if (!ignore) {
+          setIsValidatingInvitation(false);
         }
       }
     }
@@ -130,9 +136,9 @@ function BusinessRegisterPage() {
     validateInvitation();
 
     return () => {
-      cancelled = true;
+      ignore = true;
     };
-  }, [API_BASE, invitationToken, isInvitationFlow]);
+  }, [isInvitationFlow, token]);
 
   const isValidPhone = (phone) => {
     const digitsOnly = phone.replace(/\D/g, "");
@@ -160,17 +166,9 @@ function BusinessRegisterPage() {
 
   const saveBasicDraft = (payload) => {
     try {
-      sessionStorage.setItem(currentDraftKey, JSON.stringify(payload));
+      sessionStorage.setItem(PROVIDER_BASIC_DRAFT_KEY, JSON.stringify(payload));
     } catch (error) {
       console.warn("No se pudo guardar borrador de proveedor:", error);
-    }
-  };
-
-  const clearBasicDraft = () => {
-    try {
-      sessionStorage.removeItem(currentDraftKey);
-    } catch (error) {
-      console.warn("No se pudo limpiar borrador de proveedor:", error);
     }
   };
 
@@ -181,16 +179,16 @@ function BusinessRegisterPage() {
       return "Bloqueado por CORS. Revisa allowedOrigins en el backend.";
     }
 
-    if (msg.includes("invitación") || msg.includes("invitacion")) {
-      return "Esta invitación ya no es válida, ya fue utilizada o ya expiró.";
-    }
-
     if (msg.includes("teléfono")) {
       return "Ingresa un teléfono válido de 10 dígitos (sin secuencias ni repeticiones).";
     }
 
     if (msg.includes("email")) {
       return "Ingresa un correo electrónico válido.";
+    }
+
+    if (msg.includes("invitación")) {
+      return apiMessage || "La invitación no es válida, ya fue utilizada o ya expiró.";
     }
 
     if (msg.includes("faltan") || msg.includes("obligatorios")) {
@@ -208,12 +206,15 @@ function BusinessRegisterPage() {
     e.preventDefault();
     if (isSubmitting) return;
 
-    setFormError("");
-
-    if (isInvitationFlow && (!invitationToken || invitationError)) {
-      setFormError("Esta invitación ya no está disponible.");
+    if (isInvitationFlow && (isValidatingInvitation || invitationError)) {
+      setFormError(
+        invitationError ||
+          "No se puede continuar hasta validar correctamente la invitación."
+      );
       return;
     }
+
+    setFormError("");
 
     const companyName = basicData.companyName.trim();
     const ownerName = basicData.ownerName.trim();
@@ -256,24 +257,22 @@ function BusinessRegisterPage() {
       return;
     }
 
-    const cleanPayload = {
+    const nextBasicData = {
       companyName,
       ownerName,
       email: email.toLowerCase(),
       phone: phoneRaw.replace(/\D/g, ""),
-      acceptedPrivacy: isPrivacyChecked,
-      acceptedTermsDeclaration: isTermsChecked,
-      ...(isInvitationFlow ? { invitationToken } : {}),
     };
 
-    saveBasicDraft(cleanPayload);
-    setBasicData((prev) => ({
-      ...prev,
-      companyName: cleanPayload.companyName,
-      ownerName: cleanPayload.ownerName,
-      email: cleanPayload.email,
-      phone: cleanPayload.phone,
-    }));
+    const cleanPayload = {
+      ...nextBasicData,
+      acceptedPrivacy: isPrivacyChecked,
+      acceptedTermsDeclaration: isTermsChecked,
+      ...(isInvitationFlow && token ? { invitationToken: token } : {}),
+    };
+
+    saveBasicDraft(nextBasicData);
+    setBasicData(nextBasicData);
 
     setIsSubmitting(true);
 
@@ -297,18 +296,15 @@ function BusinessRegisterPage() {
         return;
       }
 
-      if (!isInvitationFlow) {
-        try {
-          await sendBusinessRegisterEmails(cleanPayload);
-        } catch (err) {
-          console.warn(
-            "Lead guardado en backend, pero falló envío de correos (EmailJS):",
-            err
-          );
-        }
+      try {
+        await sendBusinessRegisterEmails(cleanPayload);
+      } catch (err) {
+        console.warn(
+          "Lead guardado en backend, pero falló envío de correos (EmailJS):",
+          err
+        );
       }
 
-      clearBasicDraft();
       setShowThanks(true);
     } catch (error) {
       console.error("Error de red al guardar lead de proveedor:", error);
@@ -320,7 +316,7 @@ function BusinessRegisterPage() {
     }
   };
 
-  if (showThanks && isInvitationFlow) {
+  if (isInvitationFlow && isValidatingInvitation) {
     return (
       <div className="business-register">
         <header className="business-register__header">
@@ -334,76 +330,20 @@ function BusinessRegisterPage() {
             </NavLink>
 
             <span className="business-register__logo-text">
-              Kelom · Registro asistido
+              Kelom · Registro por invitación
             </span>
 
-            <span className="business-register__logo-pill">INVITACIÓN</span>
+            <span className="business-register__logo-pill">VALIDANDO</span>
           </div>
         </header>
 
         <main className="business-register__content">
           <div className="business-register__container">
             <section className="register-card">
-              <p className="register-card__eyebrow">Información recibida</p>
-
-              <h1 className="register-card__title">
-                Gracias, ya recibimos tu información
-              </h1>
-
+              <p className="register-card__eyebrow">Invitación</p>
+              <h1 className="register-card__title">Validando acceso</h1>
               <p className="register-card__subtitle">
-                Con esto podemos continuar con la creación de tu perfil en Kelom.
-              </p>
-
-              <p className="register-card__subtitle">
-                Nuestro equipo seguirá con el proceso y te contactará en caso
-                necesario.
-              </p>
-
-              <div className="register-card__actions">
-                <NavLink to="/" className="btn btn--primary">
-                  Volver al inicio
-                </NavLink>
-              </div>
-            </section>
-          </div>
-        </main>
-
-        <footer className="business-register__footer">
-          © {new Date().getFullYear()} Kelom · Área para proveedores.
-        </footer>
-      </div>
-    );
-  }
-
-  if (isInvitationFlow && invitationLoading) {
-    return (
-      <div className="business-register">
-        <header className="business-register__header">
-          <div className="container business-register__header-inner">
-            <NavLink
-              to="/"
-              className="business-register__logo-link"
-              aria-label="Volver al inicio de Kelom"
-            >
-              <img src={Kelom} alt="Logo Kelom" title="Kelom" />
-            </NavLink>
-
-            <span className="business-register__logo-text">
-              Kelom · Registro asistido
-            </span>
-
-            <span className="business-register__logo-pill">INVITACIÓN</span>
-          </div>
-        </header>
-
-        <main className="business-register__content">
-          <div className="business-register__container">
-            <section className="register-card">
-              <p className="register-card__eyebrow">Validando acceso</p>
-              <h1 className="register-card__title">Estamos revisando tu invitación</h1>
-              <p className="register-card__subtitle">
-                Un segundo. Queremos asegurarnos de que este enlace siga activo y
-                listo para usarse.
+                Estamos comprobando tu invitación para continuar con el registro.
               </p>
             </section>
           </div>
@@ -430,29 +370,23 @@ function BusinessRegisterPage() {
             </NavLink>
 
             <span className="business-register__logo-text">
-              Kelom · Registro asistido
+              Kelom · Registro por invitación
             </span>
 
-            <span className="business-register__logo-pill">INVITACIÓN</span>
+            <span className="business-register__logo-pill">NO DISPONIBLE</span>
           </div>
         </header>
 
         <main className="business-register__content">
           <div className="business-register__container">
             <section className="register-card">
-              <p className="register-card__eyebrow">Invitación no disponible</p>
-              <h1 className="register-card__title">
-                Este enlace ya no está disponible
-              </h1>
+              <p className="register-card__eyebrow">Invitación</p>
+              <h1 className="register-card__title">Este enlace ya no está disponible</h1>
               <p className="register-card__subtitle">{invitationError}</p>
 
               <div className="register-card__actions">
                 <NavLink to="/" className="btn btn--primary">
                   Volver al inicio
-                </NavLink>
-
-                <NavLink to="/empresas" className="btn btn--ghost">
-                  Ir al área de empresas
                 </NavLink>
               </div>
             </section>
@@ -479,7 +413,9 @@ function BusinessRegisterPage() {
           </NavLink>
 
           <span className="business-register__logo-text">
-            Kelom · {isInvitationFlow ? "Registro asistido" : "Registro de empresa"}
+            {isInvitationFlow
+              ? "Kelom · Registro asistido por invitación"
+              : "Kelom · Registro de empresa"}
           </span>
 
           <span className="business-register__logo-pill">
@@ -492,18 +428,23 @@ function BusinessRegisterPage() {
         <div className="business-register__container">
           <section className="register-card">
             <p className="register-card__eyebrow">
-              {isInvitationFlow ? "Invitación activa" : "Alta inicial"}
+              {isInvitationFlow ? "Registro asistido" : "Alta inicial"}
             </p>
 
-            <h1 className="register-card__title">
-              {isInvitationFlow ? "Comparte tus datos para continuar" : "Registra tu empresa"}
-            </h1>
+            <h1 className="register-card__title">Registra tu empresa</h1>
 
             <p className="register-card__subtitle">
               {isInvitationFlow
-                ? "Completa este formulario y nuestro equipo continuará internamente con la creación de tu perfil en Kelom."
+                ? "Completa este formulario inicial para que podamos continuar internamente con la creación de tu perfil en Kelom."
                 : "Este primer paso es para avisarnos que te interesa formar parte de Kelom. Después podrás completar la ficha de tu negocio con más detalle."}
             </p>
+
+            {isInvitationFlow && invitationMeta?.expires_at ? (
+              <p className="register-card__subtitle">
+                Esta invitación estará disponible hasta{" "}
+                <strong>{new Date(invitationMeta.expires_at).toLocaleString()}</strong>.
+              </p>
+            ) : null}
 
             <form
               className="form form--grid"
@@ -574,7 +515,6 @@ function BusinessRegisterPage() {
                   value={basicData.email}
                   onChange={handleBasicChange}
                   required
-                  readOnly={isInvitationFlow}
                 />
                 <span className="form__error" />
               </div>
@@ -649,13 +589,14 @@ function BusinessRegisterPage() {
                 <button
                   type="submit"
                   className="btn btn--primary"
-                  disabled={!isPrivacyChecked || !isTermsChecked || isSubmitting}
+                  disabled={
+                    !isPrivacyChecked ||
+                    !isTermsChecked ||
+                    isSubmitting ||
+                    (isInvitationFlow && isValidatingInvitation)
+                  }
                 >
-                  {isSubmitting
-                    ? "Guardando..."
-                    : isInvitationFlow
-                    ? "Enviar mi información"
-                    : "Registrar mi negocio"}
+                  {isSubmitting ? "Guardando..." : "Registrar mi negocio"}
                 </button>
               </div>
             </form>
@@ -663,7 +604,7 @@ function BusinessRegisterPage() {
         </div>
       </main>
 
-      {!isInvitationFlow && showThanks && (
+      {showThanks && (
         <div
           className="business-register__modal-overlay"
           onClick={() => setShowThanks(false)}
@@ -673,60 +614,71 @@ function BusinessRegisterPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="business-register__thanks-body">
-              <p className="register-card__eyebrow">Gracias por confiar en Kelom</p>
+              {isInvitationFlow ? (
+                <>
+                  <p className="register-card__eyebrow">
+                    Gracias por confiar en Kelom
+                  </p>
 
-              <h2 className="register-card__title">
-                {basicData.companyName
-                  ? `¡${basicData.companyName} ya está en nuestro radar!`
-                  : "¡Tu negocio ya está en nuestro radar!"}
-              </h2>
+                  <h2 className="register-card__title">
+                    Gracias, ya recibimos tu información
+                  </h2>
 
-              <p className="register-card__subtitle">
-                Recibimos tu registro inicial y lo revisaremos con calma para
-                entender mejor tu negocio y cómo presentarte dentro del catálogo
-                de Kelom.
-              </p>
+                  <p className="register-card__subtitle">
+                    Con esto podemos continuar con la creación de tu perfil en
+                    Kelom. Nuestro equipo seguirá con el proceso y te contactará en
+                    caso necesario.
+                  </p>
 
-              <p className="register-card__subtitle">
-                Te contactaremos al correo <strong>{basicData.email}</strong>
-                {basicData.phone ? ` o al teléfono ${basicData.phone}` : ""} para
-                acompañarte en el proceso.
-              </p>
+                  <p className="register-card__subtitle">
+                    También recibiremos tu aceptación de documentos legales y el
+                    registro inicial de tu negocio para dar seguimiento interno.
+                  </p>
 
-              <p className="register-card__subtitle">
-                Si quieres avanzar de una vez, puedes continuar con el llenado de
-                tu ficha de proveedor.
-              </p>
+                  <div className="register-card__actions business-register__thanks-actions">
+                    <NavLink to="/" className="btn btn--primary">
+                      Volver al inicio
+                    </NavLink>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="register-card__eyebrow">
+                    Gracias por confiar en Kelom
+                  </p>
 
-              <div className="register-card__actions business-register__thanks-actions">
-                <NavLink to="/empresas" className="btn btn--ghost">
-                  Volver al área de empresas
-                </NavLink>
+                  <h2 className="register-card__title">
+                    {basicData.companyName
+                      ? `¡${basicData.companyName} ya está en nuestro radar!`
+                      : "¡Tu negocio ya está en nuestro radar!"}
+                  </h2>
 
-                <NavLink
-                  to="/empresas/registro/completar"
-                  className="btn btn--primary"
-                  state={{
-                    authMode: "register",
-                    loginEmail: basicData.email,
-                    basicData: {
-                      companyName: basicData.companyName,
-                      ownerName: basicData.ownerName,
-                      email: basicData.email,
-                      phone: basicData.phone,
-                    },
-                  }}
-                >
-                  Continuar con registro
-                </NavLink>
+                  <p className="register-card__subtitle">
+                    Recibimos tu registro inicial y lo revisaremos con calma para
+                    entender mejor tu negocio y cómo presentarte dentro del catálogo
+                    de Kelom.
+                  </p>
 
-                <button
-                  type="button"
-                  className="btn btn--ghost"
-                  onClick={() => {
-                    setShowThanks(false);
-                    navigate("/empresas/registro/completar", {
-                      state: {
+                  <p className="register-card__subtitle">
+                    Te contactaremos al correo <strong>{basicData.email}</strong>
+                    {basicData.phone ? ` o al teléfono ${basicData.phone}` : ""} para
+                    acompañarte en el proceso.
+                  </p>
+
+                  <p className="register-card__subtitle">
+                    Si quieres avanzar de una vez, puedes continuar con el llenado de
+                    tu ficha de proveedor.
+                  </p>
+
+                  <div className="register-card__actions business-register__thanks-actions">
+                    <NavLink to="/empresas" className="btn btn--ghost">
+                      Volver al área de empresas
+                    </NavLink>
+
+                    <NavLink
+                      to="/empresas/registro/completar"
+                      className="btn btn--primary"
+                      state={{
                         authMode: "register",
                         loginEmail: basicData.email,
                         basicData: {
@@ -735,13 +687,35 @@ function BusinessRegisterPage() {
                           email: basicData.email,
                           phone: basicData.phone,
                         },
-                      },
-                    });
-                  }}
-                >
-                  Continuar ahora
-                </button>
-              </div>
+                      }}
+                    >
+                      Continuar con registro
+                    </NavLink>
+
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={() => {
+                        setShowThanks(false);
+                        navigate("/empresas/registro/completar", {
+                          state: {
+                            authMode: "register",
+                            loginEmail: basicData.email,
+                            basicData: {
+                              companyName: basicData.companyName,
+                              ownerName: basicData.ownerName,
+                              email: basicData.email,
+                              phone: basicData.phone,
+                            },
+                          },
+                        });
+                      }}
+                    >
+                      Continuar ahora
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
