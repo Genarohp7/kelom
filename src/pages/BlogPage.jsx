@@ -271,7 +271,7 @@ function BlogPage() {
           excerpt:
             "Pasar del “queremos algo bonito” al “esto sí lo podemos pagar” cambió su forma de decidir proveedores, invitados y prioridades. Y eso les ahorró muchos tropiezos.",
           readTime: "5 min",
-          image: blogPostImage16, //presupuesto//
+          image: blogPostImage16,
         },
       ],
     },
