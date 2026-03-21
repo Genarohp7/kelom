@@ -255,6 +255,7 @@ function AdminDashboardPage() {
   const [invitationsFlash, setInvitationsFlash] = useState("");
   const [isCreatingInvitation, setIsCreatingInvitation] = useState(false);
   const [lastGeneratedInvitationLink, setLastGeneratedInvitationLink] = useState("");
+  const [invitationContextBusyId, setInvitationContextBusyId] = useState(null);
 
   const [invitationForm, setInvitationForm] = useState({
     notes: "",
@@ -814,6 +815,49 @@ function AdminDashboardPage() {
       setInvitationsFlash("Enlace copiado ✅");
     } catch {
       setInvitationsFlash("No se pudo copiar automáticamente. Copia el enlace manualmente.");
+    }
+  }
+
+  async function handleContinueProviderProfile(invitationId) {
+    setInvitationContextBusyId(invitationId);
+    setInvitationsError("");
+    setInvitationsFlash("");
+
+    try {
+      const data = await adminApiFetch(`/admin/provider-invitations/${invitationId}/context`, {
+        method: "GET",
+      });
+
+      const lead = data?.lead || null;
+      const invitation = data?.invitation || null;
+
+      if (!lead) {
+        setInvitationsError(
+          "La invitación ya aparece como usada, pero no se encontró el lead relacionado."
+        );
+        return;
+      }
+
+      navigate("/empresas/registro/completar", {
+        state: {
+          adminCompletingInvitation: true,
+          invitationId,
+          invitation,
+          loginEmail: lead.email || invitation?.invited_email || "",
+          basicData: {
+            companyName: lead.company_name || "",
+            ownerName: lead.owner_name || "",
+            email: lead.email || invitation?.invited_email || "",
+            phone: lead.phone || "",
+          },
+        },
+      });
+    } catch (err) {
+      setInvitationsError(
+        err?.message || "No se pudo cargar el contexto para completar el perfil."
+      );
+    } finally {
+      setInvitationContextBusyId(null);
     }
   }
 
@@ -1673,7 +1717,9 @@ function AdminDashboardPage() {
                 <tbody>
                   {invitations.map((inv) => {
                     const isBusy = invitationBusyId === inv.id;
+                    const isLoadingContext = invitationContextBusyId === inv.id;
                     const canCancel = inv.status === "issued";
+                    const canCompleteProfile = Boolean(inv.used_at && inv.used_by_lead_id);
 
                     return (
                       <tr key={inv.id}>
@@ -1734,7 +1780,7 @@ function AdminDashboardPage() {
                           </div>
                         </td>
 
-                        <td style={{ minWidth: 200 }}>
+                        <td style={{ minWidth: 280 }}>
                           <div className="admin-actions">
                             <button
                               className="btn btn--ghost"
@@ -1742,6 +1788,19 @@ function AdminDashboardPage() {
                               onClick={() => handleCancelInvitation(inv.id)}
                             >
                               {isBusy ? "…" : "Cancelar"}
+                            </button>
+
+                            <button
+                              className="btn btn--primary"
+                              disabled={!canCompleteProfile || isLoadingContext}
+                              onClick={() => handleContinueProviderProfile(inv.id)}
+                              title={
+                                canCompleteProfile
+                                  ? "Continuar con el llenado del perfil"
+                                  : "Se habilita cuando el proveedor ya envió el formulario inicial"
+                              }
+                            >
+                              {isLoadingContext ? "Cargando…" : "Completar perfil"}
                             </button>
                           </div>
                         </td>
@@ -1761,7 +1820,7 @@ function AdminDashboardPage() {
             </div>
 
             <div className="admin-footer-note">
-              Nota: esta invitación solo habilita el acceso al formulario inicial. El proveedor captura sus propios datos y el token solo debe mostrarse al momento de crear la invitación.
+              Nota: esta invitación solo habilita el acceso al formulario inicial. Cuando el proveedor ya lo envía, se activa <strong>Completar perfil</strong> para que continúes el proceso desde admin.
             </div>
           </div>
         )}
