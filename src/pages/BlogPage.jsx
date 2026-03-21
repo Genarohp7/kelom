@@ -6,6 +6,18 @@ import blogPostImage1 from "../assets/web/pages/blog/blog-lugares.png";
 import blogPostImage2 from "../assets/web/pages/blog/blog-presupuesto.png";
 import blogPostImage3 from "../assets/web/pages/blog/blog-banquetes.png";
 import blogPostImage4 from "../assets/web/pages/blog/blog-experiencias.png";
+import blogPostImage5 from "../assets/web/pages/blog/planeacion.webp";
+import blogPostImage6 from "../assets/web/pages/blog/inspiración.webp";
+import blogPostImage7 from "../assets/web/pages/blog/atardecer.webp";
+import blogPostImage8 from "../assets/web/pages/blog/outfit.webp";
+import blogPostImage9 from "../assets/web/pages/blog/vestidos.webp";
+import blogPostImage10 from "../assets/web/pages/blog/anillo.webp";
+import blogPostImage11 from "../assets/web/pages/blog/puente.webp";
+import blogPostImage12 from "../assets/web/pages/blog/pedida.webp";
+import blogPostImage13 from "../assets/web/pages/blog/fotografo.webp";
+import blogPostImage14 from "../assets/web/pages/blog/banqueteM.webp";
+import blogPostImage15 from "../assets/web/pages/blog/ana__luis.webp";
+import blogPostImage16 from "../assets/web/pages/blog/presupuesto.webp";
 
 function BlogPage() {
   useEffect(() => {
@@ -67,7 +79,7 @@ function BlogPage() {
       excerpt:
         "Artículos pensados para ordenar prioridades, aterrizar ideas y evitar errores típicos desde el inicio.",
       readTime: "Base editorial",
-      image: blogFeaturedImage,
+      image: blogPostImage5, 
     },
     {
       id: "ideas-e-inspiracion",
@@ -76,7 +88,7 @@ function BlogPage() {
       excerpt:
         "Ideas visuales y conceptos que sí se pueden adaptar a bodas reales, presupuestos reales y parejas reales.",
       readTime: "Inspiración aterrizada",
-      image: blogPostImage1,
+      image: blogPostImage6, //inspiracion cambiar imagen//
     },
     {
       id: "antes-del-si",
@@ -133,7 +145,7 @@ function BlogPage() {
           excerpt:
             "Hay decisiones que conviene tomar antes que cualquier otra: presupuesto real, tipo de boda, cantidad estimada de invitados y margen de flexibilidad. Lo demás se acomoda mejor cuando eso ya está claro.",
           readTime: "7 min",
-          image: blogFeaturedImage,
+          image: blogPostImage7,
         },
       ],
     },
@@ -152,7 +164,7 @@ function BlogPage() {
           excerpt:
             "Una boda íntima no significa una boda simple. Bien resuelta, puede sentirse más cálida, más cuidada y mucho más memorable que un evento enorme donde todo va con prisa.",
           readTime: "5 min",
-          image: blogPostImage4,
+          image: blogPostImage8,
         },
         {
           id: 4,
@@ -162,7 +174,7 @@ function BlogPage() {
           excerpt:
             "No todas las tendencias están peleadas con la realidad. Aquí reunimos ideas que se ven actuales, bonitas y aplicables sin obligarte a hipotecar media luna de miel.",
           readTime: "5 min",
-          image: blogPostImage2,
+          image: blogPostImage9,
         },
       ],
     },
@@ -181,7 +193,7 @@ function BlogPage() {
           excerpt:
             "Metal, piedra, estilo, talla, presupuesto y gustos reales de la otra persona. No se trata de comprar el más caro, sino uno que tenga sentido y sí la represente.",
           readTime: "6 min",
-          image: blogPostImage2,
+          image: blogPostImage10, 
         },
         {
           id: 6,
@@ -191,7 +203,7 @@ function BlogPage() {
           excerpt:
             "No todo tiene que ser drone, mariachi y media ciudad escondida detrás de un arbusto. A veces lo mejor sale de una idea simple, bien pensada y muy suya.",
           readTime: "5 min",
-          image: blogHeroImage,
+          image: blogPostImage11,
         },
         {
           id: 7,
@@ -201,7 +213,7 @@ function BlogPage() {
           excerpt:
             "Hay nervios, claro. Pero también hay formas honestas de decir lo importante sin recitar algo que no se siente tuyo. Menos discurso armado, más verdad.",
           readTime: "4 min",
-          image: blogPostImage4,
+          image: blogPostImage12, 
         },
       ],
     },
@@ -220,7 +232,7 @@ function BlogPage() {
           excerpt:
             "No basta con que el feed se vea bonito. Aquí te contamos qué preguntar sobre estilo, tiempos de entrega, cobertura, respaldo de archivos y forma de trabajo el día del evento.",
           readTime: "6 min",
-          image: blogPostImage1,
+          image: blogPostImage13, 
         },
         {
           id: 9,
@@ -230,7 +242,7 @@ function BlogPage() {
           excerpt:
             "Entre gustos, opiniones y dietas especiales, el menú puede volverse terreno minado. Esta guía te ayuda a tomar decisiones con cabeza fría y sentido práctico.",
           readTime: "5 min",
-          image: blogPostImage3,
+          image: blogPostImage14,
         },
       ],
     },
@@ -249,7 +261,7 @@ function BlogPage() {
           excerpt:
             "Ellos lograron una boda muy suya, pero también aprendieron varias cosas a contrarreloj. Esta historia sirve justo por eso: porque no romantiza el proceso y sí deja lecciones útiles.",
           readTime: "6 min",
-          image: blogPostImage4,
+          image: blogPostImage15, 
         },
         {
           id: 11,
@@ -259,7 +271,7 @@ function BlogPage() {
           excerpt:
             "Pasar del “queremos algo bonito” al “esto sí lo podemos pagar” cambió su forma de decidir proveedores, invitados y prioridades. Y eso les ahorró muchos tropiezos.",
           readTime: "5 min",
-          image: blogPostImage2,
+          image: blogPostImage16, //presupuesto//
         },
       ],
     },
