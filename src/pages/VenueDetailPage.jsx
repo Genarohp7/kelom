@@ -118,8 +118,8 @@ function mapApiProviderToVenue(profile, photos = []) {
     ? photos.map((p) => toAbsoluteApiUrl(p.url)).filter(Boolean)
     : [];
 
-  const gallery = photoUrls.length ? photoUrls.slice(0, 3) : DEFAULT_GALLERY;
-  const mainImage = photoUrls.length ? photoUrls[0] : DEFAULT_GALLERY[0];
+  const gallery = photoUrls.length ? photoUrls : DEFAULT_GALLERY;
+  const mainImage = gallery[0] || DEFAULT_GALLERY[0];
 
   const capMin = profile?.capacity_min ?? profile?.capacityMin;
   const capMax = profile?.capacity_max ?? profile?.capacityMax;
@@ -235,6 +235,9 @@ function VenueDetailPage() {
 
   const [requestSending, setRequestSending] = useState(false);
   const [requestError, setRequestError] = useState("");
+
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -428,7 +431,41 @@ function VenueDetailPage() {
     return foundDemo || null;
   }, [apiVenue, id]);
 
+  const venueGallery = useMemo(() => {
+    const gallery = Array.isArray(venue?.gallery) ? venue.gallery.filter(Boolean) : [];
+
+    if (gallery.length) return gallery;
+    if (venue?.mainImage) return [venue.mainImage];
+
+    return DEFAULT_GALLERY;
+  }, [venue]);
+
+  const hasMultiplePhotos = venueGallery.length > 1;
+  const currentPhoto = venueGallery[currentSlide] || venueGallery[0] || venue?.mainImage || "";
   const unreadInboxCount = Number(inboxStats.sin_atender || 0);
+
+  useEffect(() => {
+    setCurrentSlide(0);
+    setIsCarouselPaused(false);
+  }, [venue?.id]);
+
+  useEffect(() => {
+    if (currentSlide > venueGallery.length - 1) {
+      setCurrentSlide(0);
+    }
+  }, [currentSlide, venueGallery.length]);
+
+  useEffect(() => {
+    if (!hasMultiplePhotos || isCarouselPaused) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % venueGallery.length);
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [hasMultiplePhotos, isCarouselPaused, venueGallery.length]);
 
   const isRequestSubmitDisabled =
     requestSending ||
@@ -553,6 +590,30 @@ function VenueDetailPage() {
       setRequestError(String(err?.message || "No se pudo enviar la solicitud."));
     } finally {
       setRequestSending(false);
+    }
+  };
+
+  const handlePrevSlide = () => {
+    if (!hasMultiplePhotos) return;
+    setCurrentSlide((prev) => (prev === 0 ? venueGallery.length - 1 : prev - 1));
+  };
+
+  const handleNextSlide = () => {
+    if (!hasMultiplePhotos) return;
+    setCurrentSlide((prev) => (prev + 1) % venueGallery.length);
+  };
+
+  const handleCarouselKeyDown = (event) => {
+    if (!hasMultiplePhotos) return;
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      handlePrevSlide();
+    }
+
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      handleNextSlide();
     }
   };
 
@@ -694,7 +755,7 @@ function VenueDetailPage() {
                 <div className="venue-hero__provider-note">
                   La bandeja de solicitudes está disponible solo para{" "}
                   <strong>Proveedor Destacado Kelom</strong>. Si quieres activar ese beneficio,
-                  el cambio se hace desde administración.
+                  comunicate con tu gerente de cuenta.
                 </div>
               )}
 
@@ -729,23 +790,364 @@ function VenueDetailPage() {
               </div>
             </div>
 
-            <div className="venue-hero__media">
-              <img src={venue.mainImage} alt={venue.name} className="venue-hero__image" />
+            <div
+              className="venue-hero__media"
+              tabIndex={0}
+              onKeyDown={handleCarouselKeyDown}
+              onMouseEnter={() => setIsCarouselPaused(true)}
+              onMouseLeave={() => setIsCarouselPaused(false)}
+              onFocus={() => setIsCarouselPaused(true)}
+              onBlur={() => setIsCarouselPaused(false)}
+              style={{
+                position: "relative",
+                minHeight: "clamp(340px, 48vw, 560px)",
+                borderRadius: "30px",
+                overflow: "hidden",
+                background:
+                  "linear-gradient(135deg, rgba(15,23,42,0.08), rgba(15,23,42,0.16))",
+                boxShadow: "0 24px 60px rgba(15, 23, 42, 0.16)",
+                outline: "none",
+              }}
+            >
+              {venueGallery.map((photo, index) => {
+                const isActive = index === currentSlide;
+
+                return (
+                  <div
+                    key={`${photo}-${index}`}
+                    aria-hidden={!isActive}
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      opacity: isActive ? 1 : 0,
+                      transform: isActive ? "scale(1)" : "scale(1.03)",
+                      transition: "opacity 700ms ease, transform 700ms ease",
+                      pointerEvents: isActive ? "auto" : "none",
+                    }}
+                  >
+                    <img
+                      src={photo}
+                      alt={`${venue.name} foto ${index + 1}`}
+                      className="venue-hero__image"
+                      loading={index === 0 ? "eager" : "lazy"}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    />
+                    <div
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        background:
+                          "linear-gradient(to top, rgba(15,23,42,0.34), rgba(15,23,42,0.06) 45%, rgba(15,23,42,0.04))",
+                      }}
+                    />
+                  </div>
+                );
+              })}
+
+              <div
+                style={{
+                  position: "absolute",
+                  top: "18px",
+                  left: "18px",
+                  display: "flex",
+                  gap: "0.7rem",
+                  alignItems: "center",
+                  zIndex: 2,
+                }}
+              >
+                <span
+                  style={{
+                    padding: "0.5rem 0.85rem",
+                    borderRadius: "999px",
+                    background: "rgba(255,255,255,0.88)",
+                    color: "#1f2937",
+                    fontSize: "0.88rem",
+                    fontWeight: 700,
+                    backdropFilter: "blur(10px)",
+                    boxShadow: "0 10px 30px rgba(15,23,42,0.10)",
+                  }}
+                >
+                  {currentSlide + 1} / {venueGallery.length}
+                </span>
+
+                <span
+                  style={{
+                    padding: "0.45rem 0.8rem",
+                    borderRadius: "999px",
+                    background: "rgba(15,23,42,0.54)",
+                    color: "#fff",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    backdropFilter: "blur(10px)",
+                  }}
+                >
+                  {isCarouselPaused ? "Pausado" : "Auto cada 5 s"}
+                </span>
+              </div>
+
+              {hasMultiplePhotos && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handlePrevSlide}
+                    aria-label="Ver foto anterior"
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      left: "16px",
+                      transform: "translateY(-50%)",
+                      width: "52px",
+                      height: "52px",
+                      borderRadius: "999px",
+                      border: "1px solid rgba(255,255,255,0.45)",
+                      background: "rgba(255,255,255,0.22)",
+                      color: "#fff",
+                      fontSize: "1.45rem",
+                      cursor: "pointer",
+                      backdropFilter: "blur(12px)",
+                      zIndex: 2,
+                      boxShadow: "0 10px 30px rgba(15,23,42,0.16)",
+                    }}
+                  >
+                    ‹
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleNextSlide}
+                    aria-label="Ver foto siguiente"
+                    style={{
+                      position: "absolute",
+                      top: "50%",
+                      right: "16px",
+                      transform: "translateY(-50%)",
+                      width: "52px",
+                      height: "52px",
+                      borderRadius: "999px",
+                      border: "1px solid rgba(255,255,255,0.45)",
+                      background: "rgba(255,255,255,0.22)",
+                      color: "#fff",
+                      fontSize: "1.45rem",
+                      cursor: "pointer",
+                      backdropFilter: "blur(12px)",
+                      zIndex: 2,
+                      boxShadow: "0 10px 30px rgba(15,23,42,0.16)",
+                    }}
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+
+              <div
+                style={{
+                  position: "absolute",
+                  left: "18px",
+                  right: "18px",
+                  bottom: "18px",
+                  zIndex: 2,
+                }}
+              >
+                <div
+                  style={{
+                    height: "6px",
+                    borderRadius: "999px",
+                    background: "rgba(255,255,255,0.24)",
+                    overflow: "hidden",
+                    marginBottom: "0.9rem",
+                    backdropFilter: "blur(8px)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${((currentSlide + 1) / venueGallery.length) * 100}%`,
+                      height: "100%",
+                      borderRadius: "999px",
+                      background:
+                        "linear-gradient(90deg, rgba(255,255,255,0.95), rgba(255,255,255,0.72))",
+                      transition: "width 350ms ease",
+                    }}
+                  />
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    alignItems: "center",
+                    color: "#fff",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.95rem",
+                      fontWeight: 600,
+                      textShadow: "0 4px 18px rgba(0,0,0,0.24)",
+                    }}
+                  >
+                    
+                  </p>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.86rem",
+                      opacity: 0.92,
+                      textShadow: "0 4px 18px rgba(0,0,0,0.24)",
+                    }}
+                  >
+                    
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
         <section className="venue-gallery">
           <div className="container">
-            <h2 className="section-title">Fotos del lugar</h2>
-            <p className="section-subtitle">Galería real (backend).</p>
+            <h2 className="section-title">Galería del lugar</h2>
+            <p className="section-subtitle">
+              Todas las fotos del proveedor en una vista más elegante y navegable.
+            </p>
 
-            <div className="venue-gallery__grid">
-              {(venue.gallery || []).map((photo, index) => (
-                <figure key={index} className="venue-gallery__item">
-                  <img src={photo} alt={`${venue.name} foto ${index + 1}`} loading="lazy" />
-                </figure>
-              ))}
+            <div
+              style={{
+                display: "grid",
+                gap: "1.2rem",
+              }}
+            >
+              <div
+                style={{
+                  borderRadius: "24px",
+                  overflow: "hidden",
+                  background: "#fff",
+                  border: "1px solid rgba(15,23,42,0.08)",
+                  boxShadow: "0 18px 45px rgba(15,23,42,0.08)",
+                }}
+              >
+                <img
+                  src={currentPhoto}
+                  alt={`${venue.name} vista principal ${currentSlide + 1}`}
+                  loading="lazy"
+                  style={{
+                    width: "100%",
+                    height: "clamp(280px, 42vw, 520px)",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: "1rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <strong style={{ display: "block", marginBottom: "0.2rem" }}>
+                    Foto {currentSlide + 1} de {venueGallery.length}
+                  </strong>
+                  <span style={{ opacity: 0.72 }}>
+                    
+                  </span>
+                </div>
+
+                {hasMultiplePhotos && (
+                  <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      onClick={handlePrevSlide}
+                    >
+                      ← Anterior
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      onClick={handleNextSlide}
+                    >
+                      Siguiente →
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridAutoFlow: "column",
+                  gridAutoColumns: "minmax(140px, 180px)",
+                  gap: "1rem",
+                  overflowX: "auto",
+                  paddingBottom: "0.45rem",
+                  scrollbarWidth: "thin",
+                }}
+              >
+                {venueGallery.map((photo, index) => {
+                  const isActive = index === currentSlide;
+
+                  return (
+                    <button
+                      key={`${photo}-thumb-${index}`}
+                      type="button"
+                      onClick={() => setCurrentSlide(index)}
+                      aria-label={`Ver foto ${index + 1}`}
+                      style={{
+                        padding: 0,
+                        border: isActive
+                          ? "2px solid rgba(196,149,95,1)"
+                          : "1px solid rgba(15,23,42,0.10)",
+                        borderRadius: "18px",
+                        overflow: "hidden",
+                        background: "#fff",
+                        cursor: "pointer",
+                        boxShadow: isActive
+                          ? "0 16px 36px rgba(196,149,95,0.18)"
+                          : "0 10px 24px rgba(15,23,42,0.06)",
+                        transform: isActive ? "translateY(-2px)" : "translateY(0)",
+                        transition:
+                          "transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease",
+                      }}
+                    >
+                      <img
+                        src={photo}
+                        alt={`${venue.name} miniatura ${index + 1}`}
+                        loading="lazy"
+                        style={{
+                          width: "100%",
+                          height: "112px",
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                      <div
+                        style={{
+                          padding: "0.65rem 0.75rem",
+                          textAlign: "left",
+                          fontSize: "0.85rem",
+                          fontWeight: isActive ? 700 : 600,
+                          color: "#1f2937",
+                        }}
+                      >
+                        
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>
