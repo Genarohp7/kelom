@@ -226,9 +226,7 @@ function VenueDetailPage() {
     cerrada: 0,
   });
 
-  // modal modes: null | "request" | "register"
   const [modalMode, setModalMode] = useState(null);
-
   const [requestMessage, setRequestMessage] = useState(DEFAULT_REQUEST_MESSAGE);
   const [preferredSchedule, setPreferredSchedule] = useState("");
   const [requestUiMessage, setRequestUiMessage] = useState("");
@@ -441,7 +439,6 @@ function VenueDetailPage() {
   }, [venue]);
 
   const hasMultiplePhotos = venueGallery.length > 1;
-  const currentPhoto = venueGallery[currentSlide] || venueGallery[0] || venue?.mainImage || "";
   const unreadInboxCount = Number(inboxStats.sin_atender || 0);
 
   useEffect(() => {
@@ -755,7 +752,7 @@ function VenueDetailPage() {
                 <div className="venue-hero__provider-note">
                   La bandeja de solicitudes está disponible solo para{" "}
                   <strong>Proveedor Destacado Kelom</strong>. Si quieres activar ese beneficio,
-                  comunicate con tu gerente de cuenta.
+                  comunícate con tu gerente de cuenta.
                 </div>
               )}
 
@@ -798,16 +795,6 @@ function VenueDetailPage() {
               onMouseLeave={() => setIsCarouselPaused(false)}
               onFocus={() => setIsCarouselPaused(true)}
               onBlur={() => setIsCarouselPaused(false)}
-              style={{
-                position: "relative",
-                minHeight: "clamp(340px, 48vw, 560px)",
-                borderRadius: "30px",
-                overflow: "hidden",
-                background:
-                  "linear-gradient(135deg, rgba(15,23,42,0.08), rgba(15,23,42,0.16))",
-                boxShadow: "0 24px 60px rgba(15, 23, 42, 0.16)",
-                outline: "none",
-              }}
             >
               {venueGallery.map((photo, index) => {
                 const isActive = index === currentSlide;
@@ -816,76 +803,36 @@ function VenueDetailPage() {
                   <div
                     key={`${photo}-${index}`}
                     aria-hidden={!isActive}
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      opacity: isActive ? 1 : 0,
-                      transform: isActive ? "scale(1)" : "scale(1.03)",
-                      transition: "opacity 700ms ease, transform 700ms ease",
-                      pointerEvents: isActive ? "auto" : "none",
-                    }}
+                    className={`venue-hero__slide ${
+                      isActive ? "venue-hero__slide--active" : ""
+                    }`}
                   >
+                    <img
+                      src={photo}
+                      alt=""
+                      aria-hidden="true"
+                      className="venue-hero__slide-bg"
+                      loading="lazy"
+                    />
+
+                    <div className="venue-hero__slide-overlay" />
+
                     <img
                       src={photo}
                       alt={`${venue.name} foto ${index + 1}`}
                       className="venue-hero__image"
                       loading={index === 0 ? "eager" : "lazy"}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        display: "block",
-                      }}
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        background:
-                          "linear-gradient(to top, rgba(15,23,42,0.34), rgba(15,23,42,0.06) 45%, rgba(15,23,42,0.04))",
-                      }}
                     />
                   </div>
                 );
               })}
 
-              <div
-                style={{
-                  position: "absolute",
-                  top: "18px",
-                  left: "18px",
-                  display: "flex",
-                  gap: "0.7rem",
-                  alignItems: "center",
-                  zIndex: 2,
-                }}
-              >
-                <span
-                  style={{
-                    padding: "0.5rem 0.85rem",
-                    borderRadius: "999px",
-                    background: "rgba(255,255,255,0.88)",
-                    color: "#1f2937",
-                    fontSize: "0.88rem",
-                    fontWeight: 700,
-                    backdropFilter: "blur(10px)",
-                    boxShadow: "0 10px 30px rgba(15,23,42,0.10)",
-                  }}
-                >
+              <div className="venue-hero__media-topbar">
+                <span className="venue-hero__media-badge venue-hero__media-badge--light">
                   {currentSlide + 1} / {venueGallery.length}
                 </span>
 
-                <span
-                  style={{
-                    padding: "0.45rem 0.8rem",
-                    borderRadius: "999px",
-                    background: "rgba(15,23,42,0.54)",
-                    color: "#fff",
-                    fontSize: "0.82rem",
-                    fontWeight: 600,
-                    backdropFilter: "blur(10px)",
-                  }}
-                >
+                <span className="venue-hero__media-badge venue-hero__media-badge--dark">
                   {isCarouselPaused ? "Pausado" : "Auto cada 5 s"}
                 </span>
               </div>
@@ -896,23 +843,7 @@ function VenueDetailPage() {
                     type="button"
                     onClick={handlePrevSlide}
                     aria-label="Ver foto anterior"
-                    style={{
-                      position: "absolute",
-                      top: "50%",
-                      left: "16px",
-                      transform: "translateY(-50%)",
-                      width: "52px",
-                      height: "52px",
-                      borderRadius: "999px",
-                      border: "1px solid rgba(255,255,255,0.45)",
-                      background: "rgba(255,255,255,0.22)",
-                      color: "#fff",
-                      fontSize: "1.45rem",
-                      cursor: "pointer",
-                      backdropFilter: "blur(12px)",
-                      zIndex: 2,
-                      boxShadow: "0 10px 30px rgba(15,23,42,0.16)",
-                    }}
+                    className="venue-hero__media-arrow venue-hero__media-arrow--prev"
                   >
                     ‹
                   </button>
@@ -921,232 +852,19 @@ function VenueDetailPage() {
                     type="button"
                     onClick={handleNextSlide}
                     aria-label="Ver foto siguiente"
-                    style={{
-                      position: "absolute",
-                      top: "50%",
-                      right: "16px",
-                      transform: "translateY(-50%)",
-                      width: "52px",
-                      height: "52px",
-                      borderRadius: "999px",
-                      border: "1px solid rgba(255,255,255,0.45)",
-                      background: "rgba(255,255,255,0.22)",
-                      color: "#fff",
-                      fontSize: "1.45rem",
-                      cursor: "pointer",
-                      backdropFilter: "blur(12px)",
-                      zIndex: 2,
-                      boxShadow: "0 10px 30px rgba(15,23,42,0.16)",
-                    }}
+                    className="venue-hero__media-arrow venue-hero__media-arrow--next"
                   >
                     ›
                   </button>
                 </>
               )}
 
-              <div
-                style={{
-                  position: "absolute",
-                  left: "18px",
-                  right: "18px",
-                  bottom: "18px",
-                  zIndex: 2,
-                }}
-              >
-                <div
-                  style={{
-                    height: "6px",
-                    borderRadius: "999px",
-                    background: "rgba(255,255,255,0.24)",
-                    overflow: "hidden",
-                    marginBottom: "0.9rem",
-                    backdropFilter: "blur(8px)",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${((currentSlide + 1) / venueGallery.length) * 100}%`,
-                      height: "100%",
-                      borderRadius: "999px",
-                      background:
-                        "linear-gradient(90deg, rgba(255,255,255,0.95), rgba(255,255,255,0.72))",
-                      transition: "width 350ms ease",
-                    }}
-                  />
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "1rem",
-                    alignItems: "center",
-                    color: "#fff",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "0.95rem",
-                      fontWeight: 600,
-                      textShadow: "0 4px 18px rgba(0,0,0,0.24)",
-                    }}
-                  >
-                    
-                  </p>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: "0.86rem",
-                      opacity: 0.92,
-                      textShadow: "0 4px 18px rgba(0,0,0,0.24)",
-                    }}
-                  >
-                    
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="venue-gallery">
-          <div className="container">
-            <h2 className="section-title">Galería del lugar</h2>
-            <p className="section-subtitle">
-              Todas las fotos del proveedor en una vista más elegante y navegable.
-            </p>
-
-            <div
-              style={{
-                display: "grid",
-                gap: "1.2rem",
-              }}
-            >
-              <div
-                style={{
-                  borderRadius: "24px",
-                  overflow: "hidden",
-                  background: "#fff",
-                  border: "1px solid rgba(15,23,42,0.08)",
-                  boxShadow: "0 18px 45px rgba(15,23,42,0.08)",
-                }}
-              >
-                <img
-                  src={currentPhoto}
-                  alt={`${venue.name} vista principal ${currentSlide + 1}`}
-                  loading="lazy"
-                  style={{
-                    width: "100%",
-                    height: "clamp(280px, 42vw, 520px)",
-                    objectFit: "cover",
-                    display: "block",
-                  }}
+              <div className="venue-hero__media-footer">
+                <progress
+                  className="venue-hero__media-progress"
+                  value={currentSlide + 1}
+                  max={venueGallery.length}
                 />
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: "1rem",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div>
-                  <strong style={{ display: "block", marginBottom: "0.2rem" }}>
-                    Foto {currentSlide + 1} de {venueGallery.length}
-                  </strong>
-                  <span style={{ opacity: 0.72 }}>
-                    
-                  </span>
-                </div>
-
-                {hasMultiplePhotos && (
-                  <div style={{ display: "flex", gap: "0.7rem", flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      onClick={handlePrevSlide}
-                    >
-                      ← Anterior
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--primary"
-                      onClick={handleNextSlide}
-                    >
-                      Siguiente →
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridAutoFlow: "column",
-                  gridAutoColumns: "minmax(140px, 180px)",
-                  gap: "1rem",
-                  overflowX: "auto",
-                  paddingBottom: "0.45rem",
-                  scrollbarWidth: "thin",
-                }}
-              >
-                {venueGallery.map((photo, index) => {
-                  const isActive = index === currentSlide;
-
-                  return (
-                    <button
-                      key={`${photo}-thumb-${index}`}
-                      type="button"
-                      onClick={() => setCurrentSlide(index)}
-                      aria-label={`Ver foto ${index + 1}`}
-                      style={{
-                        padding: 0,
-                        border: isActive
-                          ? "2px solid rgba(196,149,95,1)"
-                          : "1px solid rgba(15,23,42,0.10)",
-                        borderRadius: "18px",
-                        overflow: "hidden",
-                        background: "#fff",
-                        cursor: "pointer",
-                        boxShadow: isActive
-                          ? "0 16px 36px rgba(196,149,95,0.18)"
-                          : "0 10px 24px rgba(15,23,42,0.06)",
-                        transform: isActive ? "translateY(-2px)" : "translateY(0)",
-                        transition:
-                          "transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease",
-                      }}
-                    >
-                      <img
-                        src={photo}
-                        alt={`${venue.name} miniatura ${index + 1}`}
-                        loading="lazy"
-                        style={{
-                          width: "100%",
-                          height: "112px",
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
-                      <div
-                        style={{
-                          padding: "0.65rem 0.75rem",
-                          textAlign: "left",
-                          fontSize: "0.85rem",
-                          fontWeight: isActive ? 700 : 600,
-                          color: "#1f2937",
-                        }}
-                      >
-                        
-                      </div>
-                    </button>
-                  );
-                })}
               </div>
             </div>
           </div>
@@ -1172,8 +890,8 @@ function VenueDetailPage() {
 
                 {venue.sellingPoints && venue.sellingPoints.length > 0 && (
                   <>
-                    <h3 style={{ marginTop: "1.2rem" }}>Lo mejor de este lugar</h3>
-                    <ul style={{ marginTop: "0.6rem" }}>
+                    <h3 className="venue-info__subheading">Lo mejor de este lugar</h3>
+                    <ul className="venue-info__selling-points">
                       {venue.sellingPoints.map((p) => (
                         <li key={p}>{p}</li>
                       ))}
@@ -1273,7 +991,7 @@ function VenueDetailPage() {
               </p>
             </div>
 
-            <div className="venue-request-form__actions" style={{ marginTop: "1rem" }}>
+            <div className="venue-request-modal__actions">
               <button type="button" className="btn btn--ghost" onClick={closeModal}>
                 Cancelar
               </button>
@@ -1291,12 +1009,11 @@ function VenueDetailPage() {
               </button>
             </div>
 
-            <div style={{ marginTop: "0.9rem", fontSize: "0.9rem", opacity: 0.8 }}>
+            <div className="venue-request-modal__helper">
               ¿Ya tienes cuenta? Ve a{" "}
               <button
                 type="button"
-                className="btn btn--ghost"
-                style={{ padding: "0.25rem 0.7rem" }}
+                className="venue-request-modal__helper-link"
                 onClick={() => {
                   closeModal();
                   navigate("/acceso", {
@@ -1379,32 +1096,25 @@ function VenueDetailPage() {
               </div>
 
               {requestError ? (
-                <div
-                  style={{
-                    marginTop: "0.8rem",
-                    padding: "0.75rem 0.9rem",
-                    borderRadius: "14px",
-                    background: "rgba(239,68,68,0.10)",
-                    border: "1px solid rgba(239,68,68,0.25)",
-                    color: "rgba(127,29,29,1)",
-                    fontSize: "0.9rem",
-                  }}
-                >
-                  {requestError}
-                </div>
+                <div className="venue-request-form__error">{requestError}</div>
               ) : null}
 
               <div className="venue-request-form__actions">
                 <button type="button" className="btn btn--ghost" onClick={closeModal}>
                   Cancelar
                 </button>
-                <button type="submit" className="btn btn--primary" disabled={isRequestSubmitDisabled}>
+                <button
+                  type="submit"
+                  className="btn btn--primary"
+                  disabled={isRequestSubmitDisabled}
+                >
                   {requestSending ? "Enviando..." : "Enviar solicitud"}
                 </button>
               </div>
 
               <p className="venue-request-form__disclaimer">
-                Nota: tu solicitud primero pasa por moderación de Kelom antes de enviarse al proveedor.
+                Nota: tu solicitud primero pasa por moderación de Kelom antes de enviarse al
+                proveedor.
               </p>
             </form>
           </div>
