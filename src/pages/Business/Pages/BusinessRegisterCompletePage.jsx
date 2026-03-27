@@ -116,21 +116,49 @@ function getImageDimensions(file) {
   });
 }
 
+function createEmptyProfileData() {
+  return {
+    venueName: "",
+    venueLocation: "",
+    businessCategory: "",
+    localityArea: "",
+    locationPlaceId: "",
+    locationLat: "",
+    locationLng: "",
+    capacityMin: "",
+    capacityMax: "",
+    priceFrom: "",
+    priceTo: "",
+    shortDescription: "",
+    description: "",
+    spaces: "",
+    services: "",
+    rules: "",
+    website: "",
+    instagram: "",
+    facebook: "",
+    mapText: "",
+    eventTypes: [],
+    sellingPointsText: "",
+    photos: [],
+  };
+}
+
 function mapApiProfileToProfileData(profile) {
   if (!profile) return null;
 
   const sellingPointsArr = Array.isArray(profile.selling_points)
     ? profile.selling_points
     : Array.isArray(profile.sellingPoints)
-    ? profile.sellingPoints
-    : [];
+      ? profile.sellingPoints
+      : [];
 
   return {
     venueName: profile.venue_name || "",
     venueLocation: profile.venue_location || "",
     businessCategory:
       profile.business_category || profile.businessCategory || profile.category || "",
-    localityArea: profile.locality_area || profile.localityArea || "",
+    localityArea: profile.locality_area || profile.localityArea || profile.area || "",
     locationPlaceId: profile.location_place_id || "",
     locationLat:
       profile.location_lat === null || profile.location_lat === undefined
@@ -157,6 +185,9 @@ function mapApiProfileToProfileData(profile) {
         ? ""
         : String(profile.price_to),
     shortDescription: profile.short_description || "",
+    eventTypes: Array.isArray(profile.event_types) ? profile.event_types : [],
+    sellingPointsText: sellingPointsArr.length ? sellingPointsArr.join("\n") : "",
+    mapText: profile.map_text || "",
     description: profile.description || "",
     spaces: profile.spaces || "",
     services: profile.services || "",
@@ -164,9 +195,6 @@ function mapApiProfileToProfileData(profile) {
     website: profile.website || "",
     instagram: profile.instagram || "",
     facebook: profile.facebook || "",
-    mapText: profile.map_text || "",
-    eventTypes: Array.isArray(profile.event_types) ? profile.event_types : [],
-    sellingPointsText: sellingPointsArr.length ? sellingPointsArr.join("\n") : "",
     photos: [],
   };
 }
@@ -178,12 +206,70 @@ function buildSellingPointsList(sellingPointsText) {
     .filter(Boolean);
 }
 
+function getServiceStatusMeta(service) {
+  const reviewStatus = String(service?.review_status || "");
+  const visibility = String(service?.public_visibility || "");
+
+  if (reviewStatus === "approved" && visibility === "listed") {
+    return {
+      label: "Publicado",
+      background: "rgba(16, 185, 129, 0.14)",
+      borderColor: "rgba(16, 185, 129, 0.25)",
+      color: "#0f766e",
+    };
+  }
+
+  if (reviewStatus === "pending_review") {
+    return {
+      label: "Pendiente de revisión",
+      background: "rgba(245, 158, 11, 0.14)",
+      borderColor: "rgba(245, 158, 11, 0.25)",
+      color: "#b45309",
+    };
+  }
+
+  if (reviewStatus === "needs_changes") {
+    return {
+      label: "Requiere ajustes",
+      background: "rgba(249, 115, 22, 0.14)",
+      borderColor: "rgba(249, 115, 22, 0.25)",
+      color: "#c2410c",
+    };
+  }
+
+  if (reviewStatus === "rejected") {
+    return {
+      label: "Rechazado",
+      background: "rgba(239, 68, 68, 0.14)",
+      borderColor: "rgba(239, 68, 68, 0.25)",
+      color: "#b91c1c",
+    };
+  }
+
+  if (reviewStatus === "suspended") {
+    return {
+      label: "Suspendido",
+      background: "rgba(107, 114, 128, 0.14)",
+      borderColor: "rgba(107, 114, 128, 0.25)",
+      color: "#4b5563",
+    };
+  }
+
+  return {
+    label: "Oculto",
+    background: "rgba(107, 114, 128, 0.12)",
+    borderColor: "rgba(107, 114, 128, 0.22)",
+    color: "#4b5563",
+  };
+}
+
 function BusinessRegisterCompletePage() {
   const navigate = useNavigate();
   const location = useLocation();
 
   const stateBasicData = location.state?.basicData || null;
   const prefillProfileData = location.state?.prefillProfileData || null;
+  const preferredServiceIdFromState = location.state?.serviceId || null;
 
   const authModeFromState = location.state?.authMode || null;
   const loginEmailFromState = location.state?.loginEmail || "";
@@ -217,64 +303,11 @@ function BusinessRegisterCompletePage() {
     return "register";
   }, [isLoggedIn, authModeFromState, prefillProfileData]);
 
-  useEffect(() => {
-    if (authMode !== "edit") return;
-
-    const token = getProviderToken();
-    if (!token) {
-      navigate("/empresas/login", {
-        replace: true,
-        state: { from: EDIT_ROUTE },
-      });
-    }
-  }, [authMode, navigate]);
-
   const [profileData, setProfileData] = useState(() => {
     if (prefillProfileData) {
       return {
-        venueName: prefillProfileData.venueName || "",
-        venueLocation: prefillProfileData.venueLocation || "",
-        businessCategory:
-          prefillProfileData.businessCategory ||
-          prefillProfileData.business_category ||
-          prefillProfileData.category ||
-          "",
-        localityArea:
-          prefillProfileData.localityArea ||
-          prefillProfileData.locality_area ||
-          prefillProfileData.area ||
-          "",
-        locationPlaceId: prefillProfileData.locationPlaceId || "",
-        locationLat:
-          prefillProfileData.locationLat ??
-          prefillProfileData.lat ??
-          prefillProfileData.location?.lat ??
-          "",
-        locationLng:
-          prefillProfileData.locationLng ??
-          prefillProfileData.lng ??
-          prefillProfileData.location?.lng ??
-          "",
-        capacityMin: prefillProfileData.capacityMin || "",
-        capacityMax: prefillProfileData.capacityMax || "",
-        priceFrom: prefillProfileData.priceFrom || "",
-        priceTo: prefillProfileData.priceTo || "",
-        shortDescription: prefillProfileData.shortDescription || "",
-        eventTypes: Array.isArray(prefillProfileData.eventTypes)
-          ? prefillProfileData.eventTypes
-          : [],
-        sellingPointsText: prefillProfileData.sellingPointsText || "",
-        mapText: prefillProfileData.mapText || "",
-        description: prefillProfileData.description || "",
-        spaces: prefillProfileData.spaces || "",
-        services: prefillProfileData.services || "",
-        rules: prefillProfileData.rules || "",
-        website: prefillProfileData.website || "",
-        instagram: prefillProfileData.instagram || "",
-        facebook: prefillProfileData.facebook || "",
-        photos: Array.isArray(prefillProfileData.photos)
-          ? prefillProfileData.photos
-          : [],
+        ...createEmptyProfileData(),
+        ...mapApiProfileToProfileData(prefillProfileData),
       };
     }
 
@@ -284,6 +317,7 @@ function BusinessRegisterCompletePage() {
 
       if (parsed) {
         return {
+          ...createEmptyProfileData(),
           venueName: parsed.venueName || "",
           venueLocation: parsed.venueLocation || "",
           businessCategory: parsed.businessCategory || "",
@@ -313,34 +347,15 @@ function BusinessRegisterCompletePage() {
       // ignore
     }
 
-    return {
-      venueName: "",
-      venueLocation: "",
-      businessCategory: "",
-      localityArea: "",
-      locationPlaceId: "",
-      locationLat: "",
-      locationLng: "",
-      capacityMin: "",
-      capacityMax: "",
-      priceFrom: "",
-      priceTo: "",
-      shortDescription: "",
-      eventTypes: [],
-      sellingPointsText: "",
-      mapText: "",
-      description: "",
-      spaces: "",
-      services: "",
-      rules: "",
-      website: "",
-      instagram: "",
-      facebook: "",
-      photos: [],
-    };
+    return createEmptyProfileData();
   });
 
   const [serverPhotos, setServerPhotos] = useState([]);
+  const [providerServices, setProviderServices] = useState([]);
+  const [activeServiceId, setActiveServiceId] = useState(null);
+  const [canAddService, setCanAddService] = useState(false);
+  const [isCreatingNewService, setIsCreatingNewService] = useState(false);
+  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(authMode === "edit");
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
   const [submitError, setSubmitError] = useState("");
@@ -407,38 +422,117 @@ function BusinessRegisterCompletePage() {
     return data;
   };
 
+  const persistDraft = (nextProfileData) => {
+    try {
+      localStorage.setItem(
+        PROVIDER_PROFILE_DRAFT_KEY,
+        JSON.stringify({ ...nextProfileData, photos: [] })
+      );
+    } catch {
+      // ignore
+    }
+  };
+
+  const hydrateBasicDataFromWorkspace = (data) => {
+    setBasicData((prev) => ({
+      companyName: data?.profile?.company_name || prev?.companyName || "",
+      ownerName: data?.profile?.owner_name || prev?.ownerName || data?.provider?.name || "",
+      phone: data?.profile?.phone || prev?.phone || "",
+      email: data?.provider?.email || prev?.email || "",
+    }));
+  };
+
+  const applyProfileIntoForm = (profile, photos = []) => {
+    const mapped = mapApiProfileToProfileData(profile) || createEmptyProfileData();
+
+    setProfileData({
+      ...createEmptyProfileData(),
+      ...mapped,
+      photos: [],
+    });
+
+    setServerPhotos(Array.isArray(photos) ? photos : []);
+    persistDraft(mapped);
+  };
+
+  const loadProviderWorkspace = async (
+    token,
+    { preferredServiceId = null, preserveCurrentSelection = false } = {}
+  ) => {
+    const data = await apiJson("/providers/me", { token });
+
+    hydrateBasicDataFromWorkspace(data);
+
+    const services = Array.isArray(data?.profiles) ? data.profiles : [];
+    const primaryProfile = data?.profile || null;
+    const primaryProfileId = primaryProfile?.id || null;
+
+    setProviderServices(services);
+    setCanAddService(Boolean(data?.can_add_service));
+
+    if (!services.length && !primaryProfile) {
+      setActiveServiceId(null);
+      setIsCreatingNewService(false);
+      setProfileData(createEmptyProfileData());
+      setServerPhotos([]);
+      return;
+    }
+
+    const targetServiceId =
+      preferredServiceId ||
+      (preserveCurrentSelection ? activeServiceId : null) ||
+      primaryProfileId ||
+      services?.[0]?.id ||
+      null;
+
+    if (!targetServiceId) {
+      setActiveServiceId(null);
+      setIsCreatingNewService(false);
+      setProfileData(createEmptyProfileData());
+      setServerPhotos([]);
+      return;
+    }
+
+    if (primaryProfileId && targetServiceId === primaryProfileId) {
+      applyProfileIntoForm(primaryProfile, data?.photos || []);
+      setActiveServiceId(primaryProfileId);
+      setIsCreatingNewService(false);
+      return;
+    }
+
+    try {
+      const detail = await apiJson(`/providers/my-services/${targetServiceId}`, { token });
+      applyProfileIntoForm(detail?.profile, detail?.photos || []);
+      setActiveServiceId(targetServiceId);
+      setIsCreatingNewService(false);
+    } catch {
+      applyProfileIntoForm(primaryProfile, data?.photos || []);
+      setActiveServiceId(primaryProfileId);
+      setIsCreatingNewService(false);
+    }
+  };
+
   useEffect(() => {
+    if (authMode !== "edit") return;
+
     const token = getProviderToken();
-    if (!token) return;
-    if (prefillProfileData) return;
+    if (!token) {
+      navigate("/empresas/login", {
+        replace: true,
+        state: { from: EDIT_ROUTE },
+      });
+      return;
+    }
 
     let cancelled = false;
 
-    apiJson("/providers/me", { token })
-      .then((data) => {
-        if (cancelled) return;
-
-        if (data?.provider?.email || data?.profile?.company_name) {
-          setBasicData((prev) => ({
-            companyName: data?.profile?.company_name || prev?.companyName || "",
-            ownerName: data?.profile?.owner_name || prev?.ownerName || "",
-            phone: data?.profile?.phone || prev?.phone || "",
-            email: data?.provider?.email || prev?.email || "",
-          }));
-        }
-
-        const mapped = mapApiProfileToProfileData(data?.profile);
-        if (mapped) {
-          setProfileData((prev) => ({
-            ...prev,
-            ...mapped,
-            photos: prev.photos || [],
-          }));
-        }
-
-        setServerPhotos(Array.isArray(data?.photos) ? data.photos : []);
-      })
-      .catch((err) => {
+    const run = async () => {
+      try {
+        setIsLoadingWorkspace(true);
+        await loadProviderWorkspace(token, {
+          preferredServiceId: preferredServiceIdFromState || null,
+        });
+      } catch (err) {
         if (cancelled) return;
 
         console.warn("No se pudo cargar /providers/me:", err);
@@ -448,12 +542,27 @@ function BusinessRegisterCompletePage() {
           replace: true,
           state: { from: EDIT_ROUTE },
         });
-      });
+      } finally {
+        if (!cancelled) setIsLoadingWorkspace(false);
+      }
+    };
+
+    run();
 
     return () => {
       cancelled = true;
     };
-  }, [prefillProfileData, navigate]);
+  }, [authMode, navigate, preferredServiceIdFromState]);
+
+  const activeService = useMemo(
+    () => providerServices.find((service) => service.id === activeServiceId) || null,
+    [providerServices, activeServiceId]
+  );
+
+  const activeServiceStatusMeta = useMemo(
+    () => getServiceStatusMeta(activeService),
+    [activeService]
+  );
 
   const openFilePicker = () => fileInputRef.current?.click();
 
@@ -470,9 +579,7 @@ function BusinessRegisterCompletePage() {
 
     for (const file of incoming) {
       if (!ALLOWED_PROVIDER_PHOTO_TYPES.includes(file.type)) {
-        errors.push(
-          `${file.name}: formato no permitido. Usa JPG, PNG o WebP.`
-        );
+        errors.push(`${file.name}: formato no permitido. Usa JPG, PNG o WebP.`);
         continue;
       }
 
@@ -484,7 +591,10 @@ function BusinessRegisterCompletePage() {
       try {
         const { width, height } = await getImageDimensions(file);
 
-        if (width > MAX_PROVIDER_PHOTO_WIDTH || height > MAX_PROVIDER_PHOTO_HEIGHT) {
+        if (
+          width > MAX_PROVIDER_PHOTO_WIDTH ||
+          height > MAX_PROVIDER_PHOTO_HEIGHT
+        ) {
           errors.push(
             `${file.name}: excede ${MAX_PROVIDER_PHOTO_WIDTH}x${MAX_PROVIDER_PHOTO_HEIGHT}px.`
           );
@@ -560,7 +670,7 @@ function BusinessRegisterCompletePage() {
     });
   };
 
-  const uploadSelectedPhotosToBackend = async (token) => {
+  const uploadSelectedPhotosToBackend = async (token, targetProfileId) => {
     const files = Array.isArray(profileData.photos) ? profileData.photos : [];
     if (!files.length) return;
 
@@ -569,8 +679,13 @@ function BusinessRegisterCompletePage() {
 
     setIsUploadingPhotos(true);
     setSubmitError("");
+
     try {
-      const data = await apiMultipart("/providers/photos", {
+      const path = targetProfileId
+        ? `/providers/my-services/${targetProfileId}/photos`
+        : "/providers/photos";
+
+      const data = await apiMultipart(path, {
         method: "POST",
         token,
         formData: fd,
@@ -602,7 +717,12 @@ function BusinessRegisterCompletePage() {
     setIsUploadingPhotos(true);
 
     try {
-      await apiJson(`/providers/photos/${photoId}`, {
+      const path =
+        activeServiceId && !isCreatingNewService
+          ? `/providers/my-services/${activeServiceId}/photos/${photoId}`
+          : `/providers/photos/${photoId}`;
+
+      await apiJson(path, {
         method: "DELETE",
         token,
       });
@@ -883,14 +1003,42 @@ function BusinessRegisterCompletePage() {
     }
   };
 
-  const persistDraft = (nextProfileData) => {
-    try {
-      localStorage.setItem(
-        PROVIDER_PROFILE_DRAFT_KEY,
-        JSON.stringify({ ...nextProfileData, photos: [] })
+  const handleStartNewService = () => {
+    if (!canAddService) {
+      setSubmitError(
+        "Este botón se activa cuando al menos una de tus fichas ya está aprobada y visible en el catálogo."
       );
-    } catch {
-      // ignore
+      return;
+    }
+
+    setSubmitError("");
+    setSubmitSuccess("");
+    setPhotoError("");
+    setIsCreatingNewService(true);
+    setActiveServiceId(null);
+    setServerPhotos([]);
+    setProfileData(createEmptyProfileData());
+    persistDraft(createEmptyProfileData());
+  };
+
+  const handleSelectService = async (serviceId) => {
+    const token = getProviderToken();
+    if (!token) {
+      navigate("/empresas/login", { state: { from: EDIT_ROUTE } });
+      return;
+    }
+
+    setSubmitError("");
+    setSubmitSuccess("");
+    setPhotoError("");
+    setIsLoadingWorkspace(true);
+
+    try {
+      await loadProviderWorkspace(token, { preferredServiceId: serviceId });
+    } catch (err) {
+      setSubmitError(String(err?.message || "No se pudo cargar el servicio."));
+    } finally {
+      setIsLoadingWorkspace(false);
     }
   };
 
@@ -931,16 +1079,25 @@ function BusinessRegisterCompletePage() {
       return;
     }
 
-    if (!validateNumber(priceFrom) || !validateNumber(priceTo))
+    if (!validateNumber(priceFrom) || !validateNumber(priceTo)) {
       return setSubmitError("Los rangos de precio deben ser valores numéricos.");
-    if (Number(priceFrom) > Number(priceTo))
+    }
+
+    if (Number(priceFrom) > Number(priceTo)) {
       return setSubmitError("El precio 'desde' no puede ser mayor que el 'hasta'.");
-    if (!validateNumber(capacityMin))
+    }
+
+    if (!validateNumber(capacityMin)) {
       return setSubmitError("La capacidad mínima debe ser un número.");
-    if (capacityMax && !validateNumber(capacityMax))
+    }
+
+    if (capacityMax && !validateNumber(capacityMax)) {
       return setSubmitError("La capacidad máxima debe ser un número.");
-    if (capacityMax && Number(capacityMin) > Number(capacityMax))
+    }
+
+    if (capacityMax && Number(capacityMin) > Number(capacityMax)) {
       return setSubmitError("La capacidad mínima no puede ser mayor que la máxima.");
+    }
 
     const sellingPoints = sellingPointsList;
     persistDraft(profileData);
@@ -953,6 +1110,7 @@ function BusinessRegisterCompletePage() {
           setSubmitError("Primero completa el registro inicial (Paso 1).");
           return;
         }
+
         if (!validateCreatePassword()) return;
 
         const payload = {
@@ -1000,13 +1158,17 @@ function BusinessRegisterCompletePage() {
 
         setProviderSession({ token: data?.token, provider: data?.provider });
 
+        const savedProfileId = data?.profile?.id || null;
         const mapped = mapApiProfileToProfileData(data?.profile);
+
         if (mapped) {
           persistDraft(mapped);
           setProfileData((prev) => ({ ...prev, ...mapped, photos: prev.photos || [] }));
         }
 
-        if (data?.token) await uploadSelectedPhotosToBackend(data.token);
+        if (data?.token && savedProfileId) {
+          await uploadSelectedPhotosToBackend(data.token, savedProfileId);
+        }
 
         setSubmitSuccess("Cuenta creada y ficha guardada correctamente.");
         navigate("/proveedores/mi-perfil?mode=provider", {
@@ -1022,7 +1184,7 @@ function BusinessRegisterCompletePage() {
         return;
       }
 
-      const payload = {
+      const basePayload = {
         companyName: basicData?.companyName ? String(basicData.companyName).trim() : undefined,
         ownerName: basicData?.ownerName ? String(basicData.ownerName).trim() : undefined,
         phone: basicData?.phone ? normalizePhoneDigits(basicData.phone) : undefined,
@@ -1060,20 +1222,36 @@ function BusinessRegisterCompletePage() {
         sellingPointsText: profileData.sellingPointsText || "",
       };
 
-      const data = await apiJson("/providers/me", { method: "PUT", token, body: payload });
+      let data = null;
+      let savedProfileId = activeServiceId || null;
+      let successMessage = "Cambios guardados correctamente.";
 
-      const mapped = mapApiProfileToProfileData(data?.profile);
-      if (mapped) {
-        persistDraft(mapped);
-        setProfileData((prev) => ({ ...prev, ...mapped, photos: prev.photos || [] }));
+      if (isCreatingNewService) {
+        data = await apiJson("/providers/my-services", {
+          method: "POST",
+          token,
+          body: basePayload,
+        });
+        savedProfileId = data?.profile?.id || null;
+        successMessage = "Nuevo servicio guardado correctamente.";
+      } else if (activeServiceId) {
+        data = await apiJson(`/providers/my-services/${activeServiceId}`, {
+          method: "PUT",
+          token,
+          body: basePayload,
+        });
+        savedProfileId = activeServiceId;
+      } else {
+        data = await apiJson("/providers/me", { method: "PUT", token, body: basePayload });
+        savedProfileId = data?.profile?.id || null;
       }
 
-      await uploadSelectedPhotosToBackend(token);
+      if (savedProfileId) {
+        await uploadSelectedPhotosToBackend(token, savedProfileId);
+        await loadProviderWorkspace(token, { preferredServiceId: savedProfileId });
+      }
 
-      const me = await apiJson("/providers/me", { token });
-      setServerPhotos(Array.isArray(me?.photos) ? me.photos : []);
-
-      setSubmitSuccess("Cambios guardados correctamente.");
+      setSubmitSuccess(successMessage);
     } catch (err) {
       setSubmitError(String(err?.message || "No se pudo guardar."));
     } finally {
@@ -1120,6 +1298,244 @@ function BusinessRegisterCompletePage() {
                 </p>
               )}
 
+              {authMode === "edit" && (
+                <section
+                  style={{
+                    marginBottom: "1.2rem",
+                    padding: "1rem",
+                    borderRadius: "1rem",
+                    border: "1px solid rgba(186, 102, 120, 0.16)",
+                    background:
+                      "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,244,247,0.82))",
+                    boxShadow: "0 12px 28px rgba(31, 23, 26, 0.06)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                      flexWrap: "wrap",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <p
+                        style={{
+                          margin: "0 0 0.35rem",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          letterSpacing: "0.08em",
+                          textTransform: "uppercase",
+                          color: "#8f4d5b",
+                        }}
+                      >
+                        Administra tus servicios
+                      </p>
+                      <h2
+                        style={{
+                          margin: 0,
+                          fontSize: "1.15rem",
+                          color: "#1f171a",
+                        }}
+                      >
+                        Una sola cuenta, varios escaparates
+                      </h2>
+                      <p
+                        style={{
+                          margin: "0.45rem 0 0",
+                          color: "#6a5961",
+                          lineHeight: 1.6,
+                          maxWidth: "48rem",
+                        }}
+                      >
+                        Aquí puedes moverte entre tus fichas, editar una existente o dar de alta
+                        otra nueva dentro de la misma cuenta.
+                      </p>
+                    </div>
+
+                    <div style={{ minWidth: "260px", flex: "0 0 auto" }}>
+                      <button
+                        type="button"
+                        className="btn btn--primary"
+                        onClick={handleStartNewService}
+                        disabled={
+                          !canAddService || isSubmitting || isUploadingPhotos || isLoadingWorkspace
+                        }
+                        style={{ width: "100%", justifyContent: "center" }}
+                      >
+                        Agregar otro servicio
+                      </button>
+
+                      {!canAddService && (
+                        <p
+                          style={{
+                            margin: "0.55rem 0 0",
+                            fontSize: "0.84rem",
+                            color: "#6a5961",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          Este botón se activa cuando al menos una de tus fichas ya está aprobada y
+                          visible en el catálogo.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "0.75rem",
+                      marginTop: "1rem",
+                    }}
+                  >
+                    {providerServices.map((service) => {
+                      const meta = getServiceStatusMeta(service);
+                      const isSelected =
+                        !isCreatingNewService && service.id === activeServiceId;
+
+                      return (
+                        <button
+                          key={service.id}
+                          type="button"
+                          onClick={() => handleSelectService(service.id)}
+                          disabled={isSubmitting || isUploadingPhotos || isLoadingWorkspace}
+                          style={{
+                            width: "100%",
+                            textAlign: "left",
+                            borderRadius: "1rem",
+                            border: isSelected
+                              ? "1px solid rgba(186, 102, 120, 0.44)"
+                              : "1px solid rgba(186, 102, 120, 0.16)",
+                            background: isSelected
+                              ? "linear-gradient(180deg, rgba(255,255,255,1), rgba(255,240,244,0.92))"
+                              : "#fff",
+                            padding: "0.95rem 1rem",
+                            cursor: "pointer",
+                            boxShadow: isSelected
+                              ? "0 10px 24px rgba(186, 102, 120, 0.10)"
+                              : "0 6px 14px rgba(31, 23, 26, 0.04)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "1rem",
+                              alignItems: "flex-start",
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <strong
+                                style={{
+                                  display: "block",
+                                  color: "#1f171a",
+                                  fontSize: "0.98rem",
+                                }}
+                              >
+                                {service.venue_name || "Servicio sin nombre"}
+                              </strong>
+
+                              <span
+                                style={{
+                                  display: "block",
+                                  marginTop: "0.2rem",
+                                  color: "#6a5961",
+                                  fontSize: "0.88rem",
+                                }}
+                              >
+                                {service.business_category || "Categoría pendiente"}
+                                {service.locality_area ? ` · ${service.locality_area}` : ""}
+                              </span>
+
+                              <span
+                                style={{
+                                  display: "block",
+                                  marginTop: "0.28rem",
+                                  color: "#7b6b72",
+                                  fontSize: "0.82rem",
+                                }}
+                              >
+                                {service.venue_location || "Ubicación pendiente"}
+                              </span>
+                            </div>
+
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "flex-end",
+                                gap: "0.4rem",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  padding: "0.35rem 0.7rem",
+                                  borderRadius: "999px",
+                                  background: meta.background,
+                                  border: `1px solid ${meta.borderColor}`,
+                                  color: meta.color,
+                                  fontSize: "0.78rem",
+                                  fontWeight: 700,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {meta.label}
+                              </span>
+
+                              <span
+                                style={{
+                                  fontSize: "0.78rem",
+                                  color: "#8f4d5b",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {service.photo_count || 0} foto(s)
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    {isCreatingNewService && (
+                      <div
+                        style={{
+                          borderRadius: "1rem",
+                          border: "1px dashed rgba(186, 102, 120, 0.32)",
+                          background: "rgba(255, 250, 251, 0.92)",
+                          padding: "0.95rem 1rem",
+                        }}
+                      >
+                        <strong
+                          style={{
+                            display: "block",
+                            color: "#1f171a",
+                            fontSize: "0.98rem",
+                          }}
+                        >
+                          Nuevo servicio
+                        </strong>
+                        <span
+                          style={{
+                            display: "block",
+                            marginTop: "0.28rem",
+                            color: "#6a5961",
+                            fontSize: "0.88rem",
+                            lineHeight: 1.55,
+                          }}
+                        >
+                          Estás llenando una ficha nueva. Cuando la guardes, entrará a revisión del
+                          admin antes de mostrarse en el catálogo.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
               <div className="profile-progress">
                 <div className="profile-progress__row">
                   <span className="profile-progress__label">Progreso del perfil</span>
@@ -1132,6 +1548,26 @@ function BusinessRegisterCompletePage() {
                   />
                 </div>
               </div>
+
+              {authMode === "edit" && !isCreatingNewService && activeService && (
+                <div
+                  style={{
+                    marginBottom: "0.85rem",
+                    padding: "0.85rem 1rem",
+                    borderRadius: "0.95rem",
+                    background: activeServiceStatusMeta.background,
+                    border: `1px solid ${activeServiceStatusMeta.borderColor}`,
+                    color: activeServiceStatusMeta.color,
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    gap: "0.5rem",
+                    alignItems: "center",
+                  }}
+                >
+                  <span>Estado de esta ficha:</span>
+                  <span>{activeServiceStatusMeta.label}</span>
+                </div>
+              )}
 
               {submitError && (
                 <div className="form__error" style={{ marginBottom: "0.8rem" }}>
@@ -1668,7 +2104,7 @@ function BusinessRegisterCompletePage() {
                     type="button"
                     className="btn btn--ghost"
                     onClick={() => navigate("/empresas/registro")}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isLoadingWorkspace}
                   >
                     Volver al registro inicial
                   </button>
@@ -1677,17 +2113,23 @@ function BusinessRegisterCompletePage() {
                     type="button"
                     className="btn btn--ghost"
                     onClick={handleGoPreview}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isLoadingWorkspace}
                   >
                     Ver mi perfil (vista proveedor)
                   </button>
 
-                  <button type="submit" className="btn btn--primary" disabled={isSubmitting}>
+                  <button
+                    type="submit"
+                    className="btn btn--primary"
+                    disabled={isSubmitting || isLoadingWorkspace}
+                  >
                     {isSubmitting
                       ? "Guardando..."
                       : authMode === "register"
-                      ? "Crear cuenta y guardar ficha"
-                      : "Guardar cambios"}
+                        ? "Crear cuenta y guardar ficha"
+                        : isCreatingNewService
+                          ? "Guardar nuevo servicio"
+                          : "Guardar cambios"}
                   </button>
                 </div>
               </form>
@@ -1706,6 +2148,32 @@ function BusinessRegisterCompletePage() {
                       {profileData.businessCategory || "Categoría"}
                       {profileData.localityArea ? ` · ${profileData.localityArea}` : ""}
                     </strong>
+                  </p>
+                )}
+
+                {authMode === "edit" && !isCreatingNewService && activeService && (
+                  <p
+                    className="preview-card__subtitle"
+                    style={{
+                      marginTop: "-0.1rem",
+                      color: activeServiceStatusMeta.color,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {activeServiceStatusMeta.label}
+                  </p>
+                )}
+
+                {isCreatingNewService && authMode === "edit" && (
+                  <p
+                    className="preview-card__subtitle"
+                    style={{
+                      marginTop: "-0.1rem",
+                      color: "#8f4d5b",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Nueva ficha en preparación
                   </p>
                 )}
 
