@@ -1,6 +1,20 @@
-import "../../Blocks/venues/VenueDetailPage.css";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
+import { RowsPhotoAlbum } from "react-photo-album";
+import Lightbox from "yet-another-react-lightbox";
+import Captions from "yet-another-react-lightbox/plugins/captions";
+import Counter from "yet-another-react-lightbox/plugins/counter";
+import Fullscreen from "yet-another-react-lightbox/plugins/fullscreen";
+import Thumbnails from "yet-another-react-lightbox/plugins/thumbnails";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+
+import "react-photo-album/rows.css";
+import "yet-another-react-lightbox/styles.css";
+import "yet-another-react-lightbox/plugins/captions.css";
+import "yet-another-react-lightbox/plugins/counter.css";
+import "yet-another-react-lightbox/plugins/thumbnails.css";
+import "../../Blocks/venues/VenueDetailPage.css";
+
 import { clearProviderSession, getProviderToken } from "../services/providerAuth";
 import { getToken } from "../utils/auth.js";
 import { sendAdminNewInfoRequestEmail } from "../services/emailjsService.js";
@@ -203,6 +217,38 @@ function mapApiProviderToVenue(profile, photos = []) {
   };
 }
 
+function loadPhotoMetadata(src, alt, title, description) {
+  return new Promise((resolve) => {
+    const image = new Image();
+
+    image.onload = () => {
+      resolve({
+        src,
+        width: image.naturalWidth || 1600,
+        height: image.naturalHeight || 900,
+        alt,
+        title,
+        description,
+        thumbnail: src,
+      });
+    };
+
+    image.onerror = () => {
+      resolve({
+        src,
+        width: 1600,
+        height: 900,
+        alt,
+        title,
+        description,
+        thumbnail: src,
+      });
+    };
+
+    image.src = src;
+  });
+}
+
 function VenueDetailPage() {
   const { id } = useParams();
   const location = useLocation();
@@ -234,8 +280,9 @@ function VenueDetailPage() {
   const [requestSending, setRequestSending] = useState(false);
   const [requestError, setRequestError] = useState("");
 
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [isCarouselPaused, setIsCarouselPaused] = useState(false);
+  const [albumPhotos, setAlbumPhotos] = useState([]);
+  const [albumLoading, setAlbumLoading] = useState(true);
+  const [lightboxIndex, setLightboxIndex] = useState(-1);
 
   useEffect(() => {
     let cancelled = false;
@@ -438,31 +485,50 @@ function VenueDetailPage() {
     return DEFAULT_GALLERY;
   }, [venue]);
 
-  const hasMultiplePhotos = venueGallery.length > 1;
-  const unreadInboxCount = Number(inboxStats.sin_atender || 0);
-
   useEffect(() => {
-    setCurrentSlide(0);
-    setIsCarouselPaused(false);
-  }, [venue?.id]);
+    let cancelled = false;
 
-  useEffect(() => {
-    if (currentSlide > venueGallery.length - 1) {
-      setCurrentSlide(0);
-    }
-  }, [currentSlide, venueGallery.length]);
+    const run = async () => {
+      if (!venueGallery.length) {
+        setAlbumPhotos([]);
+        setAlbumLoading(false);
+        return;
+      }
 
-  useEffect(() => {
-    if (!hasMultiplePhotos || isCarouselPaused) return undefined;
+      setAlbumLoading(true);
 
-    const intervalId = window.setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % venueGallery.length);
-    }, 5000);
+      const descriptionParts = [venue?.location, venue?.category].filter(Boolean);
+      const commonDescription =
+        descriptionParts.length > 0 ? descriptionParts.join(" · ") : "Galería del proveedor";
+
+      const photos = await Promise.all(
+        venueGallery.map((src, index) =>
+          loadPhotoMetadata(
+            src,
+            `${venue?.name || "Proveedor"} foto ${index + 1}`,
+            `${venue?.name || "Proveedor"} · Foto ${index + 1}`,
+            commonDescription,
+          ),
+        ),
+      );
+
+      if (cancelled) return;
+
+      setAlbumPhotos(photos);
+      setAlbumLoading(false);
+      setLightboxIndex(-1);
+    };
+
+    run();
 
     return () => {
-      window.clearInterval(intervalId);
+      cancelled = true;
     };
-  }, [hasMultiplePhotos, isCarouselPaused, venueGallery.length]);
+  }, [venueGallery, venue?.name, venue?.location, venue?.category]);
+
+  const unreadInboxCount = Number(inboxStats.sin_atender || 0);
+  const featuredImage = albumPhotos[0]?.src || venueGallery[0] || venue?.mainImage || "";
+  const galleryCount = albumPhotos.length || venueGallery.length || 0;
 
   const isRequestSubmitDisabled =
     requestSending ||
@@ -587,30 +653,6 @@ function VenueDetailPage() {
       setRequestError(String(err?.message || "No se pudo enviar la solicitud."));
     } finally {
       setRequestSending(false);
-    }
-  };
-
-  const handlePrevSlide = () => {
-    if (!hasMultiplePhotos) return;
-    setCurrentSlide((prev) => (prev === 0 ? venueGallery.length - 1 : prev - 1));
-  };
-
-  const handleNextSlide = () => {
-    if (!hasMultiplePhotos) return;
-    setCurrentSlide((prev) => (prev + 1) % venueGallery.length);
-  };
-
-  const handleCarouselKeyDown = (event) => {
-    if (!hasMultiplePhotos) return;
-
-    if (event.key === "ArrowLeft") {
-      event.preventDefault();
-      handlePrevSlide();
-    }
-
-    if (event.key === "ArrowRight") {
-      event.preventDefault();
-      handleNextSlide();
     }
   };
 
@@ -787,85 +829,99 @@ function VenueDetailPage() {
               </div>
             </div>
 
-            <div
-              className="venue-hero__media"
-              tabIndex={0}
-              onKeyDown={handleCarouselKeyDown}
-              onMouseEnter={() => setIsCarouselPaused(true)}
-              onMouseLeave={() => setIsCarouselPaused(false)}
-              onFocus={() => setIsCarouselPaused(true)}
-              onBlur={() => setIsCarouselPaused(false)}
-            >
-              {venueGallery.map((photo, index) => {
-                const isActive = index === currentSlide;
+            <div className="venue-hero__media venue-hero__media--editorial">
+              <img
+                src={featuredImage}
+                alt=""
+                aria-hidden="true"
+                className="venue-hero__featured-bg"
+              />
+              <div className="venue-hero__featured-overlay" />
+              <img
+                src={featuredImage}
+                alt={`Foto principal de ${venue.name}`}
+                className="venue-hero__featured-image"
+              />
 
-                return (
-                  <div
-                    key={`${photo}-${index}`}
-                    aria-hidden={!isActive}
-                    className={`venue-hero__slide ${
-                      isActive ? "venue-hero__slide--active" : ""
-                    }`}
+              <div className="venue-hero__featured-topbar">
+                <span className="venue-hero__featured-badge">{galleryCount} fotos</span>
+                <span className="venue-hero__featured-badge venue-hero__featured-badge--glass">
+                  vista premium
+                </span>
+              </div>
+
+              <div className="venue-hero__featured-footer">
+                <div className="venue-hero__featured-copy">
+                  <strong>Explora la galería completa</strong>
+                  <span>Zoom, pantalla completa y navegación limpia</span>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn--primary venue-hero__featured-trigger"
+                  onClick={() => setLightboxIndex(0)}
+                  disabled={!galleryCount}
+                >
+                  Abrir galería
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="venue-album">
+          <div className="container">
+            <div className="venue-album__header">
+              <div>
+                <h2 className="section-title">Galería del lugar</h2>
+                <p className="section-subtitle">
+                  Una vista más editorial, más limpia y menos gritona.
+                </p>
+              </div>
+
+              <div className="venue-album__header-actions">
+                <span className="venue-album__count-pill">
+                  {galleryCount} {galleryCount === 1 ? "imagen" : "imágenes"}
+                </span>
+
+                {galleryCount > 0 ? (
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => setLightboxIndex(0)}
                   >
-                    <img
-                      src={photo}
-                      alt=""
-                      aria-hidden="true"
-                      className="venue-hero__slide-bg"
-                      loading="lazy"
-                    />
+                    Ver pantalla completa
+                  </button>
+                ) : null}
+              </div>
+            </div>
 
-                    <div className="venue-hero__slide-overlay" />
-
-                    <img
-                      src={photo}
-                      alt={`${venue.name} foto ${index + 1}`}
-                      className="venue-hero__image"
-                      loading={index === 0 ? "eager" : "lazy"}
-                    />
+            <div className="venue-album__surface">
+              {albumLoading ? (
+                <div className="venue-album__loading">
+                  <div className="venue-album__skeleton venue-album__skeleton--wide" />
+                  <div className="venue-album__loading-grid">
+                    <div className="venue-album__skeleton" />
+                    <div className="venue-album__skeleton" />
+                    <div className="venue-album__skeleton" />
+                    <div className="venue-album__skeleton" />
                   </div>
-                );
-              })}
-
-              <div className="venue-hero__media-topbar">
-                <span className="venue-hero__media-badge venue-hero__media-badge--light">
-                  {currentSlide + 1} / {venueGallery.length}
-                </span>
-
-                <span className="venue-hero__media-badge venue-hero__media-badge--dark">
-                  {isCarouselPaused ? "Pausado" : "Auto cada 5 s"}
-                </span>
-              </div>
-
-              {hasMultiplePhotos && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handlePrevSlide}
-                    aria-label="Ver foto anterior"
-                    className="venue-hero__media-arrow venue-hero__media-arrow--prev"
-                  >
-                    ‹
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleNextSlide}
-                    aria-label="Ver foto siguiente"
-                    className="venue-hero__media-arrow venue-hero__media-arrow--next"
-                  >
-                    ›
-                  </button>
-                </>
-              )}
-
-              <div className="venue-hero__media-footer">
-                <progress
-                  className="venue-hero__media-progress"
-                  value={currentSlide + 1}
-                  max={venueGallery.length}
+                </div>
+              ) : albumPhotos.length ? (
+                <RowsPhotoAlbum
+                  photos={albumPhotos}
+                  targetRowHeight={250}
+                  rowConstraints={{ singleRowMaxHeight: 440 }}
+                  spacing={16}
+                  padding={0}
+                  breakpoints={[480, 768, 1024, 1280]}
+                  onClick={({ index }) => setLightboxIndex(index)}
                 />
-              </div>
+              ) : (
+                <div className="venue-album__empty">
+                  Este proveedor aún no ha cargado fotos.
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -960,6 +1016,39 @@ function VenueDetailPage() {
           </div>
         </section>
       </div>
+
+      <Lightbox
+        open={lightboxIndex >= 0}
+        close={() => setLightboxIndex(-1)}
+        index={lightboxIndex >= 0 ? lightboxIndex : 0}
+        slides={albumPhotos}
+        className="venue-lightbox"
+        plugins={[Captions, Counter, Fullscreen, Thumbnails, Zoom]}
+        counter={{
+          separator: " de ",
+          container: { className: "venue-lightbox__counter" },
+        }}
+        captions={{
+          showToggle: false,
+          descriptionTextAlign: "start",
+          descriptionMaxLines: 2,
+        }}
+        thumbnails={{
+          position: "bottom",
+          width: 96,
+          height: 72,
+          border: 0,
+          borderRadius: 12,
+          padding: 0,
+          gap: 10,
+          imageFit: "cover",
+          vignette: false,
+        }}
+        zoom={{
+          maxZoomPixelRatio: 2,
+          scrollToZoom: false,
+        }}
+      />
 
       {!isProviderView && modalMode === "register" && (
         <div
