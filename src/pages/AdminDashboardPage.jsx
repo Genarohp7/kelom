@@ -325,24 +325,26 @@ function AdminDashboardPage() {
     setProviderFilters((prev) => ({ ...prev, [name]: value }));
   }
 
-  async function patchProvider(userId, patch, successMsg) {
-    setProviderBusyId(userId);
+  async function patchProvider(profileId, patch, successMsg) {
+    setProviderBusyId(profileId);
     setProvidersError("");
     setProvidersFlash("");
 
     try {
-      const data = await adminApiFetch(`/admin/providers/${userId}/status`, {
+      const data = await adminApiFetch(`/admin/providers/${profileId}/status`, {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
 
-      const moderation = data?.moderation;
+      const moderation = data?.provider || data?.moderation;
 
       setProviders((prev) =>
         prev.map((p) =>
-          p.user_id === userId
+          p.profile_id === profileId
             ? {
                 ...p,
+                profile_id: moderation?.id ?? p.profile_id,
+                user_id: moderation?.user_id ?? p.user_id,
                 review_status: moderation?.review_status ?? p.review_status,
                 public_visibility: moderation?.public_visibility ?? p.public_visibility,
                 review_notes: moderation?.review_notes ?? p.review_notes,
@@ -352,7 +354,7 @@ function AdminDashboardPage() {
                     : p.is_featured,
                 reviewed_by: moderation?.reviewed_by ?? p.reviewed_by,
                 reviewed_at: moderation?.reviewed_at ?? p.reviewed_at,
-                updated_at: moderation?.reviewed_at ?? p.updated_at,
+                updated_at: moderation?.reviewed_at ?? moderation?.updated_at ?? p.updated_at,
               }
             : p
         )
@@ -1318,7 +1320,7 @@ function AdminDashboardPage() {
             {activeSection === "providers" ? (
               <section className="admin-card admin-card--table">
                 <div className="admin-table__header">
-                  <h2 className="admin-table__title">Proveedores</h2>
+                  <h2 className="admin-table__title">Proveedores / servicios</h2>
                   <div className="admin-table__meta">
                     Mostrando: <strong>{providers.length}</strong>
                   </div>
@@ -1328,7 +1330,7 @@ function AdminDashboardPage() {
                   <table className="admin-table">
                     <thead>
                       <tr>
-                        <th>Proveedor</th>
+                        <th>Proveedor / servicio</th>
                         <th>Estatus</th>
                         <th>Visibilidad</th>
                         <th>Modalidad</th>
@@ -1339,11 +1341,12 @@ function AdminDashboardPage() {
 
                     <tbody>
                       {providers.map((p) => {
-                        const isBusy = providerBusyId === p.user_id;
+                        const rowId = p.profile_id || p.user_id;
+                        const isBusy = providerBusyId === rowId;
                         const isFeatured = Boolean(p.is_featured);
 
                         return (
-                          <tr key={p.user_id}>
+                          <tr key={rowId}>
                             <td>
                               <div className="admin-provider">
                                 <div className="admin-provider__main">
@@ -1359,7 +1362,8 @@ function AdminDashboardPage() {
                                 </div>
 
                                 <div className="admin-provider__meta">
-                                  <div className="admin-provider__id">ID: {p.user_id}</div>
+                                  <div className="admin-provider__id">Ficha: {p.profile_id || "—"}</div>
+                                  <div className="admin-provider__review">Cuenta raíz: {p.user_id}</div>
                                   {p.reviewed_at ? (
                                     <div className="admin-provider__review">
                                       Revisado: {new Date(p.reviewed_at).toLocaleString()}
@@ -1403,7 +1407,7 @@ function AdminDashboardPage() {
                                 onBlur={(e) => {
                                   const next = e.target.value.trim();
                                   if ((p.review_notes || "") !== next) {
-                                    patchProvider(p.user_id, { review_notes: next }, "Notas guardadas ✅");
+                                    patchProvider(rowId, { review_notes: next }, "Notas guardadas ✅");
                                   }
                                 }}
                               />
@@ -1417,7 +1421,7 @@ function AdminDashboardPage() {
                                   disabled={isBusy}
                                   onClick={() =>
                                     patchProvider(
-                                      p.user_id,
+                                      rowId,
                                       { review_status: "approved", public_visibility: "listed" },
                                       "Aprobado y publicado ✅"
                                     )
@@ -1430,7 +1434,7 @@ function AdminDashboardPage() {
                                   className="btn btn--ghost"
                                   disabled={isBusy}
                                   onClick={() =>
-                                    patchProvider(p.user_id, { public_visibility: "hidden" }, "Ocultado ✅")
+                                    patchProvider(rowId, { public_visibility: "hidden" }, "Ocultado ✅")
                                   }
                                 >
                                   Ocultar
@@ -1441,7 +1445,7 @@ function AdminDashboardPage() {
                                   disabled={isBusy}
                                   onClick={() =>
                                     patchProvider(
-                                      p.user_id,
+                                      rowId,
                                       { is_featured: !isFeatured },
                                       isFeatured
                                         ? "Proveedor marcado como gratuito ✅"
@@ -1457,7 +1461,7 @@ function AdminDashboardPage() {
                                   disabled={isBusy}
                                   onClick={() =>
                                     patchProvider(
-                                      p.user_id,
+                                      rowId,
                                       { review_status: "needs_changes", public_visibility: "hidden" },
                                       "Marcado: necesita cambios ✅"
                                     )
@@ -1471,7 +1475,7 @@ function AdminDashboardPage() {
                                   disabled={isBusy}
                                   onClick={() =>
                                     patchProvider(
-                                      p.user_id,
+                                      rowId,
                                       { review_status: "suspended", public_visibility: "hidden" },
                                       "Suspendido ✅"
                                     )
@@ -1497,7 +1501,7 @@ function AdminDashboardPage() {
                 </div>
 
                 <div className="admin-footer-note">
-                  Nota: el público solo ve proveedores <strong>approved + listed</strong>. La modalidad
+                  Nota: cada fila representa una <strong>ficha/servicio independiente</strong>. El público solo ve fichas <strong>approved + listed</strong>. La modalidad
                   <strong> Proveedor Destacado Kelom</strong> se controla por separado con <strong>is_featured</strong>.
                 </div>
               </section>
