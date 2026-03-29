@@ -386,7 +386,7 @@ function HomePage() {
       id: 4,
       name: "Organizadoras",
       category: "Wedding planners",
-      filterCategory: "Organizador para Bodas", // ✅ categoría real en BD
+      filterCategory: "Organizador para Bodas",
       image:
         "https://images.pexels.com/photos/3951851/pexels-photo-3951851.jpeg?auto=compress&cs=tinysrgb&w=400",
     },
@@ -436,10 +436,8 @@ function HomePage() {
     scrollToVenues();
   };
 
-  // ✅ NUEVO: click en featured card => cambia SOLO la lista de proveedores
   const handleFeaturedClick = (company) => {
     if (!company?.filterCategory) {
-      // Lugares = estado default (por ahora)
       clearSearch();
       return;
     }
@@ -495,7 +493,6 @@ function HomePage() {
     <div className="home">
       {SHOW_DEMO_SECTIONS && (
         <>
-          {/* HERO + BUSCADOR */}
           <section className="hero">
             <div className="container hero__inner">
               <div className="hero__eyebrow">Planea tu boda con calma</div>
@@ -568,7 +565,6 @@ function HomePage() {
             </div>
           </section>
 
-          {/* LUGARES / VENUES */}
           <section className="venues" ref={venuesRef}>
             <div className="container">
               <header className="venues__header">
@@ -599,8 +595,11 @@ function HomePage() {
               ) : (
                 <>
                   <div className="venues__grid">
-                    {listToShow.map((p) => {
-                      const id = p.user_id;
+                    {listToShow.map((p, index) => {
+                      const profileId = p.profile_id || p.id || null;
+                      const fallbackProviderId = p.user_id || p.provider_id || null;
+                      const detailId = profileId || fallbackProviderId || `provider-${index}`;
+
                       const name = p.venue_name || p.company_name || "Proveedor";
                       const location = p.venue_location || "Ubicación por definir";
                       const category =
@@ -610,7 +609,7 @@ function HomePage() {
                         "https://images.pexels.com/photos/3951852/pexels-photo-3951852.jpeg?auto=compress&cs=tinysrgb&w=800";
 
                       return (
-                        <article key={id} className="venue-card">
+                        <article key={detailId} className="venue-card">
                           <div className="venue-card__image-wrap">
                             <img className="venue-card__image" src={image} alt={name} />
                           </div>
@@ -625,7 +624,7 @@ function HomePage() {
 
                             <div className="venue-card__location">{location}</div>
 
-                            <Link to={`/proveedores/${id}`} className="venue-card__link">
+                            <Link to={`/proveedores/${detailId}`} className="venue-card__link">
                               Ver más detalles
                             </Link>
                           </div>
@@ -662,7 +661,6 @@ function HomePage() {
             </div>
           </section>
 
-          {/* EMPRESAS DESTACADAS */}
           <section className="featured">
             <div className="container">
               <header className="featured__header">
@@ -697,7 +695,6 @@ function HomePage() {
         </>
       )}
 
-      {/* TIPS PARA TU BODA */}
       <section className="tips">
         <div className="container">
           <header className="tips__header">

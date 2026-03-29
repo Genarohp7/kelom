@@ -14,6 +14,7 @@ const PROVIDER_BASIC_DRAFT_KEY = "kelom_provider_basic_draft";
 const PROVIDER_PROFILE_DRAFT_KEY = "kelom_provider_profile_draft";
 
 const EDIT_ROUTE = "/empresas/registro/completar";
+const LOGIN_ROUTE = "/empresas/acceso";
 
 const ALLOWED_PROVIDER_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PROVIDER_PHOTO_BYTES = 5 * 1024 * 1024; // 5MB
@@ -517,7 +518,7 @@ function BusinessRegisterCompletePage() {
 
     const token = getProviderToken();
     if (!token) {
-      navigate("/empresas/login", {
+      navigate(LOGIN_ROUTE, {
         replace: true,
         state: { from: EDIT_ROUTE },
       });
@@ -538,7 +539,7 @@ function BusinessRegisterCompletePage() {
         console.warn("No se pudo cargar /providers/me:", err);
 
         clearProviderSession();
-        navigate("/empresas/login", {
+        navigate(LOGIN_ROUTE, {
           replace: true,
           state: { from: EDIT_ROUTE },
         });
@@ -708,7 +709,7 @@ function BusinessRegisterCompletePage() {
     const token = getProviderToken();
     if (!token) {
       setSubmitError("No hay sesión activa. Inicia sesión como proveedor.");
-      navigate("/empresas/login", { state: { from: EDIT_ROUTE } });
+      navigate(LOGIN_ROUTE, { state: { from: EDIT_ROUTE } });
       return;
     }
 
@@ -964,7 +965,7 @@ function BusinessRegisterCompletePage() {
     const token = getProviderToken();
     if (!token) {
       setSubmitError("Tu sesión de proveedor no está activa. Inicia sesión primero.");
-      navigate("/empresas/login", { state: { from: EDIT_ROUTE } });
+      navigate(LOGIN_ROUTE, { state: { from: EDIT_ROUTE } });
       return;
     }
 
@@ -1024,7 +1025,7 @@ function BusinessRegisterCompletePage() {
   const handleSelectService = async (serviceId) => {
     const token = getProviderToken();
     if (!token) {
-      navigate("/empresas/login", { state: { from: EDIT_ROUTE } });
+      navigate(LOGIN_ROUTE, { state: { from: EDIT_ROUTE } });
       return;
     }
 
@@ -1180,7 +1181,7 @@ function BusinessRegisterCompletePage() {
       const token = getProviderToken();
       if (!token) {
         setSubmitError("No hay sesión activa. Inicia sesión como proveedor primero.");
-        navigate("/empresas/login", { state: { from: EDIT_ROUTE } });
+        navigate(LOGIN_ROUTE, { state: { from: EDIT_ROUTE } });
         return;
       }
 

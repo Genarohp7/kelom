@@ -73,6 +73,13 @@ function normalizeRequestItem(item, index) {
 
   return {
     id: item.id ?? `request-${index}`,
+    profileId: item.profile_id || item.service_id || null,
+    serviceName:
+      item.provider_venue_name ||
+      item.venue_name ||
+      item.service_name ||
+      item.provider_company_name ||
+      "Servicio sin identificar",
     fromName: item.requester_name || item.fromName || "Sin nombre",
     partnerName: item.partner_name || item.partnerName || "",
     submittedAt: item.created_at || item.submittedAt || "",
@@ -165,13 +172,13 @@ function ProviderInboxPage() {
 
         if (cancelled) return;
 
-        const venueName =
-          providerData?.profile?.venue_name ||
+        const companyName =
           providerData?.profile?.company_name ||
+          providerData?.profiles?.[0]?.company_name ||
           providerData?.provider?.name ||
           "Tu bandeja de solicitudes";
 
-        setProviderName(venueName);
+        setProviderName(companyName);
         setRequests(Array.isArray(requestsData?.requests) ? requestsData.requests : []);
       } catch (err) {
         if (cancelled) return;
@@ -223,7 +230,8 @@ function ProviderInboxPage() {
         String(item.location || "").toLowerCase().includes(needle) ||
         String(item.message || "").toLowerCase().includes(needle) ||
         String(item.email || "").toLowerCase().includes(needle) ||
-        String(item.phone || "").toLowerCase().includes(needle);
+        String(item.phone || "").toLowerCase().includes(needle) ||
+        String(item.serviceName || "").toLowerCase().includes(needle);
 
       return matchesStatus && matchesSearch;
     });
@@ -439,7 +447,7 @@ function ProviderInboxPage() {
                 <input
                   type="text"
                   className="provider-inbox__search"
-                  placeholder="Buscar por nombre, zona, correo, teléfono o mensaje..."
+                  placeholder="Buscar por nombre, servicio, zona, correo, teléfono o mensaje..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -521,6 +529,18 @@ function ProviderInboxPage() {
                         </span>
                       </div>
 
+                      <p
+                        className="request-card__service"
+                        style={{
+                          margin: "0.2rem 0 0.45rem",
+                          fontSize: "0.86rem",
+                          fontWeight: 700,
+                          color: "#8f4d5b",
+                        }}
+                      >
+                        {item.serviceName}
+                      </p>
+
                       <p className="request-card__excerpt">{item.message}</p>
 
                       <div className="request-card__meta">
@@ -564,6 +584,13 @@ function ProviderInboxPage() {
                   </header>
 
                   <div className="detail-card__grid">
+                    <div className="detail-card__item">
+                      <span className="detail-card__label">Servicio relacionado</span>
+                      <span className="detail-card__value">
+                        {selectedRequest.serviceName || "Servicio sin identificar"}
+                      </span>
+                    </div>
+
                     <div className="detail-card__item">
                       <span className="detail-card__label">Fecha de solicitud</span>
                       <span className="detail-card__value">

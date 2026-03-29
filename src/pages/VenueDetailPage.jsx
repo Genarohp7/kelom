@@ -77,6 +77,8 @@ const DEFAULT_GALLERY = [
 const venuesDetail = [
   {
     id: 1,
+    profileId: null,
+    providerId: null,
     name: "Jardín Las Bugambilias",
     location: "Tlalpan, Ciudad de México",
     rating: 4.3,
@@ -187,8 +189,13 @@ function mapApiProviderToVenue(profile, photos = []) {
     address: venueLocation,
   });
 
+  const profileId = profile?.id || profile?.profile_id || null;
+  const providerId = profile?.provider_id || profile?.user_id || null;
+
   return {
-    id: profile?.user_id || "mi-perfil",
+    id: profileId || providerId || "mi-perfil",
+    profileId: profileId || null,
+    providerId: providerId || null,
     name: profile?.venue_name || profile?.venueName || "Mi proveedor",
     location: venueLocation,
     rating: 0,
@@ -310,6 +317,8 @@ function VenueDetailPage() {
           if (draft && !cancelled) {
             const venue = mapApiProviderToVenue(
               {
+                id: null,
+                provider_id: null,
                 venueName: draft.venueName,
                 venueLocation: draft.venueLocation,
                 businessCategory: draft.businessCategory,
@@ -563,8 +572,16 @@ function VenueDetailPage() {
       return;
     }
 
-    const providerId = isUuid(id) ? id : isUuid(venue?.id) ? venue.id : "";
-    if (!providerId) {
+    const profileId =
+      isUuid(id)
+        ? id
+        : isUuid(venue?.profileId)
+          ? venue.profileId
+          : isUuid(venue?.id)
+            ? venue.id
+            : "";
+
+    if (!profileId) {
       setRequestUiMessage("Este proveedor es demo; aún no se puede enviar solicitud aquí.");
       return;
     }
@@ -592,8 +609,25 @@ function VenueDetailPage() {
       return;
     }
 
-    const providerId = isUuid(id) ? id : isUuid(venue?.id) ? venue.id : "";
-    if (!providerId) {
+    const profileId =
+      isUuid(id)
+        ? id
+        : isUuid(venue?.profileId)
+          ? venue.profileId
+          : isUuid(venue?.id)
+            ? venue.id
+            : "";
+
+    const providerId =
+      isUuid(venue?.providerId)
+        ? venue.providerId
+        : isUuid(venue?.profileId)
+          ? null
+          : isUuid(venue?.id)
+            ? venue.id
+            : null;
+
+    if (!profileId) {
       setRequestError("Proveedor inválido para enviar solicitud.");
       return;
     }
@@ -612,6 +646,7 @@ function VenueDetailPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          profileId,
           providerId,
           message: finalMessage,
           preferredContactSchedule: finalPreferredSchedule,
@@ -631,7 +666,7 @@ function VenueDetailPage() {
 
         await sendAdminNewInfoRequestEmail({
           providerName: venue?.name || "",
-          providerId,
+          providerId: providerId || "",
           requesterName: authData?.user?.name || "",
           requesterEmail: authData?.user?.email || "",
           requesterPhone: profileData?.profile?.phone || "",
