@@ -630,10 +630,7 @@ function BusinessRegisterPage() {
                     caso necesario.
                   </p>
 
-                  <p className="register-card__subtitle">
-                    También recibiremos tu aceptación de documentos legales y el
-                    registro inicial de tu negocio para dar seguimiento interno.
-                  </p>
+                 
 
                   <div className="register-card__actions business-register__thanks-actions">
                     <NavLink to="/" className="btn btn--primary">
