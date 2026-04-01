@@ -93,6 +93,25 @@ function readCookieConsentState() {
   };
 }
 
+function sanitizeAnalyticsPath(pathname) {
+  if (!pathname) return "/";
+
+  if (/^\/proveedores\/invitacion\/[^/]+$/.test(pathname)) {
+    return "/proveedores/invitacion/:token";
+  }
+
+  if (/^\/proveedores\/[^/]+$/.test(pathname)) {
+    return "/proveedores/:id";
+  }
+
+  return pathname;
+}
+
+function getSafeAnalyticsLocation(pathname) {
+  const safePath = sanitizeAnalyticsPath(pathname);
+  return `${window.location.origin}${safePath}`;
+}
+
 function CookieConsentManager() {
   const [hasDecision, setHasDecision] = useState(false);
   const [analyticsEnabled, setAnalyticsEnabled] = useState(false);
@@ -498,7 +517,7 @@ function App() {
       .catch((err) => console.error("Google Maps load error:", err));
   }, []);
 
-  // ✅ Pageview virtual para SPA vía GA4 directo
+  // ✅ Pageview virtual para SPA vía GA4 directo, sin query params ni hashes sensibles
   useEffect(() => {
     const api = getCookieConsentApi();
     const consent = api?.get?.();
@@ -506,10 +525,13 @@ function App() {
     if (!consent?.analytics) return;
     if (typeof window.gtag !== "function") return;
 
+    const safePath = sanitizeAnalyticsPath(location.pathname);
+    const safeLocation = getSafeAnalyticsLocation(location.pathname);
+
     window.gtag("event", "page_view", {
       page_title: document.title,
-      page_location: window.location.href,
-      page_path: `${location.pathname}${location.search}${location.hash}`,
+      page_location: safeLocation,
+      page_path: safePath,
     });
   }, [location]);
 
