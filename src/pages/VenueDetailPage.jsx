@@ -60,6 +60,47 @@ async function fetchJsonWithAuth(url, token) {
   return data;
 }
 
+function canTrackAnalytics() {
+  if (typeof window === "undefined") return false;
+
+  const consent = window.KelomCookieConsent?.get?.();
+  return Boolean(consent?.analytics) && typeof window.gtag === "function";
+}
+
+function sanitizeAnalyticsPath(pathname) {
+  if (!pathname) return "/";
+
+  if (/^\/proveedores\/invitacion\/[^/]+$/.test(pathname)) {
+    return "/proveedores/invitacion/:token";
+  }
+
+  if (/^\/proveedores\/[^/]+$/.test(pathname)) {
+    return "/proveedores/:id";
+  }
+
+  return pathname;
+}
+
+function trackGenerateLead({
+  providerId,
+  providerName,
+  providerCategory,
+  localityArea,
+  isFeatured,
+  sourcePage,
+}) {
+  if (!canTrackAnalytics()) return;
+
+  window.gtag("event", "generate_lead", {
+    provider_id: String(providerId || ""),
+    provider_name: String(providerName || ""),
+    provider_category: String(providerCategory || ""),
+    locality_area: String(localityArea || ""),
+    is_featured: isFeatured ? "true" : "false",
+    source_page: String(sourcePage || "/"),
+  });
+}
+
 const formatMXN = (value) => {
   if (value === null || value === undefined || value === "") return "";
   const n = Number(value);
@@ -655,6 +696,15 @@ function VenueDetailPage() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+      trackGenerateLead({
+        providerId: profileId,
+        providerName: venue?.name || "",
+        providerCategory: venue?.category || "",
+        localityArea: venue?.location || "",
+        isFeatured: Boolean(venue?.isFeatured),
+        sourcePage: sanitizeAnalyticsPath(location.pathname),
+      });
 
       let internalEmailWarning = false;
 
