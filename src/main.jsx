@@ -4,7 +4,6 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import "./styles/global.css";
 
-const GTM_ID = import.meta.env.VITE_GTM_ID || "GTM-55GMBHBP";
 const COOKIE_CONSENT_KEY = "kelom_cookie_consent_v1";
 
 function getStoredCookieConsent() {
@@ -75,34 +74,12 @@ function updateGoogleConsent({ analytics }) {
   });
 }
 
-function loadGtmContainer() {
-  if (!GTM_ID) return;
-  if (window.__kelomGtmLoaded) return;
-
-  window.__kelomGtmLoaded = true;
-  ensureDataLayer();
-
-  window.dataLayer.push({
-    "gtm.start": Date.now(),
-    event: "gtm.js",
-  });
-
-  const script = document.createElement("script");
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(GTM_ID)}`;
-  document.head.appendChild(script);
-}
-
 function applyStoredConsentOnBoot() {
   const stored = getStoredCookieConsent();
 
   if (!stored) return;
 
   updateGoogleConsent({ analytics: stored.analytics });
-
-  if (stored.analytics) {
-    loadGtmContainer();
-  }
 }
 
 function exposeCookieConsentApi() {
@@ -116,7 +93,6 @@ function exposeCookieConsentApi() {
     acceptAnalytics() {
       const next = saveCookieConsent({ analytics: true });
       updateGoogleConsent({ analytics: true });
-      loadGtmContainer();
 
       window.dispatchEvent(
         new CustomEvent("kelom:cookie-consent-changed", {
@@ -146,10 +122,6 @@ function exposeCookieConsentApi() {
 
     hasDecision() {
       return Boolean(getStoredCookieConsent());
-    },
-
-    getGtmId() {
-      return GTM_ID;
     },
   };
 }

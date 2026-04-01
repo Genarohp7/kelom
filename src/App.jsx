@@ -1,4 +1,3 @@
-// src/App.jsx
 import { Routes, Route, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 
@@ -499,19 +498,18 @@ function App() {
       .catch((err) => console.error("Google Maps load error:", err));
   }, []);
 
-  // ✅ Pageview virtual para SPA (queda listo para GTM/GA4)
+  // ✅ Pageview virtual para SPA vía GA4 directo
   useEffect(() => {
     const api = getCookieConsentApi();
     const consent = api?.get?.();
 
     if (!consent?.analytics) return;
+    if (typeof window.gtag !== "function") return;
 
-    window.dataLayer = window.dataLayer || [];
-    window.dataLayer.push({
-      event: "kelom_virtual_pageview",
+    window.gtag("event", "page_view", {
+      page_title: document.title,
       page_location: window.location.href,
       page_path: `${location.pathname}${location.search}${location.hash}`,
-      page_title: document.title,
     });
   }, [location]);
 
