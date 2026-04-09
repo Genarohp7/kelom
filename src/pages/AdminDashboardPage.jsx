@@ -97,6 +97,11 @@ function badgeClass(kind, value) {
     return "admin-badge admin-badge--muted";
   }
 
+  if (kind === "gold") {
+    if (value === true || v === "true") return "admin-badge admin-badge--warn";
+    return "admin-badge admin-badge--muted";
+  }
+
   if (kind === "user-status") {
     if (v === "active") return "admin-badge admin-badge--ok";
     if (v === "blocked") return "admin-badge admin-badge--bad";
@@ -352,6 +357,10 @@ function AdminDashboardPage() {
                   moderation?.is_featured !== undefined
                     ? moderation.is_featured
                     : p.is_featured,
+                is_gold:
+                  moderation?.is_gold !== undefined
+                    ? moderation.is_gold
+                    : p.is_gold,
                 reviewed_by: moderation?.reviewed_by ?? p.reviewed_by,
                 reviewed_at: moderation?.reviewed_at ?? p.reviewed_at,
                 updated_at: moderation?.reviewed_at ?? moderation?.updated_at ?? p.updated_at,
@@ -917,9 +926,9 @@ function AdminDashboardPage() {
             tone: "ok",
           },
           {
-            label: "Destacados",
-            value: providers.filter((p) => Boolean(p.is_featured)).length,
-            tone: "info",
+            label: "Gold",
+            value: providers.filter((p) => Boolean(p.is_gold)).length,
+            tone: "warn",
           },
         ]
       : activeSection === "users"
@@ -1344,6 +1353,7 @@ function AdminDashboardPage() {
                         const rowId = p.profile_id || p.user_id;
                         const isBusy = providerBusyId === rowId;
                         const isFeatured = Boolean(p.is_featured);
+                        const isGold = Boolean(p.is_gold);
 
                         return (
                           <tr key={rowId}>
@@ -1389,6 +1399,9 @@ function AdminDashboardPage() {
                               <div className="admin-inline-stack">
                                 <span className={badgeClass("featured", isFeatured)}>
                                   {isFeatured ? "Proveedor Destacado Kelom" : "Proveedor gratuito"}
+                                </span>
+                                <span className={badgeClass("gold", isGold)}>
+                                  {isGold ? "Visible en Home" : "Fuera de Home"}
                                 </span>
                                 <span className="admin-inline-help">
                                   {isFeatured
@@ -1462,6 +1475,22 @@ function AdminDashboardPage() {
                                   onClick={() =>
                                     patchProvider(
                                       rowId,
+                                      { is_gold: !isGold },
+                                      isGold
+                                        ? "Proveedor retirado del Home ✅"
+                                        : "Proveedor marcado como Gold ✅"
+                                    )
+                                  }
+                                >
+                                  {isGold ? "Quitar Gold" : "Hacer Gold"}
+                                </button>
+
+                                <button
+                                  className="btn btn--ghost"
+                                  disabled={isBusy}
+                                  onClick={() =>
+                                    patchProvider(
+                                      rowId,
                                       { review_status: "needs_changes", public_visibility: "hidden" },
                                       "Marcado: necesita cambios ✅"
                                     )
@@ -1502,7 +1531,7 @@ function AdminDashboardPage() {
 
                 <div className="admin-footer-note">
                   Nota: cada fila representa una <strong>ficha/servicio independiente</strong>. El público solo ve fichas <strong>approved + listed</strong>. La modalidad
-                  <strong> Proveedor Destacado Kelom</strong> se controla por separado con <strong>is_featured</strong>.
+                  <strong> Proveedor Destacado Kelom</strong> se controla con <strong>is_featured</strong> y la presencia en la primera vista de Home se controla con <strong>is_gold</strong>.
                 </div>
               </section>
             ) : activeSection === "users" ? (

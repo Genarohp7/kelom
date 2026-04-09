@@ -4,14 +4,14 @@ import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import tipsImage from "../assets/web/pages/home/home-tips.jpg.png";
 
-const SHOW_DEMO_SECTIONS = true; // hero/venues/featured siguen visibles
+const SHOW_DEMO_SECTIONS = true;
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
-// paginación
 const PAGE_SIZE = 10;
 const FETCH_SIZE = 11;
 
 const CATEGORY_OPTIONS = [
+  "Lugares",
   "Jardín",
   "Hacienda",
   "Salón",
@@ -25,7 +25,6 @@ const CATEGORY_OPTIONS = [
 ];
 
 const LOCALITY_OPTIONS = [
-  // CDMX (alcaldías)
   "Álvaro Obregón",
   "Azcapotzalco",
   "Benito Juárez",
@@ -42,8 +41,6 @@ const LOCALITY_OPTIONS = [
   "Tlalpan",
   "Venustiano Carranza",
   "Xochimilco",
-
-  // EdoMex (municipios)
   "Ecatepec",
   "Naucalpan",
   "Tlalnepantla",
@@ -74,14 +71,15 @@ function stripDiacritics(s) {
 function normalizeCategory(input) {
   const raw = String(input || "").trim();
   if (!raw) return "";
+
   const needle = stripDiacritics(raw);
+
+  if (needle === "lugares") return "Lugares";
+
   const found = CATEGORY_OPTIONS.find((opt) => stripDiacritics(opt) === needle);
   return found || raw;
 }
 
-/**
- * Combobox moderno (sin setState-in-effect)
- */
 function SmartCombo({
   id,
   placeholder,
@@ -247,17 +245,13 @@ function SmartCombo({
 function HomePage() {
   const venuesRef = useRef(null);
 
-  // ===== Home (sin búsqueda) =====
   const [providers, setProviders] = useState([]);
   const [providersLoading, setProvidersLoading] = useState(true);
   const [providersError, setProvidersError] = useState("");
-  const [providersOffset, setProvidersOffset] = useState(0);
-  const [providersHasNext, setProvidersHasNext] = useState(false);
 
-  // ===== Búsqueda =====
   const [searchWhat, setSearchWhat] = useState("");
   const [searchWhere, setSearchWhere] = useState("");
-  const [activeSearch, setActiveSearch] = useState(null); // { category, where } | null
+  const [activeSearch, setActiveSearch] = useState(null);
 
   const [searchResults, setSearchResults] = useState(null);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -265,60 +259,66 @@ function HomePage() {
   const [searchOffset, setSearchOffset] = useState(0);
   const [searchHasNext, setSearchHasNext] = useState(false);
 
-  const fetchProvidersPage = async ({ category, where, offset }) => {
+  const fetchProvidersPage = async ({ category, where, offset = 0, isHome = false }) => {
     const qs = new URLSearchParams();
-    qs.set("limit", String(FETCH_SIZE));
-    qs.set("offset", String(offset || 0));
-    if (category) qs.set("category", category);
-    if (where) qs.set("where", where);
+
+    if (isHome) {
+      qs.set("limit", "10");
+    } else {
+      qs.set("limit", String(FETCH_SIZE));
+      qs.set("offset", String(offset || 0));
+      if (category) qs.set("category", category);
+      if (where) qs.set("where", where);
+    }
 
     const res = await fetch(`${API_BASE}/providers?${qs.toString()}`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
 
     const list = Array.isArray(data?.providers) ? data.providers : [];
-    const hasNext = list.length > PAGE_SIZE;
 
+    if (isHome) {
+      return { list, hasNext: false };
+    }
+
+    const hasNext = list.length > PAGE_SIZE;
     return { list: list.slice(0, PAGE_SIZE), hasNext };
   };
 
-  // Carga Home paginado
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
+    async function loadHome() {
       setProvidersError("");
       setProvidersLoading(true);
 
       try {
-        const { list, hasNext } = await fetchProvidersPage({
+        const { list } = await fetchProvidersPage({
           category: "",
           where: "",
-          offset: providersOffset,
+          offset: 0,
+          isHome: true,
         });
 
         if (!cancelled) {
           setProviders(list);
-          setProvidersHasNext(hasNext);
         }
       } catch (err) {
         if (!cancelled) {
           setProvidersError(String(err?.message || "No se pudo cargar proveedores."));
           setProviders([]);
-          setProvidersHasNext(false);
         }
       } finally {
         if (!cancelled) setProvidersLoading(false);
       }
     }
 
-    load();
+    loadHome();
     return () => {
       cancelled = true;
     };
-  }, [providersOffset]);
+  }, []);
 
-  // Carga búsqueda paginada
   useEffect(() => {
     if (!activeSearch) return;
 
@@ -333,6 +333,7 @@ function HomePage() {
           category: activeSearch.category,
           where: activeSearch.where,
           offset: searchOffset,
+          isHome: false,
         });
 
         if (!cancelled) {
@@ -356,13 +357,12 @@ function HomePage() {
     };
   }, [activeSearch, searchOffset]);
 
-  // ✅ featured ahora incluye "filterCategory" (lo que manda a API)
   const featuredCompanies = [
     {
       id: 1,
       name: "Lugares",
       category: "Haciendas, jardines, salones",
-      filterCategory: null, // Lugares = default (por ahora)
+      filterCategory: "Lugares",
       image:
         "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=400",
     },
@@ -415,7 +415,6 @@ function HomePage() {
     setActiveSearch(null);
     setSearchOffset(0);
     setSearchHasNext(false);
-    setProvidersOffset(0);
     scrollToVenues();
   };
 
@@ -425,8 +424,7 @@ function HomePage() {
     const category = normalizeCategory(searchWhat);
     const where = String(searchWhere || "").trim();
 
-    if (!category && !where) {
-      clearSearch();
+    if (!category) {
       return;
     }
 
@@ -438,7 +436,6 @@ function HomePage() {
 
   const handleFeaturedClick = (company) => {
     if (!company?.filterCategory) {
-      clearSearch();
       return;
     }
 
@@ -460,32 +457,31 @@ function HomePage() {
 
   const activeFiltersText = useMemo(() => {
     if (!activeSearch) return "";
+
     const parts = [];
-    if (String(searchWhat || "").trim())
-      parts.push(`Categoría: ${normalizeCategory(searchWhat)}`);
-    if (String(searchWhere || "").trim())
-      parts.push(`Búsqueda: ${searchWhere.trim()}`);
+    if (String(activeSearch.category || "").trim()) {
+      parts.push(`Categoría: ${activeSearch.category}`);
+    }
+    if (String(activeSearch.where || "").trim()) {
+      parts.push(`Búsqueda: ${activeSearch.where.trim()}`);
+    }
+
     return parts.join(" · ");
-  }, [activeSearch, searchWhat, searchWhere]);
+  }, [activeSearch]);
 
-  const pageNumber = activeSearch
-    ? Math.floor(searchOffset / PAGE_SIZE) + 1
-    : Math.floor(providersOffset / PAGE_SIZE) + 1;
-
-  const canPrev = activeSearch ? searchOffset > 0 : providersOffset > 0;
-  const canNext = activeSearch ? searchHasNext : providersHasNext;
+  const pageNumber = Math.floor(searchOffset / PAGE_SIZE) + 1;
+  const canPrev = activeSearch ? searchOffset > 0 : false;
+  const canNext = activeSearch ? searchHasNext : false;
 
   const goPrev = () => {
-    if (!canPrev || loadingToShow) return;
-    if (activeSearch) setSearchOffset((o) => Math.max(o - PAGE_SIZE, 0));
-    else setProvidersOffset((o) => Math.max(o - PAGE_SIZE, 0));
+    if (!activeSearch || !canPrev || loadingToShow) return;
+    setSearchOffset((o) => Math.max(o - PAGE_SIZE, 0));
     scrollToVenues();
   };
 
   const goNext = () => {
-    if (!canNext || loadingToShow) return;
-    if (activeSearch) setSearchOffset((o) => o + PAGE_SIZE);
-    else setProvidersOffset((o) => o + PAGE_SIZE);
+    if (!activeSearch || !canNext || loadingToShow) return;
+    setSearchOffset((o) => o + PAGE_SIZE);
     scrollToVenues();
   };
 
@@ -516,7 +512,7 @@ function HomePage() {
 
                     <SmartCombo
                       id="search-what"
-                      placeholder="Jardín, salón, banquetes, DJ..."
+                      placeholder="Lugares, jardín, salón, banquetes, DJ..."
                       value={searchWhat}
                       onChange={setSearchWhat}
                       options={CATEGORY_OPTIONS}
@@ -540,7 +536,11 @@ function HomePage() {
                   </div>
 
                   <div className="search-panel__actions">
-                    <button className="search-panel__button" type="submit" disabled={searchLoading}>
+                    <button
+                      className="search-panel__button"
+                      type="submit"
+                      disabled={searchLoading}
+                    >
                       {searchLoading ? "Buscando..." : "Buscar"}
                     </button>
 
@@ -558,8 +558,8 @@ function HomePage() {
                 </form>
 
                 <p className="search-panel__hint">
-                  Tip: puedes elegir de la lista o escribir libre. Nosotros
-                  intentamos entenderte antes de juzgarte. (Casi siempre.)
+                  Tip: la categoría sí es importante. La localidad o el nombre del proveedor
+                  son opcionales.
                 </p>
               </div>
             </div>
@@ -575,7 +575,7 @@ function HomePage() {
                   <p className="venues__subtitle">
                     {activeSearch
                       ? activeFiltersText || "Aplicando filtros…"
-                      : "Aquí solo aparecen proveedores aprobados y publicados por Kelom."}
+                      : "Aquí aparecen los proveedores seleccionados para la primera vista de Kelom."}
                   </p>
                 </div>
               </header>
@@ -633,7 +633,7 @@ function HomePage() {
                     })}
                   </div>
 
-                  {(canPrev || canNext) && (
+                  {activeSearch && (canPrev || canNext) && (
                     <div className="venues__pagination" aria-label="Paginación de proveedores">
                       <button
                         type="button"
@@ -709,14 +709,16 @@ function HomePage() {
               <article className="tips-card">
                 <h3 className="tips-card__title">Empieza por el presupuesto</h3>
                 <p className="tips-card__text">
-                  Definir un rango claro desde el inicio te ayudará a elegir opciones realistas sin renunciar al estilo que quieres.
+                  Definir un rango claro desde el inicio te ayudará a elegir opciones realistas
+                  sin renunciar al estilo que quieres.
                 </p>
               </article>
 
               <article className="tips-card">
                 <h3 className="tips-card__title">Haz una lista de prioridades</h3>
                 <p className="tips-card__text">
-                  ¿Es más importante el lugar, la comida o la música? Ponerlo en papel facilita las decisiones cuando tengas que elegir.
+                  ¿Es más importante el lugar, la comida o la música? Ponerlo en papel facilita
+                  las decisiones cuando tengas que elegir.
                 </p>
               </article>
             </div>
