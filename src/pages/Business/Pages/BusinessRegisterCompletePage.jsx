@@ -8,6 +8,8 @@ import {
   clearProviderSession,
 } from "../../../services/providerAuth";
 
+import { adminApiFetch } from "../../../services/adminApi";
+
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.kelom.com.mx";
 
 const PROVIDER_BASIC_DRAFT_KEY = "kelom_provider_basic_draft";
@@ -17,7 +19,7 @@ const EDIT_ROUTE = "/empresas/registro/completar";
 const LOGIN_ROUTE = "/empresas/acceso";
 
 const ALLOWED_PROVIDER_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_PROVIDER_PHOTO_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_PROVIDER_PHOTO_BYTES = 5 * 1024 * 1024;
 const MAX_PROVIDER_PHOTO_WIDTH = 2500;
 const MAX_PROVIDER_PHOTO_HEIGHT = 2500;
 
@@ -268,6 +270,9 @@ function BusinessRegisterCompletePage() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const isAdminCompletingInvitation = Boolean(location.state?.adminCompletingInvitation);
+  const adminInvitationId = location.state?.invitationId || null;
+
   const stateBasicData = location.state?.basicData || null;
   const prefillProfileData = location.state?.prefillProfileData || null;
   const preferredServiceIdFromState = location.state?.serviceId || null;
@@ -294,15 +299,20 @@ function BusinessRegisterCompletePage() {
     return email;
   }, [loginEmailFromState, basicData]);
 
-  const tokenAtStart = useMemo(() => getProviderToken(), []);
+  const tokenAtStart = useMemo(
+    () => (isAdminCompletingInvitation ? null : getProviderToken()),
+    [isAdminCompletingInvitation]
+  );
+
   const isLoggedIn = !!tokenAtStart;
 
   const authMode = useMemo(() => {
+    if (isAdminCompletingInvitation) return "edit";
     if (isLoggedIn) return "edit";
     if (authModeFromState) return authModeFromState;
     if (prefillProfileData) return "edit";
     return "register";
-  }, [isLoggedIn, authModeFromState, prefillProfileData]);
+  }, [isAdminCompletingInvitation, isLoggedIn, authModeFromState, prefillProfileData]);
 
   const [profileData, setProfileData] = useState(() => {
     if (prefillProfileData) {
@@ -356,7 +366,9 @@ function BusinessRegisterCompletePage() {
   const [activeServiceId, setActiveServiceId] = useState(null);
   const [canAddService, setCanAddService] = useState(false);
   const [isCreatingNewService, setIsCreatingNewService] = useState(false);
-  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(authMode === "edit");
+  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(
+    authMode === "edit" && !isAdminCompletingInvitation
+  );
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
 
   const [submitError, setSubmitError] = useState("");
@@ -515,6 +527,7 @@ function BusinessRegisterCompletePage() {
 
   useEffect(() => {
     if (authMode !== "edit") return;
+    if (isAdminCompletingInvitation) return;
 
     const token = getProviderToken();
     if (!token) {
@@ -553,7 +566,7 @@ function BusinessRegisterCompletePage() {
     return () => {
       cancelled = true;
     };
-  }, [authMode, navigate, preferredServiceIdFromState]);
+  }, [authMode, isAdminCompletingInvitation, navigate, preferredServiceIdFromState]);
 
   const activeService = useMemo(
     () => providerServices.find((service) => service.id === activeServiceId) || null,
@@ -671,39 +684,55 @@ function BusinessRegisterCompletePage() {
     });
   };
 
-  const uploadSelectedPhotosToBackend = async (token, targetProfileId) => {
-    const files = Array.isArray(profileData.photos) ? profileData.photos : [];
-    if (!files.length) return;
+const uploadSelectedPhotosToBackend = async (token, targetProfileId) => {
+  const files = Array.isArray(profileData.photos) ? profileData.photos : [];
+  if (!files.length) return;
 
-    const fd = new FormData();
-    files.forEach((f) => fd.append("photos", f));
+  const fd = new FormData();
+  files.forEach((f) => fd.append("photos", f));
 
-    setIsUploadingPhotos(true);
-    setSubmitError("");
+  setIsUploadingPhotos(true);
+  setSubmitError("");
 
-    try {
+  try {
+    let data;
+
+    if (isAdminCompletingInvitation) {
+      if (!adminInvitationId) {
+        throw new Error("No se encontró la invitación admin para subir fotos.");
+      }
+
+      data = await adminApiFetch(
+        `/admin/provider-invitations/${adminInvitationId}/photos`,
+        {
+          method: "POST",
+          body: fd,
+        }
+      );
+    } else {
       const path = targetProfileId
         ? `/providers/my-services/${targetProfileId}/photos`
         : "/providers/photos";
 
-      const data = await apiMultipart(path, {
+      data = await apiMultipart(path, {
         method: "POST",
         token,
         formData: fd,
       });
-
-      const newPhotos = Array.isArray(data?.photos) ? data.photos : [];
-      if (newPhotos.length) setServerPhotos((prev) => [...prev, ...newPhotos]);
-
-      setProfileData((prev) => ({ ...prev, photos: [] }));
-      setPhotoError("");
-    } catch (err) {
-      setSubmitError(String(err?.message || "No se pudieron subir las fotos."));
-      throw err;
-    } finally {
-      setIsUploadingPhotos(false);
     }
-  };
+
+    const newPhotos = Array.isArray(data?.photos) ? data.photos : [];
+    if (newPhotos.length) setServerPhotos((prev) => [...prev, ...newPhotos]);
+
+    setProfileData((prev) => ({ ...prev, photos: [] }));
+    setPhotoError("");
+  } catch (err) {
+    setSubmitError(String(err?.message || "No se pudieron subir las fotos."));
+    throw err;
+  } finally {
+    setIsUploadingPhotos(false);
+  }
+};
 
   const deleteServerPhoto = async (photoId) => {
     const token = getProviderToken();
@@ -1005,6 +1034,11 @@ function BusinessRegisterCompletePage() {
   };
 
   const handleStartNewService = () => {
+    if (isAdminCompletingInvitation) {
+      setSubmitError("Este flujo de admin solo sirve para completar la ficha inicial.");
+      return;
+    }
+
     if (!canAddService) {
       setSubmitError(
         "Este botón se activa cuando al menos una de tus fichas ya está aprobada y visible en el catálogo."
@@ -1023,6 +1057,8 @@ function BusinessRegisterCompletePage() {
   };
 
   const handleSelectService = async (serviceId) => {
+    if (isAdminCompletingInvitation) return;
+
     const token = getProviderToken();
     if (!token) {
       navigate(LOGIN_ROUTE, { state: { from: EDIT_ROUTE } });
@@ -1178,13 +1214,6 @@ function BusinessRegisterCompletePage() {
         return;
       }
 
-      const token = getProviderToken();
-      if (!token) {
-        setSubmitError("No hay sesión activa. Inicia sesión como proveedor primero.");
-        navigate(LOGIN_ROUTE, { state: { from: EDIT_ROUTE } });
-        return;
-      }
-
       const basePayload = {
         companyName: basicData?.companyName ? String(basicData.companyName).trim() : undefined,
         ownerName: basicData?.ownerName ? String(basicData.ownerName).trim() : undefined,
@@ -1222,6 +1251,48 @@ function BusinessRegisterCompletePage() {
         sellingPoints,
         sellingPointsText: profileData.sellingPointsText || "",
       };
+
+if (isAdminCompletingInvitation) {
+  if (!adminInvitationId) {
+    setSubmitError("No se encontró la invitación admin para completar este perfil.");
+    return;
+  }
+
+  const data = await adminApiFetch(
+    `/admin/provider-invitations/${adminInvitationId}/complete-profile`,
+    {
+      method: "POST",
+      body: JSON.stringify(basePayload),
+    }
+  );
+
+  const savedProfileId = data?.profile?.id || null;
+
+  const mapped = mapApiProfileToProfileData(data?.profile);
+  if (mapped) {
+    persistDraft(mapped);
+    setProfileData((prev) => ({ ...prev, ...mapped, photos: prev.photos || [] }));
+  }
+
+  if (savedProfileId) {
+    await uploadSelectedPhotosToBackend(null, savedProfileId);
+  }
+
+  setSubmitSuccess("Perfil completado correctamente. Ya quedó listo para revisión en admin.");
+
+  setTimeout(() => {
+    navigate("/admin", { replace: true });
+  }, 800);
+
+  return;
+}
+
+      const token = getProviderToken();
+      if (!token) {
+        setSubmitError("No hay sesión activa. Inicia sesión como proveedor primero.");
+        navigate(LOGIN_ROUTE, { state: { from: EDIT_ROUTE } });
+        return;
+      }
 
       let data = null;
       let savedProfileId = activeServiceId || null;
@@ -1261,6 +1332,11 @@ function BusinessRegisterCompletePage() {
   };
 
   const handleGoPreview = () => {
+    if (isAdminCompletingInvitation) {
+      navigate("/admin", { replace: true });
+      return;
+    }
+
     navigate("/proveedores/mi-perfil?mode=provider", {
       state: { basicData: basicData || null },
     });
@@ -1299,7 +1375,7 @@ function BusinessRegisterCompletePage() {
                 </p>
               )}
 
-              {authMode === "edit" && (
+              {authMode === "edit" && !isAdminCompletingInvitation && (
                 <section
                   style={{
                     marginBottom: "1.2rem",
@@ -1550,7 +1626,7 @@ function BusinessRegisterCompletePage() {
                 </div>
               </div>
 
-              {authMode === "edit" && !isCreatingNewService && activeService && (
+              {authMode === "edit" && !isCreatingNewService && activeService && !isAdminCompletingInvitation && (
                 <div
                   style={{
                     marginBottom: "0.85rem",
@@ -1949,154 +2025,197 @@ function BusinessRegisterCompletePage() {
                   <div className="security-card">
                     <h3 className="security-card__title">Seguridad</h3>
 
-                    {authMode === "register" ? (
-                      <>
-                        <p className="security-card__subtitle">
-                          Crea tu contraseña para poder entrar a tu panel después.
-                        </p>
+              {authMode === "register" ? (
+  <>
+    <p className="security-card__subtitle">
+      Crea tu contraseña para poder entrar a tu panel después.
+    </p>
 
-                        <div className="security-card__grid">
-                          <div className="form__field">
-                            <label className="form__label" htmlFor="password">
-                              Crear contraseña *
-                            </label>
-                            <input
-                              id="password"
-                              name="password"
-                              type={showSecurity.password ? "text" : "password"}
-                              className="form__input"
-                              value={securityData.password}
-                              onChange={handleSecurityChange}
-                              autoComplete="new-password"
-                              disabled={isSubmitting}
-                            />
-                            <label className="form__toggle">
-                              <input
-                                type="checkbox"
-                                checked={showSecurity.password}
-                                onChange={() => toggleShow("password")}
-                              />
-                              Mostrar
-                            </label>
-                          </div>
+    <div className="security-card__grid">
+      <div className="form__field">
+        <label className="form__label" htmlFor="password">
+          Crear contraseña *
+        </label>
+        <input
+          id="password"
+          name="password"
+          type={showSecurity.password ? "text" : "password"}
+          className="form__input"
+          value={securityData.password}
+          onChange={handleSecurityChange}
+          autoComplete="new-password"
+          disabled={isSubmitting}
+        />
+        <label className="form__toggle">
+          <input
+            type="checkbox"
+            checked={showSecurity.password}
+            onChange={() => toggleShow("password")}
+          />
+          Mostrar
+        </label>
+      </div>
 
-                          <div className="form__field">
-                            <label className="form__label" htmlFor="confirmPassword">
-                              Confirmar contraseña *
-                            </label>
-                            <input
-                              id="confirmPassword"
-                              name="confirmPassword"
-                              type={showSecurity.confirmPassword ? "text" : "password"}
-                              className="form__input"
-                              value={securityData.confirmPassword}
-                              onChange={handleSecurityChange}
-                              autoComplete="new-password"
-                              disabled={isSubmitting}
-                            />
-                            <label className="form__toggle">
-                              <input
-                                type="checkbox"
-                                checked={showSecurity.confirmPassword}
-                                onChange={() => toggleShow("confirmPassword")}
-                              />
-                              Mostrar
-                            </label>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <p className="security-card__subtitle">
-                          Puedes cambiar tu contraseña cuando quieras.
-                        </p>
+      <div className="form__field">
+        <label className="form__label" htmlFor="confirmPassword">
+          Confirmar contraseña *
+        </label>
+        <input
+          id="confirmPassword"
+          name="confirmPassword"
+          type={showSecurity.confirmPassword ? "text" : "password"}
+          className="form__input"
+          value={securityData.confirmPassword}
+          onChange={handleSecurityChange}
+          autoComplete="new-password"
+          disabled={isSubmitting}
+        />
+        <label className="form__toggle">
+          <input
+            type="checkbox"
+            checked={showSecurity.confirmPassword}
+            onChange={() => toggleShow("confirmPassword")}
+          />
+          Mostrar
+        </label>
+      </div>
+    </div>
+  </>
+) : (
+  <>
+    <p className="security-card__subtitle">
+      {isAdminCompletingInvitation
+        ? "Este perfil se está completando desde administración."
+        : "Puedes cambiar tu contraseña cuando quieras."}
+    </p>
 
-                        <div className="security-card__grid">
-                          <div className="form__field">
-                            <label className="form__label" htmlFor="currentPassword">
-                              Contraseña actual
-                            </label>
-                            <input
-                              id="currentPassword"
-                              name="currentPassword"
-                              type={showSecurity.currentPassword ? "text" : "password"}
-                              className="form__input"
-                              value={securityData.currentPassword}
-                              onChange={handleSecurityChange}
-                              autoComplete="current-password"
-                              disabled={isSubmitting}
-                            />
-                            <label className="form__toggle">
-                              <input
-                                type="checkbox"
-                                checked={showSecurity.currentPassword}
-                                onChange={() => toggleShow("currentPassword")}
-                              />
-                              Mostrar
-                            </label>
-                          </div>
+{isAdminCompletingInvitation ? (
+  <div className="security-card__actions">
+    <button
+      type="button"
+      className="btn btn--ghost"
+      disabled={isSubmitting}
+      onClick={async () => {
+        if (!adminInvitationId) {
+          setSubmitError("No se encontró la invitación admin para generar el acceso.");
+          return;
+        }
 
-                          <div className="form__field">
-                            <label className="form__label" htmlFor="newPassword">
-                              Nueva contraseña
-                            </label>
-                            <input
-                              id="newPassword"
-                              name="newPassword"
-                              type={showSecurity.newPassword ? "text" : "password"}
-                              className="form__input"
-                              value={securityData.newPassword}
-                              onChange={handleSecurityChange}
-                              autoComplete="new-password"
-                              disabled={isSubmitting}
-                            />
-                            <label className="form__toggle">
-                              <input
-                                type="checkbox"
-                                checked={showSecurity.newPassword}
-                                onChange={() => toggleShow("newPassword")}
-                              />
-                              Mostrar
-                            </label>
-                          </div>
+        try {
+          setSubmitError("");
+          setSubmitSuccess("");
+          setIsSubmitting(true);
 
-                          <div className="form__field form__field--full">
-                            <label className="form__label" htmlFor="confirmNewPassword">
-                              Confirmar nueva contraseña
-                            </label>
-                            <input
-                              id="confirmNewPassword"
-                              name="confirmNewPassword"
-                              type={showSecurity.confirmNewPassword ? "text" : "password"}
-                              className="form__input"
-                              value={securityData.confirmNewPassword}
-                              onChange={handleSecurityChange}
-                              autoComplete="new-password"
-                              disabled={isSubmitting}
-                            />
-                            <label className="form__toggle">
-                              <input
-                                type="checkbox"
-                                checked={showSecurity.confirmNewPassword}
-                                onChange={() => toggleShow("confirmNewPassword")}
-                              />
-                              Mostrar
-                            </label>
-                          </div>
-                        </div>
+          const data = await adminApiFetch(
+            `/admin/provider-invitations/${adminInvitationId}/generate-password`,
+            { method: "POST" }
+          );
 
-                        <div className="security-card__actions">
-                          <button
-                            type="button"
-                            className="btn btn--ghost"
-                            onClick={handleChangePassword}
-                            disabled={isSubmitting}
-                          >
-                            Actualizar contraseña
-                          </button>
-                        </div>
-                      </>
-                    )}
+          setSubmitSuccess(
+            data?.message || "Correo de acceso enviado correctamente."
+          );
+        } catch (err) {
+          setSubmitError(
+            String(err?.message || "No se pudo generar y enviar el acceso.")
+          );
+        } finally {
+          setIsSubmitting(false);
+        }
+      }}
+    >
+      Generar contraseña y enviar acceso
+    </button>
+  </div>
+) : (
+      <>
+        <div className="security-card__grid">
+          <div className="form__field">
+            <label className="form__label" htmlFor="currentPassword">
+              Contraseña actual
+            </label>
+            <input
+              id="currentPassword"
+              name="currentPassword"
+              type={showSecurity.currentPassword ? "text" : "password"}
+              className="form__input"
+              value={securityData.currentPassword}
+              onChange={handleSecurityChange}
+              autoComplete="current-password"
+              disabled={isSubmitting}
+            />
+            <label className="form__toggle">
+              <input
+                type="checkbox"
+                checked={showSecurity.currentPassword}
+                onChange={() => toggleShow("currentPassword")}
+              />
+              Mostrar
+            </label>
+          </div>
+
+          <div className="form__field">
+            <label className="form__label" htmlFor="newPassword">
+              Nueva contraseña
+            </label>
+            <input
+              id="newPassword"
+              name="newPassword"
+              type={showSecurity.newPassword ? "text" : "password"}
+              className="form__input"
+              value={securityData.newPassword}
+              onChange={handleSecurityChange}
+              autoComplete="new-password"
+              disabled={isSubmitting}
+            />
+            <label className="form__toggle">
+              <input
+                type="checkbox"
+                checked={showSecurity.newPassword}
+                onChange={() => toggleShow("newPassword")}
+              />
+              Mostrar
+            </label>
+          </div>
+
+          <div className="form__field form__field--full">
+            <label className="form__label" htmlFor="confirmNewPassword">
+              Confirmar nueva contraseña
+            </label>
+            <input
+              id="confirmNewPassword"
+              name="confirmNewPassword"
+              type={showSecurity.confirmNewPassword ? "text" : "password"}
+              className="form__input"
+              value={securityData.confirmNewPassword}
+              onChange={handleSecurityChange}
+              autoComplete="new-password"
+              disabled={isSubmitting}
+            />
+            <label className="form__toggle">
+              <input
+                type="checkbox"
+                checked={showSecurity.confirmNewPassword}
+                onChange={() => toggleShow("confirmNewPassword")}
+              />
+              Mostrar
+            </label>
+          </div>
+        </div>
+
+        <div className="security-card__actions">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={handleChangePassword}
+            disabled={isSubmitting}
+          >
+            Actualizar contraseña
+          </button>
+        </div>
+      </>
+    )}
+  </>
+)}
                   </div>
                 </div>
 
@@ -2116,7 +2235,7 @@ function BusinessRegisterCompletePage() {
                     onClick={handleGoPreview}
                     disabled={isSubmitting || isLoadingWorkspace}
                   >
-                    Ver mi perfil (vista proveedor)
+                    {isAdminCompletingInvitation ? "Volver al admin" : "Ver mi perfil (vista proveedor)"}
                   </button>
 
                   <button
@@ -2128,9 +2247,11 @@ function BusinessRegisterCompletePage() {
                       ? "Guardando..."
                       : authMode === "register"
                         ? "Crear cuenta y guardar ficha"
-                        : isCreatingNewService
-                          ? "Guardar nuevo servicio"
-                          : "Guardar cambios"}
+                        : isAdminCompletingInvitation
+                          ? "Guardar perfil y enviar a revisión"
+                          : isCreatingNewService
+                            ? "Guardar nuevo servicio"
+                            : "Guardar cambios"}
                   </button>
                 </div>
               </form>
@@ -2152,7 +2273,7 @@ function BusinessRegisterCompletePage() {
                   </p>
                 )}
 
-                {authMode === "edit" && !isCreatingNewService && activeService && (
+                {authMode === "edit" && !isCreatingNewService && activeService && !isAdminCompletingInvitation && (
                   <p
                     className="preview-card__subtitle"
                     style={{
@@ -2165,7 +2286,7 @@ function BusinessRegisterCompletePage() {
                   </p>
                 )}
 
-                {isCreatingNewService && authMode === "edit" && (
+                {isCreatingNewService && authMode === "edit" && !isAdminCompletingInvitation && (
                   <p
                     className="preview-card__subtitle"
                     style={{
@@ -2175,6 +2296,19 @@ function BusinessRegisterCompletePage() {
                     }}
                   >
                     Nueva ficha en preparación
+                  </p>
+                )}
+
+                {isAdminCompletingInvitation && (
+                  <p
+                    className="preview-card__subtitle"
+                    style={{
+                      marginTop: "-0.1rem",
+                      color: "#8f4d5b",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Flujo de administración · quedará pendiente de revisión
                   </p>
                 )}
 
