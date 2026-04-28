@@ -10,18 +10,20 @@ function NosotrosPage() {
         <div className="container about__hero">
           <div className="about__hero-text">
             <span className="about__badge">Nosotros</span>
-            <h1 className="about__title">Detrás de Kelom hay amor por las historias reales</h1>
+            <h1 className="about__title">
+              Ayudamos a parejas a organizar su boda con más claridad
+            </h1>
             <p className="about__subtitle">
-              Kelom nace para hacer más fácil ese proceso que debería ser bonito,
-              pero muchas veces se vuelve abrumador: organizar tu boda. Queremos
-              que pases menos tiempo comparando cientos de opciones y más tiempo
-              disfrutando tu compromiso.
+              Kelom nace para hacer más simple ese proceso que debería sentirse
+              emocionante, pero muchas veces se vuelve abrumador: planear tu
+              boda. Queremos que pases menos tiempo comparando opciones y más
+              tiempo disfrutando tu compromiso.
             </p>
             <p className="about__paragraph">
-              Somos una plataforma pensada para parejas que buscan proveedores
-              confiables, transparentes y alineados con su estilo. No vendemos
-              humo: conectamos personas reales con lugares y servicios que
-              realmente pueden hacer realidad su idea de “día perfecto”.
+              Somos una plataforma pensada para parejas que buscan orientación,
+              proveedores para boda y opciones alineadas con su estilo,
+              presupuesto y momento de vida. Nuestro objetivo es ayudarte a
+              tomar mejores decisiones para tu evento.
             </p>
           </div>
 
@@ -30,13 +32,13 @@ function NosotrosPage() {
               <img
                 className="about__hero-image"
                 src={aboutHeroImage}
-                alt="Equipo organizando detalles de una boda"
+                alt="Pareja organizando su boda con apoyo y orientación"
                 loading="lazy"
               />
             </div>
             <p className="about__hero-note">
-              Nos enfocamos especialmente en parejas de CDMX y alrededores,
-              con un enfoque cercano, empático y sin presiones.
+              Nos enfocamos especialmente en parejas de CDMX, Estado de México
+              y alrededores, con un enfoque cercano, práctico y sin presiones.
             </p>
           </div>
         </div>
@@ -66,18 +68,18 @@ function NosotrosPage() {
               <h2 className="about__card-title">Nuestra misión</h2>
               <p className="about__card-text">
                 Acompañar a las parejas en su camino hacia el “sí”,
-                ayudándoles a encontrar lugares y proveedores que encajen
-                con su presupuesto, su estilo y su historia. Queremos que la
-                planeación se sienta guiada, no caótica.
+                ayudándoles a encontrar lugares, servicios y proveedores que
+                encajen con su presupuesto, su estilo y su historia. Queremos
+                que la planeación se sienta guiada, no caótica.
               </p>
             </article>
 
             <article className="about__card">
               <h2 className="about__card-title">Nuestra visión</h2>
               <p className="about__card-text">
-                Ser la primera plataforma en la que pienses cuando empieces a
-                organizar tu boda: cercana, confiable y honesta. Un espacio
-                donde encuentres inspiración, información clara y opciones
+                Ser una plataforma confiable para quienes empiezan a organizar
+                su boda en México: cercana, clara y útil. Un espacio donde
+                encuentres inspiración, información práctica y opciones
                 aterrizadas a tu realidad.
               </p>
             </article>
@@ -85,9 +87,10 @@ function NosotrosPage() {
             <article className="about__card">
               <h2 className="about__card-title">Cómo trabajamos</h2>
               <p className="about__card-text">
-                Seleccionamos cuidadosamente los venues y empresas que
-                aparecen en Kelom. Nuestro foco está en la experiencia real de las
-                parejas, la calidad del servicio y el trato humano, no solo en las fotos bonitas.
+                Incorporamos progresivamente venues y empresas que pueden
+                aportar valor a las parejas. Nuestro foco está en la claridad de
+                la información, la experiencia real del usuario y el trato
+                humano, no solo en una foto bonita.
               </p>
             </article>
           </div>
@@ -100,13 +103,13 @@ function NosotrosPage() {
               <img
                 className="about__image-band-photo"
                 src={aboutBandImage}
-                alt="Pareja celebrando en un venue iluminado"
+                alt="Boda en un venue iluminado con ambiente cálido"
                 loading="lazy"
               />
               <div className="about__image-band-overlay">
                 <div className="about__image-band-text">
-                  Queremos que tu boda se sienta como tú,
-                  no como un evento genérico más.
+                  Queremos que tu boda se sienta como ustedes, no como un
+                  evento genérico más.
                 </div>
               </div>
             </div>
@@ -118,7 +121,8 @@ function NosotrosPage() {
           <div className="container">
             <h2 className="about__section-title">Lo que nos mueve</h2>
             <p className="about__section-subtitle">
-              No solo son bodas; son capítulos importantes en la vida de las personas.
+              No solo son bodas; son decisiones importantes, emociones reales y
+              momentos que merecen vivirse con claridad.
             </p>
             <div className="about__values-list">
               <span className="about__value-pill">Empatía y escucha real</span>
@@ -135,11 +139,11 @@ function NosotrosPage() {
           <div className="container newsletter">
             <div className="newsletter__text">
               <div className="newsletter__title">
-                ¿Quieres recibir tips y recomendaciones de proveedores?
+                ¿Quieres empezar a planear tu boda con más claridad?
               </div>
               <div className="newsletter__sub">
-                Déjanos tu correo y te enviaremos solo contenido útil para
-                planear tu boda con calma, sin spam.
+                Regístrate en Kelom y recibe orientación, contenido útil y
+                acceso progresivo a proveedores para boda.
               </div>
             </div>
             <form className="newsletter__form">
@@ -148,12 +152,12 @@ function NosotrosPage() {
                 className="newsletter__input"
                 placeholder="Tu correo electrónico"
               />
-               <NavLink
-              to="/registro"
-              className="header__btn header__btn--outline"
-            >
-              Registrarme
-            </NavLink>
+              <NavLink
+                to="/registro"
+                className="header__btn header__btn--outline"
+              >
+                Registrarme sin costo
+              </NavLink>
             </form>
           </div>
         </section>

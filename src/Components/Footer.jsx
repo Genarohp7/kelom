@@ -11,6 +11,12 @@ function Footer() {
           <p className="footer__copy">
             Kelom.com.mx · Acompañándote en cada paso hacia el “sí, acepto”.
           </p>
+
+          <p className="footer__copy">
+            Kelom es una plataforma de conexión entre usuarios y proveedores.
+            Los servicios contratados son responsabilidad directa entre el
+            cliente y el proveedor.
+          </p>
         </div>
 
         <div className="footer__legal" aria-label="Sección legal">

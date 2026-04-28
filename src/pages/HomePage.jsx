@@ -361,7 +361,7 @@ function HomePage() {
     {
       id: 1,
       name: "Lugares",
-      category: "Haciendas, jardines, salones",
+      category: "Haciendas, jardines y salones para boda",
       filterCategory: "Lugares",
       image:
         "https://images.pexels.com/photos/169211/pexels-photo-169211.jpeg?auto=compress&cs=tinysrgb&w=400",
@@ -369,7 +369,7 @@ function HomePage() {
     {
       id: 2,
       name: "Banquetes",
-      category: "Cocina tradicional y de autor",
+      category: "Banquetes para boda y eventos",
       filterCategory: "Banquetes",
       image:
         "https://images.pexels.com/photos/1128678/pexels-photo-1128678.jpeg?auto=compress&cs=tinysrgb&w=400",
@@ -377,7 +377,7 @@ function HomePage() {
     {
       id: 3,
       name: "Vestidos",
-      category: "Atelier y tiendas especializadas",
+      category: "Vestidos de novia y ateliers",
       filterCategory: "Vestidos",
       image:
         "https://images.pexels.com/photos/3137073/pexels-photo-3137073.jpeg?auto=compress&cs=tinysrgb&w=400",
@@ -385,7 +385,7 @@ function HomePage() {
     {
       id: 4,
       name: "Organizadoras",
-      category: "Wedding planners",
+      category: "Wedding planner en México",
       filterCategory: "Organizador para Bodas",
       image:
         "https://images.pexels.com/photos/3951851/pexels-photo-3951851.jpeg?auto=compress&cs=tinysrgb&w=400",
@@ -393,7 +393,7 @@ function HomePage() {
     {
       id: 5,
       name: "Pasteles",
-      category: "Repostería para bodas",
+      category: "Pasteles y repostería para boda",
       filterCategory: "Pasteles",
       image:
         "https://images.pexels.com/photos/140831/pexels-photo-140831.jpeg?auto=compress&cs=tinysrgb&w=400",
@@ -491,23 +491,23 @@ function HomePage() {
         <>
           <section className="hero">
             <div className="container hero__inner">
-              <div className="hero__eyebrow">Planea tu boda con calma</div>
+              <div className="hero__eyebrow">Organiza tu boda con más claridad</div>
               <h1 className="hero__title">
-                Encuentra el{" "}
-                <span className="hero__title-highlight">lugar perfecto</span>{" "}
-                para decir “sí”.
+                Planea tu boda con{" "}
+                <span className="hero__title-highlight">proveedores y orientación</span>{" "}
+                para tomar mejores decisiones.
               </h1>
               <p className="hero__subtitle">
-                Jardines, salones, haciendas, banquetes y más. Kelom te ayuda a
-                descubrir opciones pensadas para ti, sin perderte entre miles de
-                resultados.
+                Kelom te ayuda a organizar tu boda en México con más calma:
+                encuentra proveedores para boda, compara opciones por categoría y comienza
+                a dar forma a tu evento sin perderte entre miles de resultados.
               </p>
 
               <div className="search-panel">
                 <form className="search-panel__form" onSubmit={handleSearchSubmit}>
                   <div className="search-panel__field">
                     <label className="search-panel__label" htmlFor="search-what">
-                      ¿Qué buscas?
+                      ¿Qué proveedor para tu boda buscas?
                     </label>
 
                     <SmartCombo
@@ -516,13 +516,13 @@ function HomePage() {
                       value={searchWhat}
                       onChange={setSearchWhat}
                       options={CATEGORY_OPTIONS}
-                      emptyText="No tenemos esa categoría (aún). Puedes escribirla igual."
+                      emptyText="No tenemos esa categoría aún. Puedes escribirla igual."
                     />
                   </div>
 
                   <div className="search-panel__field">
                     <label className="search-panel__label" htmlFor="search-where">
-                      ¿Qué localidad o proveedor?
+                      Localidad o nombre del proveedor
                     </label>
 
                     <SmartCombo
@@ -541,7 +541,7 @@ function HomePage() {
                       type="submit"
                       disabled={searchLoading}
                     >
-                      {searchLoading ? "Buscando..." : "Buscar"}
+                      {searchLoading ? "Buscando..." : "Buscar proveedores"}
                     </button>
 
                     {activeSearch && (
@@ -551,14 +551,14 @@ function HomePage() {
                         onClick={clearSearch}
                         disabled={searchLoading}
                       >
-                        Limpiar
+                        Limpiar búsqueda
                       </button>
                     )}
                   </div>
                 </form>
 
                 <p className="search-panel__hint">
-                  Tip: la categoría sí es importante. La localidad o el nombre del proveedor
+                  Elige una categoría para comenzar. La localidad o el nombre del proveedor
                   son opcionales.
                 </p>
               </div>
@@ -570,12 +570,14 @@ function HomePage() {
               <header className="venues__header">
                 <div>
                   <h2 className="venues__title">
-                    {activeSearch ? "Resultados de tu búsqueda" : "Lugares para realizar tu sueño"}
+                    {activeSearch
+                      ? "Proveedores para boda según tu búsqueda"
+                      : "Proveedores seleccionados para comenzar a planear tu boda"}
                   </h2>
                   <p className="venues__subtitle">
                     {activeSearch
                       ? activeFiltersText || "Aplicando filtros…"
-                      : "Aquí aparecen los proveedores seleccionados para la primera vista de Kelom."}
+                      : "Explora opciones disponibles en Kelom y encuentra lugares, banquetes, vestidos, pasteles y servicios para organizar tu evento con más claridad."}
                   </p>
                 </div>
               </header>
@@ -589,7 +591,7 @@ function HomePage() {
               ) : listToShow.length === 0 ? (
                 <p style={{ marginTop: "0.8rem" }}>
                   {activeSearch
-                    ? "No encontramos proveedores con esos filtros. Prueba otra combinación."
+                    ? "No encontramos proveedores con esos filtros. Prueba otra categoría o deja la localidad vacía."
                     : "Aún no hay proveedores publicados. Vuelve pronto."}
                 </p>
               ) : (
@@ -611,7 +613,12 @@ function HomePage() {
                       return (
                         <article key={detailId} className="venue-card">
                           <div className="venue-card__image-wrap">
-                            <img className="venue-card__image" src={image} alt={name} />
+                            <img
+                              className="venue-card__image"
+                              src={image}
+                              alt={`${name} - ${category || "proveedor para boda"} en ${location}`}
+                              loading="lazy"
+                            />
                           </div>
 
                           <div className="venue-card__body">
@@ -619,13 +626,13 @@ function HomePage() {
 
                             <div className="venue-card__rating">
                               <span className="venue-card__rating-stars">★</span>{" "}
-                              {category ? category : "Publicado en Kelom"}
+                              {category ? category : "Proveedor publicado en Kelom"}
                             </div>
 
                             <div className="venue-card__location">{location}</div>
 
                             <Link to={`/proveedores/${detailId}`} className="venue-card__link">
-                              Ver más detalles
+                              Ver detalles del proveedor
                             </Link>
                           </div>
                         </article>
@@ -664,9 +671,10 @@ function HomePage() {
           <section className="featured">
             <div className="container">
               <header className="featured__header">
-                <h2 className="featured__title">Empresas destacadas</h2>
+                <h2 className="featured__title">Encuentra proveedores para tu boda</h2>
                 <p className="featured__subtitle">
-                  Proveedores clave para completar tu boda ideal.
+                  Filtra por categorías clave y comienza a organizar tu boda con opciones
+                  de lugares, banquetes, vestidos, pasteles y wedding planners.
                 </p>
               </header>
 
@@ -678,12 +686,13 @@ function HomePage() {
                     className="featured-card featured-card--button"
                     onClick={() => handleFeaturedClick(company)}
                     title={`Ver proveedores: ${company.name}`}
-                    aria-label={`Filtrar proveedores por ${company.name}`}
+                    aria-label={`Filtrar proveedores para boda por ${company.name}`}
                   >
                     <img
                       src={company.image}
-                      alt={company.name}
+                      alt={`${company.category} en Kelom`}
                       className="featured-card__image"
+                      loading="lazy"
                     />
                     <div className="featured-card__name">{company.name}</div>
                     <div className="featured-card__category">{company.category}</div>
@@ -698,9 +707,10 @@ function HomePage() {
       <section className="tips">
         <div className="container">
           <header className="tips__header">
-            <h2 className="tips__title">Tips para tu boda</h2>
+            <h2 className="tips__title">Tips para planear tu boda</h2>
             <p className="tips__subtitle">
-              Consejos cortos para que disfrutes el proceso, no solo el gran día.
+              Consejos simples para organizar tu boda con claridad, cuidar tu presupuesto
+              y avanzar paso a paso.
             </p>
           </header>
 
@@ -709,16 +719,16 @@ function HomePage() {
               <article className="tips-card">
                 <h3 className="tips-card__title">Empieza por el presupuesto</h3>
                 <p className="tips-card__text">
-                  Definir un rango claro desde el inicio te ayudará a elegir opciones realistas
-                  sin renunciar al estilo que quieres.
+                  Definir un rango claro desde el inicio te ayuda a elegir proveedores para
+                  boda realistas sin renunciar al estilo que quieres.
                 </p>
               </article>
 
               <article className="tips-card">
                 <h3 className="tips-card__title">Haz una lista de prioridades</h3>
                 <p className="tips-card__text">
-                  ¿Es más importante el lugar, la comida o la música? Ponerlo en papel facilita
-                  las decisiones cuando tengas que elegir.
+                  Decide qué pesa más para tu evento: el lugar, la comida, la música,
+                  la fotografía o la organización. Así será más fácil comparar opciones.
                 </p>
               </article>
             </div>
@@ -726,8 +736,9 @@ function HomePage() {
             <div className="tips__image-wrap">
               <img
                 src={tipsImage}
-                alt="Pareja organizando su boda con calma"
+                alt="Pareja organizando su boda con claridad y acompañamiento"
                 className="tips__image"
+                loading="lazy"
               />
             </div>
           </div>

@@ -85,16 +85,17 @@ function UserRegisterPage() {
                 Gracias, {form.fullName || "pareja"} 🤍
               </h1>
               <p className="register-card__subtitle">
-                Hemos recibido tus datos. Muchas gracias por confiar en nosotros.
+                Recibimos tus datos. Ya puedes continuar con tu registro para
+                comenzar a organizar tu boda con más claridad.
               </p>
               <p className="register-card__subtitle">
-                Te enviaremos un correo a <strong>{form.email}</strong> con un mensaje
-                de bienvenida y algunas ideas para empezar.
+                También enviaremos un correo a <strong>{form.email}</strong> con
+                información para dar los primeros pasos en Kelom.
               </p>
 
               <div className="register-card__actions">
                 <Link to="/registro/completar" className="btn btn--primary">
-                  Continuar con registro
+                  Continuar y planear mi boda
                 </Link>
                 <Link to="/" className="btn btn--ghost">
                   Volver al inicio
@@ -112,10 +113,13 @@ function UserRegisterPage() {
       <main className="business-register__content">
         <div className="business-register__container">
           <section className="register-card">
-            <p className="register-card__eyebrow">Alta inicial</p>
-            <h1 className="register-card__title">Regístrate con nosotros</h1>
+            <p className="register-card__eyebrow">Registro sin costo</p>
+            <h1 className="register-card__title">
+              Comienza a planear tu boda con Kelom
+            </h1>
             <p className="register-card__subtitle">
-              Recibirás información útil para que tu gran día sea como lo sueñas.
+              Cuéntanos sobre tu evento y te ayudaremos a empezar con claridad,
+              orientación y acceso progresivo a proveedores para boda.
             </p>
 
             <form className="form" onSubmit={handleSubmit} noValidate>
@@ -212,7 +216,7 @@ function UserRegisterPage() {
                   className="btn btn--primary"
                   disabled={!isPrivacyChecked}
                 >
-                  Crear mi registro
+                  Comenzar a planear mi boda
                 </button>
               </div>
             </form>
