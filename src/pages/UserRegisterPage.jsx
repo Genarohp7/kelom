@@ -3,6 +3,17 @@ import { Link } from "react-router-dom";
 import { savePendingRegistration } from "../utils/userStorage.js";
 import { sendUserRegisterEmails } from "../services/emailService.js";
 
+function trackKelomUserRegistration() {
+  if (typeof window === "undefined" || typeof window.gtag !== "function") {
+    return;
+  }
+
+  window.gtag("event", "sign_up", {
+    method: "kelom_user_registration",
+    user_type: "couple",
+  });
+}
+
 function UserRegisterPage() {
   const [form, setForm] = useState({
     email: "",
@@ -66,6 +77,7 @@ function UserRegisterPage() {
 
       savePendingRegistration(payload);
       await sendUserRegisterEmails(payload);
+      trackKelomUserRegistration();
       setIsSubmitted(true);
     } catch (err) {
       console.error("Error al enviar correos de registro:", err);
