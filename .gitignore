@@ -24,3 +24,6 @@ Thumbs.db
 uploads/
 **/uploads/
 *.log
+# Local backend backup
+backend_local_backup_before_vm_sync/
+*.bak

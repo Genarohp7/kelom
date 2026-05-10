@@ -12,6 +12,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import multer from "multer";
 import sharp from "sharp";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -27,7 +28,6 @@ const __dirname = path.dirname(__filename);
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
-// ✅ Recomendado para que recursos (fotos, avatares, etc.) se puedan usar cross-origin sin bronca
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -76,6 +76,22 @@ const avatarLimiter = rateLimit({
   message: { error: "Demasiadas solicitudes. Intenta más tarde." },
 });
 
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados intentos. Intenta más tarde." },
+});
+
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiados intentos. Intenta más tarde." },
+});
+
 // Providers
 const providerLeadsLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -101,6 +117,22 @@ const providerLoginLimiter = rateLimit({
   message: { error: "Demasiados intentos. Intenta más tarde." },
 });
 
+const providerInvitationCreateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 80,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas invitaciones. Intenta más tarde." },
+});
+
+const providerInvitationValidateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas validaciones. Intenta más tarde." },
+});
+
 // ✅ Info Requests (usuarios -> proveedores)
 const infoRequestLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -118,7 +150,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "https://kelom.com.mx",
   "https://www.kelom.com.mx",
-  "https://genarohp7.github.io", // staging GH Pages
+  "https://genarohp7.github.io",
 ];
 
 app.use(
@@ -132,7 +164,6 @@ app.use(
   })
 );
 
-// JSON limitado (avatars y fotos se envían por multipart/form-data)
 app.use(express.json({ limit: "500kb" }));
 
 // ===================== PATHS / UPLOADS ROOT =====================
@@ -157,6 +188,12 @@ app.use(
 );
 
 // ===================== HELPERS =====================
+
+const PASSWORD_RESET_TOKEN_TTL_MINUTES = 30;
+const FORGOT_PASSWORD_GENERIC_MESSAGE =
+  "Si el correo existe, te enviaremos instrucciones para restablecer tu contraseña.";
+const PASSWORD_RESET_DEBUG_RETURN_URL =
+  String(process.env.PASSWORD_RESET_DEBUG_RETURN_URL || "").trim().toLowerCase() === "true";
 
 function requireEnv(name) {
   if (!process.env[name]) {
@@ -259,6 +296,86 @@ function randomHex(size = 8) {
   return Math.random().toString(16).slice(2, 2 + size);
 }
 
+function hashSha256(value) {
+  return crypto.createHash("sha256").update(String(value || "")).digest("hex");
+}
+
+function generatePasswordResetToken() {
+  return crypto.randomBytes(32).toString("hex");
+}
+
+function getPasswordResetExpiresAt() {
+  return new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MINUTES * 60 * 1000);
+}
+
+function buildPasswordResetUrl(rawToken) {
+  const base = String(
+    process.env.PASSWORD_RESET_BASE_URL || "https://kelom.com.mx/restablecer-contrasena"
+  ).trim();
+
+  const separator = base.includes("?") ? "&" : "?";
+  return `${base}${separator}token=${encodeURIComponent(rawToken)}`;
+}
+
+async function cleanupExpiredPasswordResetTokens() {
+  try {
+    await pool.query(
+      `DELETE FROM password_reset_tokens
+       WHERE expires_at < now()
+          OR used_at IS NOT NULL`
+    );
+  } catch (err) {
+    console.warn("password reset cleanup error:", err?.message || err);
+  }
+}
+
+async function sendPasswordResetEmail({ toEmail, toName, resetUrl, accountRole }) {
+  const serviceId = String(process.env.EMAILJS_SERVICE_ID || "").trim();
+  const templateId = String(process.env.EMAILJS_TEMPLATE_PASSWORD_RESET || "").trim();
+  const publicKey = String(process.env.EMAILJS_PUBLIC_KEY || "").trim();
+  const privateKey = String(process.env.EMAILJS_PRIVATE_KEY || "").trim();
+
+  if (!serviceId || !templateId || !publicKey) {
+    return {
+      delivered: false,
+      reason: "missing_email_config",
+    };
+  }
+
+  const payload = {
+    service_id: serviceId,
+    template_id: templateId,
+    user_id: publicKey,
+    template_params: {
+      to_email: toEmail,
+      to_name: toName || "usuario",
+      reset_url: resetUrl,
+      app_name: "Kelom",
+      support_email: String(process.env.KELOM_SUPPORT_EMAIL || "clientes@mail.com").trim(),
+      account_role: accountRole || "user",
+    },
+  };
+
+  if (privateKey) {
+    payload.accessToken = privateKey;
+  }
+
+  const response = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(text || `EmailJS error HTTP ${response.status}`);
+  }
+
+  return { delivered: true };
+}
+
 const PROVIDER_REQUEST_STATUS_VALUES = new Set([
   "sin_atender",
   "pendiente",
@@ -277,6 +394,257 @@ function normalizeProviderRequestStatus(value) {
   return v;
 }
 
+// ===================== PROVIDER INVITATIONS HELPERS =====================
+
+const PROVIDER_INVITATION_STATUS_VALUES = new Set(["issued", "used", "cancelled", "expired"]);
+
+function generateProviderInvitationToken() {
+  return crypto.randomBytes(24).toString("hex");
+}
+
+async function expireProviderInvitations(db = pool) {
+  try {
+    await db.query(
+      `UPDATE provider_invitations
+       SET status = 'expired',
+           updated_at = now()
+       WHERE status = 'issued'
+         AND expires_at IS NOT NULL
+         AND expires_at < now()`
+    );
+  } catch (err) {
+    console.warn("provider invitations expire error:", err?.message || err);
+  }
+}
+
+function sanitizeIp(req) {
+  let requestIp = req.ip || null;
+
+  if (requestIp && String(requestIp).startsWith("::ffff:")) {
+    requestIp = String(requestIp).replace("::ffff:", "");
+  }
+
+  if (requestIp === "::1") {
+    requestIp = "127.0.0.1";
+  }
+
+  return requestIp;
+}
+
+// ===================== PROVIDER MULTI-SERVICE HELPERS =====================
+
+function providerProfilesOrderSql(alias = "p") {
+  return `
+    CASE
+      WHEN ${alias}.review_status = 'approved' AND ${alias}.public_visibility = 'listed' THEN 0
+      WHEN ${alias}.review_status = 'pending_review' THEN 1
+      WHEN ${alias}.review_status = 'needs_changes' THEN 2
+      ELSE 3
+    END,
+    COALESCE(${alias}.updated_at, ${alias}.created_at) DESC,
+    ${alias}.created_at ASC,
+    ${alias}.id ASC
+  `;
+}
+
+async function listProviderProfiles(db, userId) {
+  const result = await db.query(
+    `
+    SELECT
+      p.*,
+      (
+        SELECT url
+        FROM provider_photos ph
+        WHERE ph.profile_id = p.id
+        ORDER BY ph.sort_order ASC, ph.created_at ASC
+        LIMIT 1
+      ) AS main_photo_url,
+      (
+        SELECT COUNT(*)::int
+        FROM provider_photos ph
+        WHERE ph.profile_id = p.id
+      ) AS photo_count
+    FROM provider_profiles p
+    WHERE p.user_id = $1
+    ORDER BY ${providerProfilesOrderSql("p")}
+    `,
+    [userId]
+  );
+
+  return result.rows || [];
+}
+
+async function getPrimaryProviderProfile(db, userId) {
+  const profiles = await listProviderProfiles(db, userId);
+  return profiles[0] || null;
+}
+
+async function getOwnedProviderProfile(db, userId, profileId) {
+  if (!isUuid(profileId)) return null;
+
+  const result = await db.query(
+    `
+    SELECT
+      p.*,
+      (
+        SELECT url
+        FROM provider_photos ph
+        WHERE ph.profile_id = p.id
+        ORDER BY ph.sort_order ASC, ph.created_at ASC
+        LIMIT 1
+      ) AS main_photo_url,
+      (
+        SELECT COUNT(*)::int
+        FROM provider_photos ph
+        WHERE ph.profile_id = p.id
+      ) AS photo_count
+    FROM provider_profiles p
+    WHERE p.id = $1
+      AND p.user_id = $2
+    LIMIT 1
+    `,
+    [profileId, userId]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function getProviderPhotosByProfile(db, profileId) {
+  if (!profileId || !isUuid(profileId)) return [];
+
+  const result = await db.query(
+    `
+    SELECT id, profile_id, user_id, url, sort_order, created_at
+    FROM provider_photos
+    WHERE profile_id = $1
+    ORDER BY sort_order ASC, created_at ASC
+    `,
+    [profileId]
+  );
+
+  return result.rows || [];
+}
+
+async function providerCanAddAnotherService(db, userId) {
+  const result = await db.query(
+    `
+    SELECT 1
+    FROM provider_profiles
+    WHERE user_id = $1
+      AND review_status = 'approved'
+      AND public_visibility = 'listed'
+    LIMIT 1
+    `,
+    [userId]
+  );
+
+  return result.rowCount > 0;
+}
+
+async function resolvePublicProviderProfile(db, rawId, isAdmin = false) {
+  if (!isUuid(rawId)) return null;
+
+  let result = await db.query(
+    `
+    SELECT
+      p.id,
+      p.id AS profile_id,
+      p.user_id AS provider_id,
+      p.user_id,
+      p.company_name, p.owner_name,
+      p.venue_name, p.venue_location, p.business_category, p.locality_area,
+      p.location_place_id, p.location_lat, p.location_lng,
+      p.capacity_min, p.capacity_max, p.price_from, p.price_to,
+      p.short_description, p.description, p.spaces, p.services, p.rules,
+      p.website, p.instagram, p.facebook, p.map_text, p.event_types, p.selling_points,
+      p.review_status, p.public_visibility, p.is_featured,
+      p.created_at, p.updated_at
+    FROM provider_profiles p
+    WHERE p.id = $1
+    LIMIT 1
+    `,
+    [rawId]
+  );
+
+  let profile = result.rows[0] || null;
+
+  if (!profile) {
+    result = await db.query(
+      `
+      SELECT
+        p.id,
+        p.id AS profile_id,
+        p.user_id AS provider_id,
+        p.user_id,
+        p.company_name, p.owner_name,
+        p.venue_name, p.venue_location, p.business_category, p.locality_area,
+        p.location_place_id, p.location_lat, p.location_lng,
+        p.capacity_min, p.capacity_max, p.price_from, p.price_to,
+        p.short_description, p.description, p.spaces, p.services, p.rules,
+        p.website, p.instagram, p.facebook, p.map_text, p.event_types, p.selling_points,
+        p.review_status, p.public_visibility, p.is_featured,
+        p.created_at, p.updated_at
+      FROM provider_profiles p
+      WHERE p.user_id = $1
+      ORDER BY ${providerProfilesOrderSql("p")}
+      LIMIT 1
+      `,
+      [rawId]
+    );
+
+    profile = result.rows[0] || null;
+  }
+
+  if (!profile) return null;
+
+  if (!isAdmin) {
+    const rs = String(profile.review_status || "");
+    const pv = String(profile.public_visibility || "");
+    if (!(rs === "approved" && pv === "listed")) return null;
+  }
+
+  return profile;
+}
+
+async function resolveTargetProfileFromInfoRequestPayload(db, rawId) {
+  if (!rawId || !isUuid(rawId)) return null;
+
+  let result = await db.query(
+    `
+    SELECT p.id, p.user_id
+    FROM provider_profiles p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.id = $1
+      AND p.review_status = 'approved'
+      AND p.public_visibility = 'listed'
+      AND u.role = 'provider'
+      AND u.account_status = 'active'
+    LIMIT 1
+    `,
+    [rawId]
+  );
+
+  if (result.rowCount > 0) return result.rows[0];
+
+  result = await db.query(
+    `
+    SELECT p.id, p.user_id
+    FROM provider_profiles p
+    JOIN users u ON u.id = p.user_id
+    WHERE p.user_id = $1
+      AND p.review_status = 'approved'
+      AND p.public_visibility = 'listed'
+      AND u.role = 'provider'
+      AND u.account_status = 'active'
+    ORDER BY ${providerProfilesOrderSql("p")}
+    LIMIT 1
+    `,
+    [rawId]
+  );
+
+  return result.rows[0] || null;
+}
+
 // ===================== RBAC (ADMIN TIERS + PERMISSIONS) =====================
 
 const ADMIN_TIERS = new Set(["super", "moderator", "content", "support"]);
@@ -287,13 +655,17 @@ function normalizeAdminTier(tier) {
 }
 
 function hasPermission(user, perm) {
-  // Superadmin = dios con checklist
   if (user?.role === "admin" && user?.admin_tier === "super") return true;
 
   const tier = user?.admin_tier;
 
   const tierPerms = {
-    moderator: new Set(["admin:providers:read", "admin:providers:review"]),
+    moderator: new Set([
+      "admin:providers:read",
+      "admin:providers:review",
+      "admin:provider_invitations:read",
+      "admin:provider_invitations:write",
+    ]),
     support: new Set(["admin:users:read", "admin:users:block", "admin:users:unblock"]),
     content: new Set(["admin:content:write", "admin:content:read"]),
   };
@@ -404,7 +776,6 @@ function adminAuthMiddleware(req, res, next) {
   });
 }
 
-// Optional auth helper (para endpoints públicos que pueden “abrirse” al admin)
 async function tryGetAdminUserFromRequest(req) {
   try {
     const header = req.headers.authorization || "";
@@ -494,7 +865,7 @@ async function processAndStoreAvatar(userId, file) {
 const avatarUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 1024 * 1024, // 1MB antes de optimizar
+    fileSize: 1024 * 1024,
   },
   fileFilter(req, file, cb) {
     if (!ALLOWED_AVATAR_IMAGE_TYPES.has(file.mimetype)) {
@@ -556,7 +927,7 @@ const providerUpload = multer({
     return cb(null, true);
   },
   limits: {
-    fileSize: 6 * 1024 * 1024, // 6MB por imagen antes de optimizar
+    fileSize: 6 * 1024 * 1024,
     files: 12,
   },
 });
@@ -736,6 +1107,187 @@ app.put("/auth/password", changePasswordLimiter, authMiddleware, async (req, res
   }
 });
 
+app.post("/auth/forgot-password", forgotPasswordLimiter, async (req, res) => {
+  try {
+    const emailNorm = normalizeEmail(req.body?.email);
+
+    if (!emailNorm) {
+      return res.status(400).json({ error: "email es obligatorio" });
+    }
+
+    if (!isValidEmail(emailNorm)) {
+      return res.status(400).json({ error: "email inválido" });
+    }
+
+    await cleanupExpiredPasswordResetTokens();
+
+    const found = await pool.query(
+      `SELECT id, email, name, role, account_status
+       FROM users
+       WHERE email = $1
+       LIMIT 1`,
+      [emailNorm]
+    );
+
+    const user = found.rows[0] || null;
+
+    if (!user || (user.account_status && user.account_status !== "active")) {
+      return res.json({
+        ok: true,
+        message: FORGOT_PASSWORD_GENERIC_MESSAGE,
+      });
+    }
+
+    const rawToken = generatePasswordResetToken();
+    const tokenHash = hashSha256(rawToken);
+    const expiresAt = getPasswordResetExpiresAt();
+
+    await pool.query(
+      `DELETE FROM password_reset_tokens
+       WHERE user_id = $1
+         AND used_at IS NULL`,
+      [user.id]
+    );
+
+    await pool.query(
+      `INSERT INTO password_reset_tokens
+        (user_id, token_hash, expires_at, requested_ip, user_agent)
+       VALUES
+        ($1, $2, $3, $4, $5)`,
+      [user.id, tokenHash, expiresAt, req.ip || null, req.headers["user-agent"] || null]
+    );
+
+    const resetUrl = buildPasswordResetUrl(rawToken);
+
+    try {
+      const emailResult = await sendPasswordResetEmail({
+        toEmail: user.email,
+        toName: user.name || "usuario",
+        resetUrl,
+        accountRole: user.role || "user",
+      });
+
+      if (!emailResult.delivered && PASSWORD_RESET_DEBUG_RETURN_URL) {
+        return res.json({
+          ok: true,
+          message: FORGOT_PASSWORD_GENERIC_MESSAGE,
+          preview_reset_url: resetUrl,
+        });
+      }
+    } catch (emailErr) {
+      console.error("forgot-password email error:", emailErr);
+
+      if (PASSWORD_RESET_DEBUG_RETURN_URL) {
+        return res.json({
+          ok: true,
+          message: FORGOT_PASSWORD_GENERIC_MESSAGE,
+          preview_reset_url: resetUrl,
+        });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      message: FORGOT_PASSWORD_GENERIC_MESSAGE,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.post("/auth/reset-password", resetPasswordLimiter, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const token = String(req.body?.token || "").trim();
+    const newPassword = String(req.body?.newPassword || "");
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: "token y newPassword son obligatorios" });
+    }
+
+    if (newPassword.length < 5) {
+      return res.status(400).json({ error: "password mínimo 5 caracteres" });
+    }
+
+    const tokenHash = hashSha256(token);
+
+    await client.query("BEGIN");
+
+    const found = await client.query(
+      `SELECT
+         prt.id,
+         prt.user_id,
+         prt.expires_at,
+         prt.used_at,
+         u.password_hash,
+         u.account_status
+       FROM password_reset_tokens prt
+       JOIN users u ON u.id = prt.user_id
+       WHERE prt.token_hash = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [tokenHash]
+    );
+
+    const row = found.rows[0] || null;
+
+    if (!row) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Token inválido o expirado" });
+    }
+
+    if (row.used_at || new Date(row.expires_at).getTime() < Date.now()) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "Token inválido o expirado" });
+    }
+
+    if (row.account_status && row.account_status !== "active") {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "Cuenta bloqueada" });
+    }
+
+    const same = await bcrypt.compare(newPassword, row.password_hash);
+    if (same) {
+      await client.query("ROLLBACK");
+      return res
+        .status(400)
+        .json({ error: "La nueva contraseña no puede ser igual a la actual" });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+
+    await client.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [
+      newHash,
+      row.user_id,
+    ]);
+
+    await client.query(
+      `UPDATE password_reset_tokens
+       SET used_at = now()
+       WHERE user_id = $1
+         AND used_at IS NULL`,
+      [row.user_id]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({ ok: true, message: "Contraseña restablecida correctamente." });
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      void 0;
+    }
+
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  } finally {
+    client.release();
+  }
+});
+
 // ===================== PROFILE (WEDDING PROFILES) =====================
 
 app.get("/profile/me", authMiddleware, async (req, res) => {
@@ -868,16 +1420,10 @@ app.put(
       const processed = await processAndStoreAvatar(userId, req.file);
       newAvatarAbsPath = processed.absPath;
 
-      const prev = await pool.query(
-        `SELECT avatar_url FROM users WHERE id = $1 LIMIT 1`,
-        [userId]
-      );
+      const prev = await pool.query(`SELECT avatar_url FROM users WHERE id = $1 LIMIT 1`, [userId]);
       const prevUrl = prev.rows[0]?.avatar_url || null;
 
-      await pool.query(`UPDATE users SET avatar_url = $1 WHERE id = $2`, [
-        processed.url,
-        userId,
-      ]);
+      await pool.query(`UPDATE users SET avatar_url = $1 WHERE id = $2`, [processed.url, userId]);
 
       if (prevUrl && prevUrl.startsWith("/uploads/avatars/")) {
         const prevPath = path.join(__dirname, prevUrl.replace(/^\//, ""));
@@ -905,7 +1451,7 @@ app.put(
 );
 
 // ===================== INFO REQUESTS (USUARIO -> PROVEEDOR) =====================
-// Crea solicitud y queda pendiente de moderación. Aún NO envía correos.
+
 app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) => {
   try {
     if (req.user?.role !== "user") {
@@ -913,15 +1459,21 @@ app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) 
     }
 
     const body = req.body || {};
-    const providerId = String(body.providerId || body.provider_id || "").trim();
+    const rawTargetId = String(
+      body.profileId ||
+        body.profile_id ||
+        body.providerId ||
+        body.provider_id ||
+        ""
+    ).trim();
 
     const message = String(body.message || "").trim();
     const preferredContactSchedule = String(
       body.preferredContactSchedule || body.preferred_contact_schedule || ""
     ).trim();
 
-    if (!providerId || !isUuid(providerId)) {
-      return res.status(400).json({ error: "providerId inválido" });
+    if (!rawTargetId || !isUuid(rawTargetId)) {
+      return res.status(400).json({ error: "profileId/providerId inválido" });
     }
 
     if (!message) {
@@ -935,22 +1487,9 @@ app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) 
     const messageSafe = message.slice(0, 2000);
     const scheduleSafe = preferredContactSchedule.slice(0, 220);
 
-    const prov = await pool.query(
-      `
-      SELECT p.user_id
-      FROM provider_profiles p
-      JOIN users u ON u.id = p.user_id
-      WHERE p.user_id = $1
-        AND p.review_status = 'approved'
-        AND p.public_visibility = 'listed'
-        AND u.role = 'provider'
-        AND u.account_status = 'active'
-      LIMIT 1
-      `,
-      [providerId]
-    );
+    const targetProfile = await resolveTargetProfileFromInfoRequestPayload(pool, rawTargetId);
 
-    if (!prov.rowCount) {
+    if (!targetProfile) {
       return res.status(404).json({ error: "Proveedor no encontrado" });
     }
 
@@ -972,6 +1511,7 @@ app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) 
       `
       INSERT INTO provider_info_requests (
         provider_id,
+        profile_id,
         requester_user_id,
         requester_name,
         requester_email,
@@ -979,17 +1519,19 @@ app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) 
         message,
         preferred_contact_schedule
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
       RETURNING
         id,
         provider_id,
+        profile_id,
         requester_user_id,
         moderation_status,
         provider_status,
         created_at
       `,
       [
-        providerId,
+        targetProfile.user_id,
+        targetProfile.id,
         r.id,
         r.name || null,
         r.email || null,
@@ -1006,11 +1548,85 @@ app.post("/info-requests", infoRequestLimiter, authMiddleware, async (req, res) 
   }
 });
 
+// ===================== PUBLIC PROVIDER INVITATIONS =====================
+
+app.get(
+  "/providers/invitations/:token/validate",
+  providerInvitationValidateLimiter,
+  async (req, res) => {
+    try {
+      await expireProviderInvitations();
+
+      const rawToken = String(req.params.token || "").trim();
+      if (!rawToken) {
+        return res.status(400).json({ error: "Token inválido" });
+      }
+
+      const tokenHash = hashSha256(rawToken);
+
+      const found = await pool.query(
+        `SELECT
+           id,
+           invited_email,
+           invited_company_name,
+           invited_owner_name,
+           status,
+           expires_at,
+           used_at,
+           used_by_lead_id,
+           notes,
+           created_at,
+           updated_at
+         FROM provider_invitations
+         WHERE token_hash = $1
+         LIMIT 1`,
+        [tokenHash]
+      );
+
+      const invitation = found.rows[0] || null;
+      if (!invitation) {
+        return res.status(404).json({ error: "Invitación no válida" });
+      }
+
+      if (invitation.status !== "issued") {
+        return res.status(400).json({ error: "La invitación ya no está disponible" });
+      }
+
+      return res.json({
+        valid: true,
+        invitation: {
+          id: invitation.id,
+          status: invitation.status,
+          invited_email: invitation.invited_email || "",
+          invited_company_name: invitation.invited_company_name || "",
+          invited_owner_name: invitation.invited_owner_name || "",
+          expires_at: invitation.expires_at,
+          notes: invitation.notes || null,
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
 // ===================== PROVIDERS =====================
 
 app.post("/providers/leads", providerLeadsLimiter, async (req, res) => {
+  const client = await pool.connect();
+
   try {
-    const { companyName, ownerName, phone, email } = req.body || {};
+    const {
+      companyName,
+      ownerName,
+      phone,
+      email,
+      acceptedPrivacy,
+      acceptedTermsDeclaration,
+      invitationToken,
+    } = req.body || {};
+
     const emailNorm = normalizeEmail(email);
 
     if (!companyName?.trim() || !ownerName?.trim() || !phone?.trim() || !emailNorm) {
@@ -1025,24 +1641,161 @@ app.post("/providers/leads", providerLeadsLimiter, async (req, res) => {
       return res.status(400).json({ error: "Teléfono inválido (10 dígitos, sin secuencias)" });
     }
 
-    const phoneDigits = normalizePhoneDigits(phone);
+    if (acceptedPrivacy !== true) {
+      return res.status(400).json({ error: "Debes aceptar el aviso de privacidad" });
+    }
 
-    const result = await pool.query(
-      `INSERT INTO provider_leads (company_name, owner_name, phone, email)
-       VALUES ($1, $2, $3, $4)
+    if (acceptedTermsDeclaration !== true) {
+      return res.status(400).json({
+        error: "Debes aceptar la declaración de aceptación de términos y condiciones",
+      });
+    }
+
+    const companyNameClean = companyName.trim();
+    const ownerNameClean = ownerName.trim();
+    const phoneDigits = normalizePhoneDigits(phone);
+    const rawInvitationToken = String(invitationToken || "").trim();
+    const hasInvitationToken = Boolean(rawInvitationToken);
+
+    const requestIp = sanitizeIp(req);
+    const userAgent = String(req.headers["user-agent"] || "").trim() || null;
+
+    await client.query("BEGIN");
+    await expireProviderInvitations(client);
+
+    let invitation = null;
+
+    if (hasInvitationToken) {
+      const tokenHash = hashSha256(rawInvitationToken);
+
+      const invitationRes = await client.query(
+        `SELECT
+           id,
+           status,
+           expires_at,
+           used_at,
+           used_by_lead_id,
+           invited_email,
+           invited_company_name,
+           invited_owner_name
+         FROM provider_invitations
+         WHERE token_hash = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [tokenHash]
+      );
+
+      invitation = invitationRes.rows[0] || null;
+
+      if (!invitation) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Invitación no válida" });
+      }
+
+      if (invitation.status !== "issued") {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "La invitación ya no está disponible" });
+      }
+
+      if (invitation.expires_at && new Date(invitation.expires_at).getTime() < Date.now()) {
+        await client.query(
+          `UPDATE provider_invitations
+           SET status = 'expired',
+               updated_at = now()
+           WHERE id = $1`,
+          [invitation.id]
+        );
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "La invitación ha expirado" });
+      }
+    }
+
+    const nextLeadStatus = hasInvitationToken ? "pending_admin_completion" : "lead";
+
+    const result = await client.query(
+      `INSERT INTO provider_leads (company_name, owner_name, phone, email, status)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (email) DO UPDATE SET
          company_name = EXCLUDED.company_name,
          owner_name = EXCLUDED.owner_name,
          phone = EXCLUDED.phone,
+         status = CASE
+           WHEN $6 = true THEN 'pending_admin_completion'
+           ELSE provider_leads.status
+         END,
          updated_at = now()
        RETURNING id, company_name, owner_name, phone, email, status, created_at, updated_at`,
-      [companyName.trim(), ownerName.trim(), phoneDigits, emailNorm]
+      [companyNameClean, ownerNameClean, phoneDigits, emailNorm, nextLeadStatus, hasInvitationToken]
     );
 
-    return res.status(201).json({ lead: result.rows[0] });
+    const lead = result.rows[0];
+
+    await client.query(
+      `INSERT INTO legal_acceptance_events (
+        provider_lead_id,
+        email_snapshot,
+        company_name_snapshot,
+        owner_name_snapshot,
+        document_slug,
+        document_title,
+        document_version,
+        source_form,
+        accepted_at,
+        ip_address,
+        user_agent
+      )
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9, $10),
+        ($1, $2, $3, $4, $11, $12, $13, $8, now(), $9, $10)`,
+      [
+        String(lead.id),
+        emailNorm,
+        companyNameClean,
+        ownerNameClean,
+        "aviso-de-privacidad",
+        "Aviso de Privacidad Integral",
+        "2026-03-11",
+        hasInvitationToken ? "provider_invitation_register" : "provider_basic_register",
+        requestIp,
+        userAgent,
+        "aceptacion-de-terminos-y-condiciones",
+        "Declaración de Aceptación de Términos y Condiciones",
+        "2026-03-19-v1",
+      ]
+    );
+
+    if (hasInvitationToken && invitation) {
+      await client.query(
+        `UPDATE provider_invitations
+         SET status = 'used',
+             used_at = now(),
+             used_by_lead_id = $2,
+             invited_email = $3,
+             invited_company_name = $4,
+             invited_owner_name = $5,
+             updated_at = now()
+         WHERE id = $1`,
+        [invitation.id, lead.id, emailNorm, companyNameClean, ownerNameClean]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return res.status(201).json({
+      lead,
+      invitation_flow: hasInvitationToken,
+    });
   } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      void 0;
+    }
+
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
+  } finally {
+    client.release();
   }
 });
 
@@ -1067,7 +1820,7 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     await client.query("BEGIN");
 
     const leadFound = await client.query(
-      `SELECT company_name, owner_name, phone, status
+      `SELECT id, company_name, owner_name, phone, status
        FROM provider_leads
        WHERE email = $1
        LIMIT 1`,
@@ -1173,9 +1926,12 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
     const provider = userIns.rows[0];
     const userId = provider.id;
 
-    if (lead && lead.status === "lead") {
+    if (lead && (lead.status === "lead" || lead.status === "pending_admin_completion")) {
       await client.query(
-        `UPDATE provider_leads SET status = 'converted', updated_at = now() WHERE email = $1`,
+        `UPDATE provider_leads
+         SET status = 'converted',
+             updated_at = now()
+         WHERE email = $1`,
         [emailNorm]
       );
     }
@@ -1185,6 +1941,7 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
 
     const profileIns = await client.query(
       `INSERT INTO provider_profiles (
+        id,
         user_id, company_name, owner_name, phone,
         venue_name, venue_location, business_category, locality_area,
         location_place_id, location_lat, location_lng,
@@ -1194,6 +1951,7 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
         review_status, public_visibility
       )
       VALUES (
+        uuid_generate_v4(),
         $1,$2,$3,$4,
         $5,$6,$7,$8,
         $9,$10,$11,
@@ -1208,34 +1966,28 @@ app.post("/providers/register", providerRegisterLimiter, async (req, res) => {
         companyName,
         ownerName,
         phoneDigits || null,
-
         venueName,
         venueLocation,
         businessCategory,
         localityArea,
-
         locationPlaceId,
         locationLat,
         locationLng,
-
         capacityMin,
         capacityMax,
         priceFrom,
         priceTo,
-
         shortDescription,
         description,
         spaces,
         services,
         rules,
-
         website,
         instagram,
         facebook,
         mapText,
         eventTypes,
         sellingPoints,
-
         reviewStatus,
         publicVisibility,
       ]
@@ -1341,28 +2093,25 @@ app.get("/providers/me", providerAuthMiddleware, async (req, res) => {
     const provider = u.rows[0] || null;
     if (!provider) return res.status(404).json({ error: "Proveedor no encontrado" });
 
-    const p = await pool.query(`SELECT * FROM provider_profiles WHERE user_id = $1 LIMIT 1`, [
-      userId,
-    ]);
+    const profiles = await listProviderProfiles(pool, userId);
+    const profile = profiles[0] || null;
+    const photos = profile ? await getProviderPhotosByProfile(pool, profile.id) : [];
+    const can_add_service = await providerCanAddAnotherService(pool, userId);
 
-    const profile = p.rows[0] || null;
-
-    const photos = await pool.query(
-      `SELECT id, url, sort_order, created_at
-       FROM provider_photos
-       WHERE user_id = $1
-       ORDER BY sort_order ASC, created_at ASC`,
-      [userId]
-    );
-
-    return res.json({ provider, profile, photos: photos.rows || [] });
+    return res.json({
+      provider,
+      profile,
+      photos,
+      profiles,
+      can_add_service,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
   }
 });
 
-// ===================== PROVIDER INBOX (SOLICITUDES REALES) =====================
+// ===================== PROVIDER INBOX =====================
 
 app.get("/providers/info-requests", providerAuthMiddleware, async (req, res) => {
   try {
@@ -1388,16 +2137,18 @@ app.get("/providers/info-requests", providerAuthMiddleware, async (req, res) => 
     }
 
     if (q) {
-      params.push(`%${q}%`);
-      where.push(
-        `(COALESCE(r.requester_name,'') ILIKE $${params.length}
-          OR COALESCE(r.requester_email,'') ILIKE $${params.length}
-          OR COALESCE(r.requester_phone,'') ILIKE $${params.length}
-          OR COALESCE(r.message,'') ILIKE $${params.length}
-          OR COALESCE(wp.partner_name,'') ILIKE $${params.length}
-          OR COALESCE(wp.city,'') ILIKE $${params.length})`
-      );
-    }
+  params.push(`%${q}%`);
+  where.push(
+    `(COALESCE(r.requester_name,'') ILIKE $${params.length}
+      OR COALESCE(r.requester_email,'') ILIKE $${params.length}
+      OR COALESCE(r.requester_phone,'') ILIKE $${params.length}
+      OR COALESCE(r.message,'') ILIKE $${params.length}
+      OR COALESCE(wp.partner_name,'') ILIKE $${params.length}
+      OR COALESCE(wp.city,'') ILIKE $${params.length}
+      OR COALESCE(p.venue_name,'') ILIKE $${params.length}
+      OR COALESCE(p.company_name,'') ILIKE $${params.length})`
+  );
+}
 
     params.push(limit);
     params.push(offset);
@@ -1406,6 +2157,7 @@ app.get("/providers/info-requests", providerAuthMiddleware, async (req, res) => 
       SELECT
         r.id,
         r.provider_id,
+        r.profile_id,
         r.requester_user_id,
         r.requester_name,
         r.requester_email,
@@ -1416,11 +2168,14 @@ app.get("/providers/info-requests", providerAuthMiddleware, async (req, res) => 
         COALESCE(r.provider_status, 'sin_atender') AS provider_status,
         r.created_at,
         r.updated_at,
+        p.venue_name AS provider_venue_name,
+        p.company_name AS provider_company_name,
         wp.partner_name,
         wp.city,
         wp.wedding_date,
         wp.guests
       FROM provider_info_requests r
+      LEFT JOIN provider_profiles p ON p.id = r.profile_id
       LEFT JOIN wedding_profiles wp ON wp.user_id = r.requester_user_id
       WHERE ${where.join(" AND ")}
       ORDER BY r.created_at DESC
@@ -1499,6 +2254,7 @@ app.patch("/providers/info-requests/:id/status", providerAuthMiddleware, async (
       `SELECT
          id,
          provider_id,
+         profile_id,
          requester_user_id,
          requester_name,
          requester_email,
@@ -1531,6 +2287,7 @@ app.patch("/providers/info-requests/:id/status", providerAuthMiddleware, async (
        RETURNING
          id,
          provider_id,
+         profile_id,
          requester_user_id,
          requester_name,
          requester_email,
@@ -1556,6 +2313,7 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const body = req.body || {};
+    const requestedProfileId = toNullIfEmpty(body.profileId || body.profile_id);
 
     const companyName = toNullIfEmpty(body.companyName);
     const ownerName = toNullIfEmpty(body.ownerName);
@@ -1610,14 +2368,17 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
 
     await client.query("BEGIN");
 
-    const currentRes = await client.query(
-      `SELECT event_types, selling_points, company_name, owner_name, phone
-       FROM provider_profiles
-       WHERE user_id = $1
-       LIMIT 1`,
-      [userId]
-    );
-    const current = currentRes.rows[0] || null;
+    let current = null;
+
+    if (requestedProfileId) {
+      current = await getOwnedProviderProfile(client, userId, requestedProfileId);
+      if (!current) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Servicio no encontrado" });
+      }
+    } else {
+      current = await getPrimaryProviderProfile(client, userId);
+    }
 
     const eventTypes =
       Array.isArray(body.eventTypes) && body.eventTypes.length
@@ -1641,87 +2402,129 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
       await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [ownerName, userId]);
     }
 
-    const upsert = await client.query(
-      `INSERT INTO provider_profiles (
-        user_id, company_name, owner_name, phone,
-        venue_name, venue_location, business_category, locality_area,
-        location_place_id, location_lat, location_lng,
-        capacity_min, capacity_max, price_from, price_to,
-        short_description, description, spaces, services, rules,
-        website, instagram, facebook, map_text, event_types, selling_points
-      )
-      VALUES (
-        $1,$2,$3,$4,
-        $5,$6,$7,$8,
-        $9,$10,$11,
-        $12,$13,$14,$15,
-        $16,$17,$18,$19,$20,
-        $21,$22,$23,$24,$25,$26
-      )
-      ON CONFLICT (user_id) DO UPDATE SET
-        company_name = EXCLUDED.company_name,
-        owner_name = EXCLUDED.owner_name,
-        phone = EXCLUDED.phone,
-        venue_name = EXCLUDED.venue_name,
-        venue_location = EXCLUDED.venue_location,
-        business_category = EXCLUDED.business_category,
-        locality_area = EXCLUDED.locality_area,
-        location_place_id = EXCLUDED.location_place_id,
-        location_lat = EXCLUDED.location_lat,
-        location_lng = EXCLUDED.location_lng,
-        capacity_min = EXCLUDED.capacity_min,
-        capacity_max = EXCLUDED.capacity_max,
-        price_from = EXCLUDED.price_from,
-        price_to = EXCLUDED.price_to,
-        short_description = EXCLUDED.short_description,
-        description = EXCLUDED.description,
-        spaces = EXCLUDED.spaces,
-        services = EXCLUDED.services,
-        rules = EXCLUDED.rules,
-        website = EXCLUDED.website,
-        instagram = EXCLUDED.instagram,
-        facebook = EXCLUDED.facebook,
-        map_text = EXCLUDED.map_text,
-        event_types = EXCLUDED.event_types,
-        selling_points = EXCLUDED.selling_points
-      RETURNING *`,
-      [
-        userId,
-        (companyName ?? current?.company_name ?? "").trim(),
-        (ownerName ?? current?.owner_name ?? "").trim(),
-        phoneDigits || current?.phone || null,
+    let saved;
 
-        venueName,
-        venueLocation,
-        businessCategory,
-        localityArea,
-
-        locationPlaceId,
-        locationLat,
-        locationLng,
-
-        capacityMin,
-        capacityMax,
-        priceFrom,
-        priceTo,
-
-        shortDescription,
-        description,
-        spaces,
-        services,
-        rules,
-
-        website,
-        instagram,
-        facebook,
-        mapText,
-        eventTypes,
-        sellingPoints,
-      ]
-    );
+    if (current?.id) {
+      saved = await client.query(
+        `
+        UPDATE provider_profiles
+        SET
+          company_name = $2,
+          owner_name = $3,
+          phone = $4,
+          venue_name = $5,
+          venue_location = $6,
+          business_category = $7,
+          locality_area = $8,
+          location_place_id = $9,
+          location_lat = $10,
+          location_lng = $11,
+          capacity_min = $12,
+          capacity_max = $13,
+          price_from = $14,
+          price_to = $15,
+          short_description = $16,
+          description = $17,
+          spaces = $18,
+          services = $19,
+          rules = $20,
+          website = $21,
+          instagram = $22,
+          facebook = $23,
+          map_text = $24,
+          event_types = $25,
+          selling_points = $26,
+          updated_at = now()
+        WHERE id = $1
+          AND user_id = $27
+        RETURNING *
+        `,
+        [
+          current.id,
+          (companyName ?? current?.company_name ?? "").trim(),
+          (ownerName ?? current?.owner_name ?? "").trim(),
+          phoneDigits || current?.phone || null,
+          venueName,
+          venueLocation,
+          businessCategory,
+          localityArea,
+          locationPlaceId,
+          locationLat,
+          locationLng,
+          capacityMin,
+          capacityMax,
+          priceFrom,
+          priceTo,
+          shortDescription,
+          description,
+          spaces,
+          services,
+          rules,
+          website,
+          instagram,
+          facebook,
+          mapText,
+          eventTypes,
+          sellingPoints,
+          userId,
+        ]
+      );
+    } else {
+      saved = await client.query(
+        `
+        INSERT INTO provider_profiles (
+          id,
+          user_id, company_name, owner_name, phone,
+          venue_name, venue_location, business_category, locality_area,
+          location_place_id, location_lat, location_lng,
+          capacity_min, capacity_max, price_from, price_to,
+          short_description, description, spaces, services, rules,
+          website, instagram, facebook, map_text, event_types, selling_points
+        )
+        VALUES (
+          uuid_generate_v4(),
+          $1,$2,$3,$4,
+          $5,$6,$7,$8,
+          $9,$10,$11,
+          $12,$13,$14,$15,
+          $16,$17,$18,$19,$20,
+          $21,$22,$23,$24,$25,$26
+        )
+        RETURNING *
+        `,
+        [
+          userId,
+          (companyName ?? "").trim(),
+          (ownerName ?? "").trim(),
+          phoneDigits || null,
+          venueName,
+          venueLocation,
+          businessCategory,
+          localityArea,
+          locationPlaceId,
+          locationLat,
+          locationLng,
+          capacityMin,
+          capacityMax,
+          priceFrom,
+          priceTo,
+          shortDescription,
+          description,
+          spaces,
+          services,
+          rules,
+          website,
+          instagram,
+          facebook,
+          mapText,
+          eventTypes,
+          sellingPoints,
+        ]
+      );
+    }
 
     await client.query("COMMIT");
-    return res.json({ profile: upsert.rows[0] });
+    return res.json({ profile: saved.rows[0] });
   } catch (err) {
     try {
       await client.query("ROLLBACK");
@@ -1735,8 +2538,378 @@ app.put("/providers/me", providerAuthMiddleware, async (req, res) => {
   }
 });
 
+app.get("/providers/my-services", providerAuthMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const profiles = await listProviderProfiles(pool, userId);
+    const can_add_service = await providerCanAddAnotherService(pool, userId);
+
+    return res.json({
+      services: profiles,
+      can_add_service,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.get("/providers/my-services/:serviceId", providerAuthMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { serviceId } = req.params;
+
+    const profile = await getOwnedProviderProfile(pool, userId, serviceId);
+    if (!profile) return res.status(404).json({ error: "Servicio no encontrado" });
+
+    const photos = await getProviderPhotosByProfile(pool, profile.id);
+
+    return res.json({ profile, photos });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  }
+});
+
+app.post("/providers/my-services", providerAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const userId = req.user.id;
+    const body = req.body || {};
+
+    const canAdd = await providerCanAddAnotherService(client, userId);
+    if (!canAdd) {
+      return res.status(403).json({
+        error: "Solo puedes agregar otro servicio cuando ya tengas al menos una ficha aprobada y publicada.",
+      });
+    }
+
+    const baseProfile = await getPrimaryProviderProfile(client, userId);
+
+    const companyName = toNullIfEmpty(body.companyName) || baseProfile?.company_name || "";
+    const ownerName = toNullIfEmpty(body.ownerName) || baseProfile?.owner_name || req.authUser?.name || "";
+    const phoneDigits = body.phone
+      ? normalizePhoneDigits(body.phone)
+      : baseProfile?.phone || null;
+
+    const venueName = String(body.venueName || "").trim();
+    const venueLocation = String(body.venueLocation || "").trim();
+    const businessCategory = String(body.businessCategory || "").trim();
+    const localityArea = String(body.localityArea || "").trim();
+
+    const capacityMin = toIntOrNull(body.capacityMin);
+    const capacityMax = toIntOrNull(body.capacityMax);
+    const priceFrom = toIntOrNull(body.priceFrom);
+    const priceTo = toIntOrNull(body.priceTo);
+
+    const shortDescription = String(body.shortDescription || "").trim();
+    const description = String(body.description || "").trim();
+    const services = String(body.services || "").trim();
+
+    if (
+      !venueName ||
+      !venueLocation ||
+      !businessCategory ||
+      !localityArea ||
+      capacityMin === null ||
+      priceFrom === null ||
+      priceTo === null ||
+      !shortDescription ||
+      !description ||
+      !services
+    ) {
+      return res.status(400).json({ error: "Faltan campos obligatorios del servicio" });
+    }
+
+    if (capacityMax !== null && capacityMax < capacityMin) {
+      return res.status(400).json({ error: "capacityMax no puede ser menor que capacityMin" });
+    }
+
+    if (priceTo < priceFrom) {
+      return res.status(400).json({ error: "priceTo no puede ser menor que priceFrom" });
+    }
+
+    const locationPlaceId = toNullIfEmpty(body.locationPlaceId);
+    const locationLat = toFloatOrNull(body.locationLat);
+    const locationLng = toFloatOrNull(body.locationLng);
+
+    const spaces = toNullIfEmpty(body.spaces);
+    const rules = toNullIfEmpty(body.rules);
+    const website = toNullIfEmpty(body.website);
+    const instagram = toNullIfEmpty(body.instagram);
+    const facebook = toNullIfEmpty(body.facebook);
+    const mapText = toNullIfEmpty(body.mapText);
+
+    const eventTypes = Array.isArray(body.eventTypes) ? toTextArray(body.eventTypes) : [];
+    const sellingPointsFromBody = toTextArray(body.sellingPoints);
+    const sellingPointsTextFromBody = toTextArray(body.sellingPointsText, {
+      maxItems: 20,
+      maxLen: 160,
+    });
+
+    const sellingPoints =
+      sellingPointsFromBody.length > 0
+        ? sellingPointsFromBody
+        : sellingPointsTextFromBody.length > 0
+        ? sellingPointsTextFromBody
+        : [];
+
+    await client.query("BEGIN");
+
+    if (ownerName) {
+      await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [ownerName, userId]);
+    }
+
+    const created = await client.query(
+      `
+      INSERT INTO provider_profiles (
+        id,
+        user_id, company_name, owner_name, phone,
+        venue_name, venue_location, business_category, locality_area,
+        location_place_id, location_lat, location_lng,
+        capacity_min, capacity_max, price_from, price_to,
+        short_description, description, spaces, services, rules,
+        website, instagram, facebook, map_text, event_types, selling_points,
+        review_status, public_visibility
+      )
+      VALUES (
+        uuid_generate_v4(),
+        $1,$2,$3,$4,
+        $5,$6,$7,$8,
+        $9,$10,$11,
+        $12,$13,$14,$15,
+        $16,$17,$18,$19,$20,
+        $21,$22,$23,$24,$25,$26,
+        'pending_review','hidden'
+      )
+      RETURNING *
+      `,
+      [
+        userId,
+        String(companyName || "").trim(),
+        String(ownerName || "").trim(),
+        phoneDigits || null,
+        venueName,
+        venueLocation,
+        businessCategory,
+        localityArea,
+        locationPlaceId,
+        locationLat,
+        locationLng,
+        capacityMin,
+        capacityMax,
+        priceFrom,
+        priceTo,
+        shortDescription,
+        description,
+        spaces,
+        services,
+        rules,
+        website,
+        instagram,
+        facebook,
+        mapText,
+        eventTypes,
+        sellingPoints,
+      ]
+    );
+
+    await client.query("COMMIT");
+    return res.status(201).json({ profile: created.rows[0] });
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      void 0;
+    }
+
+    if (err?.code === "23505") {
+      return res.status(409).json({
+        error: "La base aún no está liberada para múltiples servicios. Falta el siguiente paso SQL.",
+      });
+    }
+
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  } finally {
+    client.release();
+  }
+});
+
+app.put("/providers/my-services/:serviceId", providerAuthMiddleware, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const userId = req.user.id;
+    const body = req.body || {};
+    const requestedProfileId = toNullIfEmpty(req.params.serviceId);
+
+    const companyName = toNullIfEmpty(body.companyName);
+    const ownerName = toNullIfEmpty(body.ownerName);
+    const phoneDigits = body.phone ? normalizePhoneDigits(body.phone) : null;
+
+    const venueName = String(body.venueName || "").trim();
+    const venueLocation = String(body.venueLocation || "").trim();
+    const businessCategory = String(body.businessCategory || "").trim();
+    const localityArea = String(body.localityArea || "").trim();
+
+    const capacityMin = toIntOrNull(body.capacityMin);
+    const capacityMax = toIntOrNull(body.capacityMax);
+    const priceFrom = toIntOrNull(body.priceFrom);
+    const priceTo = toIntOrNull(body.priceTo);
+
+    const shortDescription = String(body.shortDescription || "").trim();
+    const description = String(body.description || "").trim();
+    const services = String(body.services || "").trim();
+
+    if (
+      !venueName ||
+      !venueLocation ||
+      !businessCategory ||
+      !localityArea ||
+      capacityMin === null ||
+      priceFrom === null ||
+      priceTo === null ||
+      !shortDescription ||
+      !description ||
+      !services
+    ) {
+      return res.status(400).json({ error: "Faltan campos obligatorios del servicio" });
+    }
+
+    if (capacityMax !== null && capacityMax < capacityMin) {
+      return res.status(400).json({ error: "capacityMax no puede ser menor que capacityMin" });
+    }
+
+    if (priceTo < priceFrom) {
+      return res.status(400).json({ error: "priceTo no puede ser menor que priceFrom" });
+    }
+
+    const locationPlaceId = toNullIfEmpty(body.locationPlaceId);
+    const locationLat = toFloatOrNull(body.locationLat);
+    const locationLng = toFloatOrNull(body.locationLng);
+
+    const spaces = toNullIfEmpty(body.spaces);
+    const rules = toNullIfEmpty(body.rules);
+    const website = toNullIfEmpty(body.website);
+    const instagram = toNullIfEmpty(body.instagram);
+    const facebook = toNullIfEmpty(body.facebook);
+    const mapText = toNullIfEmpty(body.mapText);
+
+    await client.query("BEGIN");
+
+    const current = await getOwnedProviderProfile(client, userId, requestedProfileId);
+    if (!current) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "Servicio no encontrado" });
+    }
+
+    const eventTypes =
+      Array.isArray(body.eventTypes) && body.eventTypes.length
+        ? toTextArray(body.eventTypes)
+        : current?.event_types || [];
+
+    const sellingPointsFromBody = toTextArray(body.sellingPoints);
+    const sellingPointsTextFromBody = toTextArray(body.sellingPointsText, {
+      maxItems: 20,
+      maxLen: 160,
+    });
+
+    const sellingPoints =
+      sellingPointsFromBody.length > 0
+        ? sellingPointsFromBody
+        : sellingPointsTextFromBody.length > 0
+        ? sellingPointsTextFromBody
+        : current?.selling_points || [];
+
+    if (ownerName) {
+      await client.query(`UPDATE users SET name = $1 WHERE id = $2`, [ownerName, userId]);
+    }
+
+    const saved = await client.query(
+      `
+      UPDATE provider_profiles
+      SET
+        company_name = $2,
+        owner_name = $3,
+        phone = $4,
+        venue_name = $5,
+        venue_location = $6,
+        business_category = $7,
+        locality_area = $8,
+        location_place_id = $9,
+        location_lat = $10,
+        location_lng = $11,
+        capacity_min = $12,
+        capacity_max = $13,
+        price_from = $14,
+        price_to = $15,
+        short_description = $16,
+        description = $17,
+        spaces = $18,
+        services = $19,
+        rules = $20,
+        website = $21,
+        instagram = $22,
+        facebook = $23,
+        map_text = $24,
+        event_types = $25,
+        selling_points = $26,
+        updated_at = now()
+      WHERE id = $1
+        AND user_id = $27
+      RETURNING *
+      `,
+      [
+        current.id,
+        (companyName ?? current?.company_name ?? "").trim(),
+        (ownerName ?? current?.owner_name ?? "").trim(),
+        phoneDigits || current?.phone || null,
+        venueName,
+        venueLocation,
+        businessCategory,
+        localityArea,
+        locationPlaceId,
+        locationLat,
+        locationLng,
+        capacityMin,
+        capacityMax,
+        priceFrom,
+        priceTo,
+        shortDescription,
+        description,
+        spaces,
+        services,
+        rules,
+        website,
+        instagram,
+        facebook,
+        mapText,
+        eventTypes,
+        sellingPoints,
+        userId,
+      ]
+    );
+
+    await client.query("COMMIT");
+    return res.json({ profile: saved.rows[0] });
+  } catch (err) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      void 0;
+    }
+
+    console.error(err);
+    return res.status(500).json({ error: "Error interno" });
+  } finally {
+    client.release();
+  }
+});
+
 app.post(
-  "/providers/photos",
+  "/providers/my-services/:serviceId/photos",
   providerAuthMiddleware,
   providerUpload.array("photos", 12),
   async (req, res) => {
@@ -1744,25 +2917,25 @@ app.post(
 
     try {
       const userId = req.user.id;
+      const { serviceId } = req.params;
 
       const files = Array.isArray(req.files) ? req.files : [];
       if (!files.length) {
         return res.status(400).json({ error: "No se enviaron fotos" });
       }
 
-      const hasProfile = await pool.query(
-        `SELECT 1 FROM provider_profiles WHERE user_id = $1 LIMIT 1`,
-        [userId]
-      );
-      if (hasProfile.rowCount === 0) {
-        return res.status(400).json({ error: "Primero guarda tu ficha antes de subir fotos." });
+      const targetProfile = await getOwnedProviderProfile(pool, userId, serviceId);
+      if (!targetProfile) {
+        return res.status(404).json({ error: "Servicio no encontrado" });
       }
 
       const maxRes = await pool.query(
-        `SELECT COALESCE(MAX(sort_order), -1) AS max
-         FROM provider_photos
-         WHERE user_id = $1`,
-        [userId]
+        `
+        SELECT COALESCE(MAX(sort_order), -1) AS max
+        FROM provider_photos
+        WHERE profile_id = $1
+        `,
+        [targetProfile.id]
       );
 
       let sort = Number(maxRes.rows?.[0]?.max ?? -1);
@@ -1777,10 +2950,10 @@ app.post(
         sort += 1;
 
         const ins = await pool.query(
-          `INSERT INTO provider_photos (user_id, url, sort_order)
-           VALUES ($1, $2, $3)
-           RETURNING id, url, sort_order, created_at`,
-          [userId, processed.url, sort]
+          `INSERT INTO provider_photos (user_id, profile_id, url, sort_order)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, profile_id, url, sort_order, created_at`,
+          [userId, targetProfile.id, processed.url, sort]
         );
 
         inserted.push(ins.rows[0]);
@@ -1788,9 +2961,119 @@ app.post(
 
       return res.status(201).json({ photos: inserted });
     } catch (err) {
-      await Promise.all(
-        savedAbsPaths.map((absPath) => fs.promises.unlink(absPath).catch(() => {}))
+      await Promise.all(savedAbsPaths.map((absPath) => fs.promises.unlink(absPath).catch(() => {})));
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.delete(
+  "/providers/my-services/:serviceId/photos/:photoId",
+  providerAuthMiddleware,
+  async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const { serviceId, photoId } = req.params;
+
+      if (!isUuid(photoId) || !isUuid(serviceId)) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+
+      const del = await pool.query(
+        `DELETE FROM provider_photos
+         WHERE id = $1
+           AND user_id = $2
+           AND profile_id = $3
+         RETURNING id, profile_id, url`,
+        [photoId, userId, serviceId]
       );
+
+      if (!del.rowCount) {
+        return res.status(404).json({ error: "Foto no encontrada" });
+      }
+
+      const url = del.rows[0].url;
+
+      if (url && typeof url === "string" && url.startsWith("/uploads/")) {
+        const abs = path.join(__dirname, url.replace(/^\//, ""));
+        fs.promises.unlink(abs).catch(() => {});
+      }
+
+      return res.json({ ok: true, id: del.rows[0].id, profile_id: del.rows[0].profile_id });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.post(
+  "/providers/photos",
+  providerAuthMiddleware,
+  providerUpload.array("photos", 12),
+  async (req, res) => {
+    const savedAbsPaths = [];
+
+    try {
+      const userId = req.user.id;
+      const requestedProfileId = toNullIfEmpty(
+        req.body?.profileId || req.body?.profile_id || req.query?.profileId || req.query?.profile_id
+      );
+
+      const files = Array.isArray(req.files) ? req.files : [];
+      if (!files.length) {
+        return res.status(400).json({ error: "No se enviaron fotos" });
+      }
+
+      let targetProfile = null;
+
+      if (requestedProfileId) {
+        targetProfile = await getOwnedProviderProfile(pool, userId, requestedProfileId);
+        if (!targetProfile) {
+          return res.status(404).json({ error: "Servicio no encontrado" });
+        }
+      } else {
+        targetProfile = await getPrimaryProviderProfile(pool, userId);
+      }
+
+      if (!targetProfile) {
+        return res.status(400).json({ error: "Primero guarda tu ficha antes de subir fotos." });
+      }
+
+      const maxRes = await pool.query(
+        `
+        SELECT COALESCE(MAX(sort_order), -1) AS max
+        FROM provider_photos
+        WHERE profile_id = $1
+        `,
+        [targetProfile.id]
+      );
+
+      let sort = Number(maxRes.rows?.[0]?.max ?? -1);
+      if (!Number.isFinite(sort)) sort = -1;
+
+      const inserted = [];
+
+      for (const file of files) {
+        const processed = await processAndStoreProviderPhoto(userId, file);
+        savedAbsPaths.push(processed.absPath);
+
+        sort += 1;
+
+        const ins = await pool.query(
+          `INSERT INTO provider_photos (user_id, profile_id, url, sort_order)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, profile_id, url, sort_order, created_at`,
+          [userId, targetProfile.id, processed.url, sort]
+        );
+
+        inserted.push(ins.rows[0]);
+      }
+
+      return res.status(201).json({ photos: inserted });
+    } catch (err) {
+      await Promise.all(savedAbsPaths.map((absPath) => fs.promises.unlink(absPath).catch(() => {})));
 
       console.error(err);
       return res.status(500).json({ error: "Error interno" });
@@ -1810,7 +3093,7 @@ app.delete("/providers/photos/:photoId", providerAuthMiddleware, async (req, res
     const del = await pool.query(
       `DELETE FROM provider_photos
        WHERE id = $1 AND user_id = $2
-       RETURNING id, url`,
+       RETURNING id, profile_id, url`,
       [photoId, userId]
     );
 
@@ -1825,25 +3108,27 @@ app.delete("/providers/photos/:photoId", providerAuthMiddleware, async (req, res
       fs.promises.unlink(abs).catch(() => {});
     }
 
-    return res.json({ ok: true, id: del.rows[0].id });
+    return res.json({ ok: true, id: del.rows[0].id, profile_id: del.rows[0].profile_id });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
   }
 });
 
-// ===================== PUBLIC PROVIDERS LIST (Home + Search) =====================
+// ===================== PUBLIC PROVIDERS LIST =====================
 
 app.get("/providers", async (req, res) => {
   try {
     const q = toNullIfEmpty(req.query.q);
-    const category = toNullIfEmpty(req.query.category);
+    const categoryRaw = toNullIfEmpty(req.query.category);
     const whereText = toNullIfEmpty(req.query.where);
 
-    const limit = Math.min(Math.max(Number(req.query.limit || 20), 1), 100);
-    const offset = Math.max(Number(req.query.offset || 0), 0);
+    const limitRequested = Math.min(Math.max(Number(req.query.limit || 20), 1), 100);
+    const offsetRequested = Math.max(Number(req.query.offset || 0), 0);
 
-    const where = [
+    const isHome = !categoryRaw && !whereText && !q;
+
+    const baseWhere = [
       "p.review_status = 'approved'",
       "p.public_visibility = 'listed'",
       "u.role = 'provider'",
@@ -1851,6 +3136,60 @@ app.get("/providers", async (req, res) => {
     ];
 
     const params = [];
+
+    if (isHome) {
+      params.push(Math.min(limitRequested, 10));
+
+      const sql = `
+        SELECT
+          p.id,
+          p.id AS profile_id,
+          p.user_id AS provider_id,
+          p.user_id,
+          p.company_name,
+          p.owner_name,
+          p.venue_name,
+          p.venue_location,
+          p.business_category,
+          p.locality_area,
+          p.short_description,
+          p.capacity_min,
+          p.capacity_max,
+          p.price_from,
+          p.price_to,
+          p.event_types,
+          p.selling_points,
+          p.is_featured,
+          p.is_gold,
+          p.updated_at,
+          (
+            SELECT url
+            FROM provider_photos ph
+            WHERE ph.profile_id = p.id
+            ORDER BY ph.sort_order ASC, ph.created_at ASC
+            LIMIT 1
+          ) AS main_photo_url
+        FROM provider_profiles p
+        JOIN users u ON u.id = p.user_id
+        WHERE ${baseWhere.join(" AND ")}
+          AND p.is_gold = true
+        ORDER BY RANDOM()
+        LIMIT $1
+      `;
+
+      const rows = await pool.query(sql, params);
+
+      return res.json({
+        providers: rows.rows || [],
+        pagination: {
+          limit: Math.min(limitRequested, 10),
+          offset: 0,
+          next_offset: 0,
+        },
+      });
+    }
+
+    const where = [...baseWhere];
 
     if (q) {
       params.push(`%${q}%`);
@@ -1862,9 +3201,15 @@ app.get("/providers", async (req, res) => {
       );
     }
 
-    if (category) {
-      params.push(category);
-      where.push(`p.business_category = $${params.length}`);
+    if (categoryRaw) {
+      const normalizedCategory = String(categoryRaw).trim().toLowerCase();
+
+      if (normalizedCategory === "lugares") {
+        where.push(`p.business_category IN ('Jardín', 'Hacienda', 'Salón')`);
+      } else {
+        params.push(categoryRaw);
+        where.push(`p.business_category = $${params.length}`);
+      }
     }
 
     if (whereText) {
@@ -1877,11 +3222,17 @@ app.get("/providers", async (req, res) => {
       );
     }
 
-    params.push(limit);
-    params.push(offset);
+    params.push(limitRequested);
+    const limitParam = params.length;
+
+    params.push(offsetRequested);
+    const offsetParam = params.length;
 
     const sql = `
       SELECT
+        p.id,
+        p.id AS profile_id,
+        p.user_id AS provider_id,
         p.user_id,
         p.company_name,
         p.owner_name,
@@ -1896,33 +3247,42 @@ app.get("/providers", async (req, res) => {
         p.price_to,
         p.event_types,
         p.selling_points,
+        p.is_featured,
+        p.is_gold,
         p.updated_at,
         (
           SELECT url
           FROM provider_photos ph
-          WHERE ph.user_id = p.user_id
+          WHERE ph.profile_id = p.id
           ORDER BY ph.sort_order ASC, ph.created_at ASC
           LIMIT 1
         ) AS main_photo_url
       FROM provider_profiles p
       JOIN users u ON u.id = p.user_id
       WHERE ${where.join(" AND ")}
-      ORDER BY COALESCE(p.updated_at, p.created_at) DESC
-      LIMIT $${params.length - 1}
-      OFFSET $${params.length}
+      ORDER BY
+        CASE WHEN p.is_featured = true THEN 0 ELSE 1 END,
+        RANDOM()
+      LIMIT $${limitParam}
+      OFFSET $${offsetParam}
     `;
 
     const rows = await pool.query(sql, params);
 
     return res.json({
       providers: rows.rows || [],
-      pagination: { limit, offset, next_offset: offset + limit },
+      pagination: {
+        limit: limitRequested,
+        offset: offsetRequested,
+        next_offset: offsetRequested + limitRequested,
+      },
     });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
   }
 });
+
 
 app.get("/providers/:id", async (req, res) => {
   try {
@@ -1935,49 +3295,19 @@ app.get("/providers/:id", async (req, res) => {
     const admin = await tryGetAdminUserFromRequest(req);
     const isAdmin = Boolean(admin);
 
-    const found = await pool.query(
-      `SELECT
-        p.user_id,
-        p.company_name, p.owner_name,
-        p.venue_name, p.venue_location, p.business_category, p.locality_area, p.location_place_id, p.location_lat, p.location_lng,
-        p.capacity_min, p.capacity_max, p.price_from, p.price_to,
-        p.short_description, p.description, p.spaces, p.services, p.rules,
-        p.website, p.instagram, p.facebook, p.map_text, p.event_types, p.selling_points,
-        p.review_status, p.public_visibility,
-        p.created_at, p.updated_at
-       FROM provider_profiles p
-       WHERE p.user_id = $1
-       LIMIT 1`,
-      [id]
-    );
-
-    const profile = found.rows[0] || null;
+    const profile = await resolvePublicProviderProfile(pool, id, isAdmin);
     if (!profile) return res.status(404).json({ error: "Proveedor no encontrado" });
 
-    if (!isAdmin) {
-      const rs = String(profile.review_status || "");
-      const pv = String(profile.public_visibility || "");
-      if (!(rs === "approved" && pv === "listed")) {
-        return res.status(404).json({ error: "Proveedor no encontrado" });
-      }
-    }
+    const photos = await getProviderPhotosByProfile(pool, profile.id);
 
-    const photos = await pool.query(
-      `SELECT id, url, sort_order, created_at
-       FROM provider_photos
-       WHERE user_id = $1
-       ORDER BY sort_order ASC, created_at ASC`,
-      [id]
-    );
-
-    return res.json({ profile, photos: photos.rows || [] });
+    return res.json({ profile, photos });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: "Error interno" });
   }
 });
 
-// ===================== ADMIN INFO REQUESTS (MODERACIÓN) =====================
+// ===================== ADMIN INFO REQUESTS =====================
 
 app.get(
   "/admin/info-requests",
@@ -2018,6 +3348,7 @@ app.get(
         SELECT
           r.id,
           r.provider_id,
+          r.profile_id,
           r.requester_user_id,
           r.requester_name,
           r.requester_email,
@@ -2036,7 +3367,7 @@ app.get(
           p.is_featured AS provider_is_featured,
           pu.email AS provider_email
         FROM provider_info_requests r
-        LEFT JOIN provider_profiles p ON p.user_id = r.provider_id
+        LEFT JOIN provider_profiles p ON p.id = r.profile_id
         LEFT JOIN users pu ON pu.id = r.provider_id
         ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
         ORDER BY r.created_at DESC
@@ -2154,6 +3485,1005 @@ app.patch(
   adminAuthMiddleware,
   requirePermission("admin:providers:review"),
   moderateInfoRequest
+);
+
+// ===================== ADMIN PROVIDER INVITATIONS =====================
+
+app.post(
+  "/admin/provider-invitations",
+  adminAuthMiddleware,
+  requirePermission("admin:provider_invitations:write"),
+  providerInvitationCreateLimiter,
+  async (req, res) => {
+    try {
+      await expireProviderInvitations();
+
+      const invitedEmailRaw = String(req.body?.invited_email || "").trim();
+      const invitedCompanyName = toNullIfEmpty(req.body?.invited_company_name);
+      const invitedOwnerName = toNullIfEmpty(req.body?.invited_owner_name);
+      const notes = toNullIfEmpty(req.body?.notes);
+      const expiresInDays = toIntOrNull(req.body?.expires_in_days);
+
+      if (invitedEmailRaw && !isValidEmail(invitedEmailRaw)) {
+        return res.status(400).json({ error: "Correo inválido" });
+      }
+
+      if (expiresInDays !== null && (expiresInDays < 1 || expiresInDays > 365)) {
+        return res.status(400).json({ error: "expires_in_days debe estar entre 1 y 365" });
+      }
+
+      const rawToken = generateProviderInvitationToken();
+      const tokenHash = hashSha256(rawToken);
+
+      const expiresAt =
+        expiresInDays !== null
+          ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+          : null;
+
+      const invitedEmailStored = invitedEmailRaw ? normalizeEmail(invitedEmailRaw) : "";
+
+      const inserted = await pool.query(
+        `INSERT INTO provider_invitations (
+           token_hash,
+           invited_email,
+           invited_company_name,
+           invited_owner_name,
+           status,
+           created_by_admin_id,
+           expires_at,
+           notes
+         )
+         VALUES ($1, $2, $3, $4, 'issued', $5, $6, $7)
+         RETURNING
+           id,
+           invited_email,
+           invited_company_name,
+           invited_owner_name,
+           status,
+           created_by_admin_id,
+           expires_at,
+           used_at,
+           used_by_lead_id,
+           notes,
+           created_at,
+           updated_at`,
+        [
+          tokenHash,
+          invitedEmailStored,
+          invitedCompanyName,
+          invitedOwnerName,
+          req.authUser.id,
+          expiresAt,
+          notes,
+        ]
+      );
+
+      await writeAdminAuditLog(req, {
+        action: "provider_invitations:create",
+        entityType: "provider_invitation",
+        entityId: inserted.rows[0]?.id || null,
+        beforeState: null,
+        afterState: inserted.rows[0] || null,
+      });
+
+      return res.status(201).json({
+        invitation: inserted.rows[0],
+        raw_token: rawToken,
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.get(
+  "/admin/provider-invitations",
+  adminAuthMiddleware,
+  requirePermission("admin:provider_invitations:read"),
+  async (req, res) => {
+    try {
+      await expireProviderInvitations();
+
+      const status = toNullIfEmpty(req.query.status);
+      const q = toNullIfEmpty(req.query.q);
+      const limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+      const offset = Math.max(Number(req.query.offset || 0), 0);
+
+      const where = [];
+      const params = [];
+
+      if (status) {
+        if (!PROVIDER_INVITATION_STATUS_VALUES.has(status)) {
+          return res.status(400).json({ error: "status inválido" });
+        }
+        params.push(status);
+        where.push(`pi.status = $${params.length}`);
+      }
+
+      if (q) {
+        params.push(`%${q}%`);
+        where.push(
+          `(COALESCE(pi.invited_email,'') ILIKE $${params.length}
+            OR COALESCE(pi.invited_company_name,'') ILIKE $${params.length}
+            OR COALESCE(pi.invited_owner_name,'') ILIKE $${params.length}
+            OR COALESCE(pi.notes,'') ILIKE $${params.length})`
+        );
+      }
+
+      params.push(limit);
+      params.push(offset);
+
+      const sql = `
+        SELECT
+          pi.id,
+          pi.invited_email,
+          pi.invited_company_name,
+          pi.invited_owner_name,
+          pi.status,
+          pi.created_by_admin_id,
+          pi.expires_at,
+          pi.used_at,
+          pi.used_by_lead_id,
+          pi.notes,
+          pi.created_at,
+          pi.updated_at
+        FROM provider_invitations pi
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY pi.created_at DESC
+        LIMIT $${params.length - 1}
+        OFFSET $${params.length}
+      `;
+
+      const rows = await pool.query(sql, params);
+
+      return res.json({
+        invitations: rows.rows || [],
+        pagination: { limit, offset, next_offset: offset + limit },
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.patch(
+  "/admin/provider-invitations/:id/cancel",
+  adminAuthMiddleware,
+  requirePermission("admin:provider_invitations:write"),
+  async (req, res) => {
+    try {
+      await expireProviderInvitations();
+
+      const { id } = req.params;
+      if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const beforeRes = await pool.query(
+        `SELECT
+           id,
+           invited_email,
+           invited_company_name,
+           invited_owner_name,
+           status,
+           created_by_admin_id,
+           expires_at,
+           used_at,
+           used_by_lead_id,
+           notes,
+           created_at,
+           updated_at
+         FROM provider_invitations
+         WHERE id = $1
+         LIMIT 1`,
+        [id]
+      );
+
+      const before = beforeRes.rows[0] || null;
+      if (!before) return res.status(404).json({ error: "Invitación no encontrada" });
+
+      if (before.status !== "issued") {
+        return res.status(400).json({ error: "Solo se pueden cancelar invitaciones emitidas" });
+      }
+
+      const updatedRes = await pool.query(
+        `UPDATE provider_invitations
+         SET status = 'cancelled',
+             updated_at = now()
+         WHERE id = $1
+         RETURNING
+           id,
+           invited_email,
+           invited_company_name,
+           invited_owner_name,
+           status,
+           created_by_admin_id,
+           expires_at,
+           used_at,
+           used_by_lead_id,
+           notes,
+           created_at,
+           updated_at`,
+        [id]
+      );
+
+      const after = updatedRes.rows[0] || null;
+
+      await writeAdminAuditLog(req, {
+        action: "provider_invitations:cancel",
+        entityType: "provider_invitation",
+        entityId: id,
+        beforeState: before,
+        afterState: after,
+      });
+
+      return res.json({ invitation: after });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.get(
+  "/admin/provider-invitations/:id/context",
+  adminAuthMiddleware,
+  requirePermission("admin:provider_invitations:read"),
+  async (req, res) => {
+    try {
+      await expireProviderInvitations();
+
+      const { id } = req.params;
+      if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const invRes = await pool.query(
+        `SELECT
+           id,
+           invited_email,
+           invited_company_name,
+           invited_owner_name,
+           status,
+           created_by_admin_id,
+           expires_at,
+           used_at,
+           used_by_lead_id,
+           notes,
+           created_at,
+           updated_at
+         FROM provider_invitations
+         WHERE id = $1
+         LIMIT 1`,
+        [id]
+      );
+
+      const invitation = invRes.rows[0] || null;
+      if (!invitation) {
+        return res.status(404).json({ error: "Invitación no encontrada" });
+      }
+
+      let lead = null;
+      let legal_acceptance_events = [];
+
+      if (invitation.used_by_lead_id) {
+        const leadRes = await pool.query(
+          `SELECT
+             id,
+             company_name,
+             owner_name,
+             phone,
+             email,
+             status,
+             created_at,
+             updated_at
+           FROM provider_leads
+           WHERE id = $1
+           LIMIT 1`,
+          [invitation.used_by_lead_id]
+        );
+        lead = leadRes.rows[0] || null;
+
+        const legalRes = await pool.query(
+          `SELECT
+             id,
+             provider_lead_id,
+             email_snapshot,
+             company_name_snapshot,
+             owner_name_snapshot,
+             document_slug,
+             document_title,
+             document_version,
+             source_form,
+             accepted_at,
+             ip_address,
+             user_agent,
+             created_at
+           FROM legal_acceptance_events
+           WHERE provider_lead_id = $1
+           ORDER BY accepted_at ASC, id ASC`,
+          [invitation.used_by_lead_id]
+        );
+
+        legal_acceptance_events = legalRes.rows || [];
+      }
+
+      return res.json({
+        invitation,
+        lead,
+        legal_acceptance_events,
+        can_complete_profile: Boolean(invitation.used_by_lead_id),
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.post(
+  "/admin/provider-invitations/:id/complete-profile",
+  adminAuthMiddleware,
+  requirePermission("admin:providers:review"),
+  async (req, res) => {
+    const client = await pool.connect();
+
+    try {
+      const { id } = req.params;
+      if (!isUuid(id)) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+
+      const body = req.body || {};
+
+      const companyName = String(
+        body.companyName ||
+          body.company_name ||
+          ""
+      ).trim();
+
+      const ownerName = String(
+        body.ownerName ||
+          body.owner_name ||
+          ""
+      ).trim();
+
+      const phoneDigits = normalizePhoneDigits(body.phone || "");
+
+      const venueName = String(body.venueName || "").trim();
+      const venueLocation = String(body.venueLocation || "").trim();
+      const businessCategory = String(body.businessCategory || "").trim();
+      const localityArea = String(body.localityArea || "").trim();
+
+      const capacityMin = toIntOrNull(body.capacityMin);
+      const capacityMax = toIntOrNull(body.capacityMax);
+      const priceFrom = toIntOrNull(body.priceFrom);
+      const priceTo = toIntOrNull(body.priceTo);
+
+      const shortDescription = String(body.shortDescription || "").trim();
+      const description = String(body.description || "").trim();
+      const services = String(body.services || "").trim();
+
+      if (
+        !venueName ||
+        !venueLocation ||
+        !businessCategory ||
+        !localityArea ||
+        capacityMin === null ||
+        priceFrom === null ||
+        priceTo === null ||
+        !shortDescription ||
+        !description ||
+        !services
+      ) {
+        return res.status(400).json({ error: "Faltan campos obligatorios del perfil" });
+      }
+
+      if (capacityMax !== null && capacityMax < capacityMin) {
+        return res.status(400).json({ error: "capacityMax no puede ser menor que capacityMin" });
+      }
+
+      if (priceTo < priceFrom) {
+        return res.status(400).json({ error: "priceTo no puede ser menor que priceFrom" });
+      }
+
+      const locationPlaceId = toNullIfEmpty(body.locationPlaceId);
+      const locationLat = toFloatOrNull(body.locationLat);
+      const locationLng = toFloatOrNull(body.locationLng);
+
+      const spaces = toNullIfEmpty(body.spaces);
+      const rules = toNullIfEmpty(body.rules);
+      const website = toNullIfEmpty(body.website);
+      const instagram = toNullIfEmpty(body.instagram);
+      const facebook = toNullIfEmpty(body.facebook);
+      const mapText = toNullIfEmpty(body.mapText);
+
+      const eventTypes = Array.isArray(body.eventTypes) ? toTextArray(body.eventTypes) : [];
+      const sellingPointsFromBody = toTextArray(body.sellingPoints);
+      const sellingPointsTextFromBody = toTextArray(body.sellingPointsText, {
+        maxItems: 20,
+        maxLen: 160,
+      });
+      const sellingPoints =
+        sellingPointsFromBody.length > 0
+          ? sellingPointsFromBody
+          : sellingPointsTextFromBody.length > 0
+            ? sellingPointsTextFromBody
+            : [];
+
+      await client.query("BEGIN");
+
+      const invitationRes = await client.query(
+        `SELECT
+           id,
+           invited_email,
+           invited_company_name,
+           invited_owner_name,
+           status,
+           used_at,
+           used_by_lead_id
+         FROM provider_invitations
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [id]
+      );
+
+      const invitation = invitationRes.rows[0] || null;
+      if (!invitation) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Invitación no encontrada" });
+      }
+
+      if (!invitation.used_by_lead_id) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "La invitación aún no tiene lead asociado" });
+      }
+
+      const leadRes = await client.query(
+        `SELECT
+           id,
+           company_name,
+           owner_name,
+           phone,
+           email,
+           status
+         FROM provider_leads
+         WHERE id = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [invitation.used_by_lead_id]
+      );
+
+      const lead = leadRes.rows[0] || null;
+      if (!lead) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Lead no encontrado" });
+      }
+
+      const emailNorm = normalizeEmail(lead.email || invitation.invited_email || "");
+      if (!emailNorm) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({ error: "No hay email válido para crear la cuenta del proveedor" });
+      }
+
+      const finalCompanyName =
+        companyName ||
+        String(lead.company_name || invitation.invited_company_name || "").trim();
+
+      const finalOwnerName =
+        ownerName ||
+        String(lead.owner_name || invitation.invited_owner_name || "").trim();
+
+      const finalPhoneDigits =
+        phoneDigits ||
+        normalizePhoneDigits(lead.phone || "");
+
+      if (!finalCompanyName || !finalOwnerName) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: "Faltan companyName/ownerName para completar el perfil",
+        });
+      }
+
+      let providerUserRes = await client.query(
+        `SELECT id, email, name, role, account_status
+         FROM users
+         WHERE email = $1
+         LIMIT 1
+         FOR UPDATE`,
+        [emailNorm]
+      );
+
+      let providerUser = providerUserRes.rows[0] || null;
+
+      if (providerUser && providerUser.role !== "provider") {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          error: "Ya existe un usuario con ese email, pero no tiene rol provider",
+        });
+      }
+
+      if (!providerUser) {
+        const tempPassword = `kelom-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 10)}`;
+        const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+        const createdUserRes = await client.query(
+          `INSERT INTO users (email, password_hash, name, role)
+           VALUES ($1, $2, $3, 'provider')
+           RETURNING id, email, name, role, account_status, created_at`,
+          [emailNorm, passwordHash, finalOwnerName]
+        );
+
+        providerUser = createdUserRes.rows[0];
+      } else if (finalOwnerName && providerUser.name !== finalOwnerName) {
+        const updatedUserRes = await client.query(
+          `UPDATE users
+           SET name = $2
+           WHERE id = $1
+           RETURNING id, email, name, role, account_status, created_at`,
+          [providerUser.id, finalOwnerName]
+        );
+
+        providerUser = updatedUserRes.rows[0];
+      }
+
+      const existingProfileRes = await client.query(
+        `SELECT
+           id,
+           user_id,
+           review_status,
+           public_visibility,
+           is_featured,
+           is_gold,
+           reviewed_by,
+           reviewed_at,
+           review_notes
+         FROM provider_profiles
+         WHERE user_id = $1
+         ORDER BY ${providerProfilesOrderSql("provider_profiles")}
+         LIMIT 1
+         FOR UPDATE`,
+        [providerUser.id]
+      );
+
+      const before = existingProfileRes.rows[0] || null;
+
+      let profileRes;
+
+      if (before) {
+        profileRes = await client.query(
+          `UPDATE provider_profiles
+           SET
+             company_name = $2,
+             owner_name = $3,
+             phone = $4,
+             venue_name = $5,
+             venue_location = $6,
+             business_category = $7,
+             locality_area = $8,
+             location_place_id = $9,
+             location_lat = $10,
+             location_lng = $11,
+             capacity_min = $12,
+             capacity_max = $13,
+             price_from = $14,
+             price_to = $15,
+             short_description = $16,
+             description = $17,
+             spaces = $18,
+             services = $19,
+             rules = $20,
+             website = $21,
+             instagram = $22,
+             facebook = $23,
+             map_text = $24,
+             event_types = $25,
+             selling_points = $26,
+             review_status = 'pending_review',
+             public_visibility = 'hidden',
+             updated_at = now()
+           WHERE id = $1
+           RETURNING *`,
+          [
+            before.id,
+            finalCompanyName,
+            finalOwnerName,
+            finalPhoneDigits || null,
+            venueName,
+            venueLocation,
+            businessCategory,
+            localityArea,
+            locationPlaceId,
+            locationLat,
+            locationLng,
+            capacityMin,
+            capacityMax,
+            priceFrom,
+            priceTo,
+            shortDescription,
+            description,
+            spaces,
+            services,
+            rules,
+            website,
+            instagram,
+            facebook,
+            mapText,
+            eventTypes,
+            sellingPoints,
+          ]
+        );
+      } else {
+        profileRes = await client.query(
+          `INSERT INTO provider_profiles (
+            id,
+            user_id, company_name, owner_name, phone,
+            venue_name, venue_location, business_category, locality_area,
+            location_place_id, location_lat, location_lng,
+            capacity_min, capacity_max, price_from, price_to,
+            short_description, description, spaces, services, rules,
+            website, instagram, facebook, map_text, event_types, selling_points,
+            review_status, public_visibility
+          )
+          VALUES (
+            uuid_generate_v4(),
+            $1,$2,$3,$4,
+            $5,$6,$7,$8,
+            $9,$10,$11,
+            $12,$13,$14,$15,
+            $16,$17,$18,$19,$20,
+            $21,$22,$23,$24,$25,$26,
+            'pending_review','hidden'
+          )
+          RETURNING *`,
+          [
+            providerUser.id,
+            finalCompanyName,
+            finalOwnerName,
+            finalPhoneDigits || null,
+            venueName,
+            venueLocation,
+            businessCategory,
+            localityArea,
+            locationPlaceId,
+            locationLat,
+            locationLng,
+            capacityMin,
+            capacityMax,
+            priceFrom,
+            priceTo,
+            shortDescription,
+            description,
+            spaces,
+            services,
+            rules,
+            website,
+            instagram,
+            facebook,
+            mapText,
+            eventTypes,
+            sellingPoints,
+          ]
+        );
+      }
+
+      const after = profileRes.rows[0];
+
+      await client.query(
+        `UPDATE provider_leads
+         SET status = 'converted',
+             updated_at = now()
+         WHERE id = $1`,
+        [lead.id]
+      );
+
+      await writeAdminAuditLog(req, {
+        action: "provider_invitations:complete_profile",
+        entityType: "provider_profile",
+        entityId: after.id,
+        beforeState: before,
+        afterState: after,
+      });
+
+      await client.query("COMMIT");
+
+      return res.json({
+        ok: true,
+        invitation_id: invitation.id,
+        lead_id: lead.id,
+        provider_user: providerUser,
+        profile: after,
+      });
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        void 0;
+      }
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+app.post(
+  "/admin/provider-invitations/:id/photos",
+  adminAuthMiddleware,
+  requirePermission("admin:providers:review"),
+  providerUpload.array("photos", 12),
+  async (req, res) => {
+    const savedAbsPaths = [];
+
+    try {
+      const { id } = req.params;
+      if (!isUuid(id)) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+
+      const files = Array.isArray(req.files) ? req.files : [];
+      if (!files.length) {
+        return res.status(400).json({ error: "No se enviaron fotos" });
+      }
+
+      const invitationRes = await pool.query(
+        `SELECT
+           id,
+           invited_email,
+           used_by_lead_id
+         FROM provider_invitations
+         WHERE id = $1
+         LIMIT 1`,
+        [id]
+      );
+
+      const invitation = invitationRes.rows[0] || null;
+      if (!invitation) {
+        return res.status(404).json({ error: "Invitación no encontrada" });
+      }
+
+      if (!invitation.used_by_lead_id) {
+        return res.status(400).json({ error: "La invitación aún no tiene lead asociado" });
+      }
+
+      const leadRes = await pool.query(
+        `SELECT
+           id,
+           email
+         FROM provider_leads
+         WHERE id = $1
+         LIMIT 1`,
+        [invitation.used_by_lead_id]
+      );
+
+      const lead = leadRes.rows[0] || null;
+      if (!lead) {
+        return res.status(404).json({ error: "Lead no encontrado" });
+      }
+
+      const emailNorm = normalizeEmail(lead.email || invitation.invited_email || "");
+      if (!emailNorm) {
+        return res.status(400).json({ error: "No hay email válido para localizar al proveedor" });
+      }
+
+      const userRes = await pool.query(
+        `SELECT id, email, role
+         FROM users
+         WHERE email = $1
+         LIMIT 1`,
+        [emailNorm]
+      );
+
+      const providerUser = userRes.rows[0] || null;
+      if (!providerUser || providerUser.role !== "provider") {
+        return res.status(404).json({ error: "No se encontró la cuenta provider para esta invitación" });
+      }
+
+      const profileRes = await pool.query(
+        `SELECT id, user_id
+         FROM provider_profiles
+         WHERE user_id = $1
+         ORDER BY ${providerProfilesOrderSql("provider_profiles")}
+         LIMIT 1`,
+        [providerUser.id]
+      );
+
+      const targetProfile = profileRes.rows[0] || null;
+      if (!targetProfile) {
+        return res.status(404).json({ error: "No se encontró el perfil del proveedor" });
+      }
+
+      const maxRes = await pool.query(
+        `
+        SELECT COALESCE(MAX(sort_order), -1) AS max
+        FROM provider_photos
+        WHERE profile_id = $1
+        `,
+        [targetProfile.id]
+      );
+
+      let sort = Number(maxRes.rows?.[0]?.max ?? -1);
+      if (!Number.isFinite(sort)) sort = -1;
+
+      const inserted = [];
+
+      for (const file of files) {
+        const processed = await processAndStoreProviderPhoto(providerUser.id, file);
+        savedAbsPaths.push(processed.absPath);
+
+        sort += 1;
+
+        const ins = await pool.query(
+          `INSERT INTO provider_photos (user_id, profile_id, url, sort_order)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, profile_id, url, sort_order, created_at`,
+          [providerUser.id, targetProfile.id, processed.url, sort]
+        );
+
+        inserted.push(ins.rows[0]);
+      }
+
+      return res.status(201).json({
+        photos: inserted,
+        profile_id: targetProfile.id,
+        provider_user_id: providerUser.id,
+      });
+    } catch (err) {
+      await Promise.all(savedAbsPaths.map((absPath) => fs.promises.unlink(absPath).catch(() => {})));
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.post(
+  "/admin/provider-invitations/:id/generate-password",
+  adminAuthMiddleware,
+  requirePermission("admin:providers:review"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!isUuid(id)) {
+        return res.status(400).json({ error: "ID inválido" });
+      }
+
+      await cleanupExpiredPasswordResetTokens();
+
+      const invitationRes = await pool.query(
+        `SELECT
+           id,
+           invited_email,
+           invited_company_name,
+           invited_owner_name,
+           used_by_lead_id
+         FROM provider_invitations
+         WHERE id = $1
+         LIMIT 1`,
+        [id]
+      );
+
+      const invitation = invitationRes.rows[0] || null;
+      if (!invitation) {
+        return res.status(404).json({ error: "Invitación no encontrada" });
+      }
+
+      const leadId = invitation.used_by_lead_id || null;
+      let lead = null;
+
+      if (leadId) {
+        const leadRes = await pool.query(
+          `SELECT id, company_name, owner_name, email
+           FROM provider_leads
+           WHERE id = $1
+           LIMIT 1`,
+          [leadId]
+        );
+        lead = leadRes.rows[0] || null;
+      }
+
+      const emailNorm = normalizeEmail(
+        lead?.email || invitation.invited_email || ""
+      );
+
+      if (!emailNorm || !isValidEmail(emailNorm)) {
+        return res.status(400).json({ error: "No hay email válido para esta invitación" });
+      }
+
+      const userRes = await pool.query(
+        `SELECT id, email, name, role, account_status
+         FROM users
+         WHERE email = $1
+         LIMIT 1`,
+        [emailNorm]
+      );
+
+      const user = userRes.rows[0] || null;
+
+      if (!user) {
+        return res.status(404).json({
+          error: "Aún no existe una cuenta de proveedor para esta invitación",
+        });
+      }
+
+      if (user.role !== "provider") {
+        return res.status(400).json({
+          error: "La cuenta encontrada no corresponde a un proveedor",
+        });
+      }
+
+      if (user.account_status && user.account_status !== "active") {
+        return res.status(400).json({
+          error: "La cuenta del proveedor no está activa",
+        });
+      }
+
+      const rawToken = generatePasswordResetToken();
+      const tokenHash = hashSha256(rawToken);
+      const expiresAt = getPasswordResetExpiresAt();
+
+      await pool.query(
+        `DELETE FROM password_reset_tokens
+         WHERE user_id = $1
+           AND used_at IS NULL`,
+        [user.id]
+      );
+
+      await pool.query(
+        `INSERT INTO password_reset_tokens
+          (user_id, token_hash, expires_at, requested_ip, user_agent)
+         VALUES
+          ($1, $2, $3, $4, $5)`,
+        [user.id, tokenHash, expiresAt, req.ip || null, req.headers["user-agent"] || null]
+      );
+
+      const resetUrl = buildPasswordResetUrl(rawToken);
+
+      try {
+        const emailResult = await sendPasswordResetEmail({
+          toEmail: user.email,
+          toName:
+            user.name ||
+            lead?.owner_name ||
+            invitation.invited_owner_name ||
+            "proveedor",
+          resetUrl,
+          accountRole: user.role || "provider",
+        });
+
+        if (!emailResult.delivered && PASSWORD_RESET_DEBUG_RETURN_URL) {
+          return res.json({
+            ok: true,
+            message: "Enlace de acceso generado",
+            preview_reset_url: resetUrl,
+          });
+        }
+      } catch (emailErr) {
+        console.error("admin generate-password email error:", emailErr);
+
+        if (PASSWORD_RESET_DEBUG_RETURN_URL) {
+          return res.json({
+            ok: true,
+            message: "Enlace de acceso generado",
+            preview_reset_url: resetUrl,
+          });
+        }
+
+        return res.status(500).json({
+          error: "No se pudo enviar el correo de acceso",
+        });
+      }
+
+      return res.json({
+        ok: true,
+        message: "Correo de acceso enviado correctamente",
+      });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
 );
 
 // ===================== ADMIN API =====================
@@ -2327,7 +4657,9 @@ app.get(
       if (q) {
         params.push(`%${q}%`);
         where.push(
-          `(u.email ILIKE $${params.length} OR COALESCE(p.company_name,'') ILIKE $${params.length} OR COALESCE(p.venue_name,'') ILIKE $${params.length})`
+          `(u.email ILIKE $${params.length}
+            OR COALESCE(p.company_name,'') ILIKE $${params.length}
+            OR COALESCE(p.venue_name,'') ILIKE $${params.length})`
         );
       }
 
@@ -2336,16 +4668,17 @@ app.get(
 
       const sql = `
         SELECT
+          p.id AS profile_id,
           u.id AS user_id,
           u.email, u.name, u.created_at,
           p.company_name, p.owner_name, p.phone,
           p.venue_name, p.venue_location,
           p.review_status, p.public_visibility,
-          p.is_featured,
+          p.is_featured, p.is_gold,
           p.reviewed_by, p.reviewed_at, p.review_notes,
           p.updated_at
-        FROM users u
-        LEFT JOIN provider_profiles p ON p.user_id = u.id
+        FROM provider_profiles p
+        JOIN users u ON u.id = p.user_id
         WHERE ${where.join(" AND ")}
         ORDER BY COALESCE(p.updated_at, u.created_at) DESC
         LIMIT $${params.length - 1}
@@ -2375,8 +4708,10 @@ app.patch(
       const review_notes = toNullIfEmpty(req.body?.review_notes);
 
       const rawIsFeatured = req.body?.is_featured;
-      const is_featured =
-        rawIsFeatured === undefined ? null : toBooleanOrNull(rawIsFeatured);
+      const is_featured = rawIsFeatured === undefined ? null : toBooleanOrNull(rawIsFeatured);
+
+      const rawIsGold = req.body?.is_gold;
+      const is_gold = rawIsGold === undefined ? null : toBooleanOrNull(rawIsGold);
 
       const allowedReview = new Set([
         "draft",
@@ -2395,17 +4730,29 @@ app.patch(
       if (public_visibility && !allowedVisibility.has(public_visibility)) {
         return res.status(400).json({ error: "public_visibility inválido" });
       }
-      if (rawIsFeatured !== undefined && is_featured === null) {
-        return res.status(400).json({ error: "is_featured inválido" });
+      if (rawIsGold !== undefined && is_gold === null) {
+          return res.status(400).json({ error: "is_gold inválido" });
       }
 
-      const beforeRes = await pool.query(
-        `SELECT user_id, review_status, public_visibility, is_featured, reviewed_by, reviewed_at, review_notes
+      let beforeRes = await pool.query(
+        `SELECT id, user_id, review_status, public_visibility, is_featured, is_gold, reviewed_by, reviewed_at, review_notes
          FROM provider_profiles
-         WHERE user_id = $1
+         WHERE id = $1
          LIMIT 1`,
         [id]
       );
+
+      if (!beforeRes.rowCount) {
+        beforeRes = await pool.query(
+          `SELECT id, user_id, review_status, public_visibility, is_featured, reviewed_by, reviewed_at, review_notes
+           FROM provider_profiles
+           WHERE user_id = $1
+           ORDER BY ${providerProfilesOrderSql("provider_profiles")}
+           LIMIT 1`,
+          [id]
+        );
+      }
+
       const before = beforeRes.rows[0];
       if (!before) return res.status(404).json({ error: "Proveedor no encontrado" });
 
@@ -2415,24 +4762,25 @@ app.patch(
              public_visibility = COALESCE($3, public_visibility),
              review_notes = COALESCE($4, review_notes),
              is_featured = COALESCE($5, is_featured),
+             is_gold = COALESCE($6, is_gold),
              reviewed_by = $1,
              reviewed_at = now()
-         WHERE user_id = $6
-         RETURNING user_id, review_status, public_visibility, is_featured, reviewed_by, reviewed_at, review_notes`,
-        [req.authUser.id, review_status, public_visibility, review_notes, is_featured, id]
+        WHERE id = $7
+        RETURNING id, user_id, review_status, public_visibility, is_featured, is_gold, reviewed_by, reviewed_at, review_notes`,
+        [req.authUser.id, review_status, public_visibility, review_notes, is_featured, is_gold, before.id]
       );
 
       const after = updatedRes.rows[0];
 
       await writeAdminAuditLog(req, {
-        action: "providers:status",
-        entityType: "provider",
-        entityId: id,
+        action: "providers:review",
+        entityType: "provider_profile",
+        entityId: after.id,
         beforeState: before,
         afterState: after,
       });
 
-      return res.json({ moderation: after });
+      return res.json({ provider: after });
     } catch (err) {
       console.error(err);
       return res.status(500).json({ error: "Error interno" });
