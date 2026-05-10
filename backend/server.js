@@ -686,6 +686,29 @@ function requirePermission(perm) {
   };
 }
 
+function requireSuperAdmin(req, res, next) {
+  if (req.authUser?.role !== "admin" || req.authUser?.admin_tier !== "super") {
+    return res.status(403).json({ error: "Solo un administrador super puede realizar esta acción" });
+  }
+  return next();
+}
+
+const ADMIN_USER_PUBLIC_FIELDS =
+  "id, email, name, role, admin_tier, account_status, created_at";
+
+function sanitizeAdminUser(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    admin_tier: row.admin_tier,
+    account_status: row.account_status,
+    created_at: row.created_at,
+  };
+}
+
 // ===================== AUTH MIDDLEWARES =====================
 
 async function loadUserFromDbById(id) {
@@ -4489,6 +4512,279 @@ app.post(
 // ===================== ADMIN API =====================
 
 app.get(
+  "/admin/users/admins",
+  adminAuthMiddleware,
+  requireSuperAdmin,
+  async (req, res) => {
+    try {
+      const rows = await pool.query(
+        `
+        SELECT ${ADMIN_USER_PUBLIC_FIELDS}
+        FROM users
+        WHERE role = 'admin'
+        ORDER BY created_at DESC
+        `
+      );
+
+      return res.json({ admins: rows.rows.map(sanitizeAdminUser) });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.post(
+  "/admin/users/admins",
+  adminAuthMiddleware,
+  requireSuperAdmin,
+  async (req, res) => {
+    try {
+      const email = normalizeEmail(req.body?.email);
+      const name = toNullIfEmpty(req.body?.name);
+      const password = String(req.body?.password || "");
+      const adminTier = normalizeAdminTier(req.body?.admin_tier);
+
+      if (!email || !isValidEmail(email)) {
+        return res.status(400).json({ error: "Email inválido" });
+      }
+      if (password.length < 8) {
+        return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres" });
+      }
+      if (!adminTier) {
+        return res.status(400).json({ error: "Tipo de acceso inválido" });
+      }
+
+      const exists = await pool.query(`SELECT id FROM users WHERE email = $1 LIMIT 1`, [email]);
+      if (exists.rowCount > 0) {
+        return res.status(409).json({ error: "Ya existe un usuario con ese email" });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      const inserted = await pool.query(
+        `
+        INSERT INTO users (email, password_hash, name, role, admin_tier, account_status)
+        VALUES ($1, $2, $3, 'admin', $4, 'active')
+        RETURNING ${ADMIN_USER_PUBLIC_FIELDS}
+        `,
+        [email, passwordHash, name, adminTier]
+      );
+
+      const admin = sanitizeAdminUser(inserted.rows[0]);
+
+      await writeAdminAuditLog(req, {
+        action: "admins:create",
+        entityType: "admin_user",
+        entityId: admin.id,
+        beforeState: null,
+        afterState: admin,
+      });
+
+      return res.status(201).json({ admin });
+    } catch (err) {
+      if (err?.code === "23505") {
+        return res.status(409).json({ error: "Ya existe un usuario con ese email" });
+      }
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.patch(
+  "/admin/users/admins/:id",
+  adminAuthMiddleware,
+  requireSuperAdmin,
+  async (req, res) => {
+    const client = await pool.connect();
+
+    try {
+      const { id } = req.params;
+      if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
+
+      const hasEmail = Object.prototype.hasOwnProperty.call(req.body || {}, "email");
+      const hasName = Object.prototype.hasOwnProperty.call(req.body || {}, "name");
+      const hasTier = Object.prototype.hasOwnProperty.call(req.body || {}, "admin_tier");
+      const hasStatus = Object.prototype.hasOwnProperty.call(req.body || {}, "account_status");
+
+      if (!hasEmail && !hasName && !hasTier && !hasStatus) {
+        return res.status(400).json({ error: "No hay cambios para guardar" });
+      }
+
+      const nextEmail = hasEmail ? normalizeEmail(req.body.email) : null;
+      const nextName = hasName ? toNullIfEmpty(req.body.name) : null;
+      const nextTier = hasTier ? normalizeAdminTier(req.body.admin_tier) : null;
+      const nextStatus = hasStatus ? String(req.body.account_status || "").trim().toLowerCase() : null;
+
+      if (hasEmail && (!nextEmail || !isValidEmail(nextEmail))) {
+        return res.status(400).json({ error: "Email inválido" });
+      }
+      if (hasTier && !nextTier) {
+        return res.status(400).json({ error: "Tipo de acceso inválido" });
+      }
+      if (hasStatus && !["active", "blocked"].includes(nextStatus)) {
+        return res.status(400).json({ error: "Estado inválido" });
+      }
+
+      await client.query("BEGIN");
+
+      const beforeRes = await client.query(
+        `
+        SELECT ${ADMIN_USER_PUBLIC_FIELDS}
+        FROM users
+        WHERE id = $1 AND role = 'admin'
+        LIMIT 1
+        FOR UPDATE
+        `,
+        [id]
+      );
+
+      const before = beforeRes.rows[0];
+      if (!before) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ error: "Administrador no encontrado" });
+      }
+
+      if (hasEmail && nextEmail !== normalizeEmail(before.email)) {
+        const collision = await client.query(
+          `SELECT id FROM users WHERE email = $1 AND id <> $2 LIMIT 1`,
+          [nextEmail, id]
+        );
+        if (collision.rowCount > 0) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({ error: "Ya existe un usuario con ese email" });
+        }
+      }
+
+      const finalTier = hasTier ? nextTier : before.admin_tier;
+      const finalStatus = hasStatus ? nextStatus : before.account_status;
+      const wouldRemoveActiveSuper =
+        before.admin_tier === "super" &&
+        before.account_status === "active" &&
+        (finalTier !== "super" || finalStatus !== "active");
+
+      if (wouldRemoveActiveSuper) {
+        const superRes = await client.query(
+          `
+          SELECT id
+          FROM users
+          WHERE role = 'admin'
+            AND admin_tier = 'super'
+            AND account_status = 'active'
+          FOR UPDATE
+          `
+        );
+        const remainingActiveSuper = superRes.rows.filter((row) => row.id !== id).length;
+        if (remainingActiveSuper < 1) {
+          await client.query("ROLLBACK");
+          return res.status(400).json({
+            error: "No puedes dejar el sistema sin un administrador super activo",
+          });
+        }
+      }
+
+      const updated = await client.query(
+        `
+        UPDATE users
+        SET email = CASE WHEN $2::boolean THEN $3 ELSE email END,
+            name = CASE WHEN $4::boolean THEN $5 ELSE name END,
+            admin_tier = CASE WHEN $6::boolean THEN $7 ELSE admin_tier END,
+            account_status = CASE WHEN $8::boolean THEN $9 ELSE account_status END,
+            blocked_at = CASE
+              WHEN $8::boolean AND $9 = 'blocked' THEN COALESCE(blocked_at, now())
+              WHEN $8::boolean AND $9 = 'active' THEN NULL
+              ELSE blocked_at
+            END,
+            blocked_reason = CASE
+              WHEN $8::boolean AND $9 = 'blocked' THEN COALESCE(blocked_reason, 'Bloqueado por administrador')
+              WHEN $8::boolean AND $9 = 'active' THEN NULL
+              ELSE blocked_reason
+            END
+        WHERE id = $1 AND role = 'admin'
+        RETURNING ${ADMIN_USER_PUBLIC_FIELDS}
+        `,
+        [id, hasEmail, nextEmail, hasName, nextName, hasTier, nextTier, hasStatus, nextStatus]
+      );
+
+      await client.query("COMMIT");
+
+      const after = sanitizeAdminUser(updated.rows[0]);
+
+      await writeAdminAuditLog(req, {
+        action: "admins:update",
+        entityType: "admin_user",
+        entityId: id,
+        beforeState: sanitizeAdminUser(before),
+        afterState: after,
+      });
+
+      return res.json({ admin: after });
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {}
+
+      if (err?.code === "23505") {
+        return res.status(409).json({ error: "Ya existe un usuario con ese email" });
+      }
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+app.patch(
+  "/admin/users/admins/:id/password",
+  adminAuthMiddleware,
+  requireSuperAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const password = String(req.body?.password || "");
+
+      if (!isUuid(id)) return res.status(400).json({ error: "ID inválido" });
+      if (password.length < 8) {
+        return res.status(400).json({ error: "La contraseña debe tener al menos 8 caracteres" });
+      }
+
+      const beforeRes = await pool.query(
+        `
+        SELECT ${ADMIN_USER_PUBLIC_FIELDS}
+        FROM users
+        WHERE id = $1 AND role = 'admin'
+        LIMIT 1
+        `,
+        [id]
+      );
+
+      const before = beforeRes.rows[0];
+      if (!before) return res.status(404).json({ error: "Administrador no encontrado" });
+
+      const passwordHash = await bcrypt.hash(password, 10);
+      await pool.query(`UPDATE users SET password_hash = $2 WHERE id = $1 AND role = 'admin'`, [
+        id,
+        passwordHash,
+      ]);
+
+      await writeAdminAuditLog(req, {
+        action: "admins:password_reset",
+        entityType: "admin_user",
+        entityId: id,
+        beforeState: sanitizeAdminUser(before),
+        afterState: { ...sanitizeAdminUser(before), password_reset: true },
+      });
+
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Error interno" });
+    }
+  }
+);
+
+app.get(
   "/admin/users",
   adminAuthMiddleware,
   requirePermission("admin:users:read"),
@@ -4503,6 +4799,10 @@ app.get(
 
       const where = [];
       const params = [];
+
+      if (req.authUser?.admin_tier !== "super") {
+        where.push(`role <> 'admin'`);
+      }
 
       if (role) {
         params.push(role);
@@ -4559,6 +4859,27 @@ app.patch(
       );
       const before = beforeRes.rows[0];
       if (!before) return res.status(404).json({ error: "Usuario no encontrado" });
+      if (before.role === "admin" && req.authUser?.admin_tier !== "super") {
+        return res.status(403).json({ error: "Solo un administrador super puede modificar admins" });
+      }
+      if (before.role === "admin" && before.admin_tier === "super" && before.account_status === "active") {
+        const superRes = await pool.query(
+          `
+          SELECT COUNT(*)::int AS count
+          FROM users
+          WHERE role = 'admin'
+            AND admin_tier = 'super'
+            AND account_status = 'active'
+            AND id <> $1
+          `,
+          [id]
+        );
+        if (Number(superRes.rows[0]?.count || 0) < 1) {
+          return res.status(400).json({
+            error: "No puedes dejar el sistema sin un administrador super activo",
+          });
+        }
+      }
 
       const updated = await pool.query(
         `UPDATE users
@@ -4603,6 +4924,9 @@ app.patch(
       );
       const before = beforeRes.rows[0];
       if (!before) return res.status(404).json({ error: "Usuario no encontrado" });
+      if (before.role === "admin" && req.authUser?.admin_tier !== "super") {
+        return res.status(403).json({ error: "Solo un administrador super puede modificar admins" });
+      }
 
       const updated = await pool.query(
         `UPDATE users

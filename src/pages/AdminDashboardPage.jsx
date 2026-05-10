@@ -52,6 +52,13 @@ const INVITATION_STATUSES = [
   { value: "", label: "Todas" },
 ];
 
+const ADMIN_ACCESS_TYPES = [
+  { value: "super", label: "Acceso total" },
+  { value: "moderator", label: "Moderador" },
+  { value: "content", label: "Contenido" },
+  { value: "support", label: "Soporte" },
+];
+
 const SECTION_ITEMS = [
   {
     key: "providers",
@@ -62,6 +69,12 @@ const SECTION_ITEMS = [
     key: "users",
     title: "Usuarios",
     description: "Roles, estado de cuenta y bloqueos.",
+  },
+  {
+    key: "admins",
+    title: "Administradores",
+    description: "Accesos internos, permisos y contraseñas temporales.",
+    superOnly: true,
   },
   {
     key: "requests",
@@ -112,6 +125,14 @@ function badgeClass(kind, value) {
     if (v === "admin") return "admin-badge admin-badge--warn";
     if (v === "provider") return "admin-badge admin-badge--info";
     if (v === "user") return "admin-badge admin-badge--muted";
+    return "admin-badge";
+  }
+
+  if (kind === "admin-tier") {
+    if (v === "super") return "admin-badge admin-badge--warn";
+    if (v === "moderator") return "admin-badge admin-badge--info";
+    if (v === "content") return "admin-badge admin-badge--ok";
+    if (v === "support") return "admin-badge admin-badge--muted";
     return "admin-badge";
   }
 
@@ -220,6 +241,20 @@ function AdminDashboardPage() {
   const [userBusyId, setUserBusyId] = useState(null);
   const [usersError, setUsersError] = useState("");
   const [usersFlash, setUsersFlash] = useState("");
+
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminUsersLoading, setAdminUsersLoading] = useState(false);
+  const [adminUserBusyId, setAdminUserBusyId] = useState(null);
+  const [adminsError, setAdminsError] = useState("");
+  const [adminsFlash, setAdminsFlash] = useState("");
+  const [adminDrafts, setAdminDrafts] = useState({});
+  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
+  const [adminCreateForm, setAdminCreateForm] = useState({
+    email: "",
+    name: "",
+    password: "",
+    admin_tier: "moderator",
+  });
 
   const usersQueryString = useMemo(() => {
     const p = new URLSearchParams();
@@ -445,6 +480,122 @@ function AdminDashboardPage() {
 
   function handleUnblockUser(userId) {
     patchUserStatus(userId, "unblock", "", "Usuario desbloqueado ✅");
+  }
+
+  function buildAdminDrafts(rows) {
+    return rows.reduce((acc, admin) => {
+      acc[admin.id] = {
+        email: admin.email || "",
+        name: admin.name || "",
+        admin_tier: admin.admin_tier || "support",
+        account_status: admin.account_status || "active",
+      };
+      return acc;
+    }, {});
+  }
+
+  async function loadAdmins() {
+    setAdminsError("");
+    setAdminsFlash("");
+    setAdminUsersLoading(true);
+
+    try {
+      const data = await adminApiFetch("/admin/users/admins", { method: "GET" });
+      const rows = Array.isArray(data?.admins) ? data.admins : [];
+      setAdminUsers(rows);
+      setAdminDrafts(buildAdminDrafts(rows));
+    } catch (err) {
+      setAdminsError(err?.message || "No se pudo cargar la lista de administradores.");
+    } finally {
+      setAdminUsersLoading(false);
+    }
+  }
+
+  function updateAdminCreateForm(name, value) {
+    setAdminCreateForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function updateAdminDraft(adminId, name, value) {
+    setAdminDrafts((prev) => ({
+      ...prev,
+      [adminId]: {
+        ...(prev[adminId] || {}),
+        [name]: value,
+      },
+    }));
+  }
+
+  async function handleCreateAdmin(e) {
+    e.preventDefault();
+    setAdminsError("");
+    setAdminsFlash("");
+    setIsCreatingAdmin(true);
+
+    try {
+      await adminApiFetch("/admin/users/admins", {
+        method: "POST",
+        body: JSON.stringify(adminCreateForm),
+      });
+
+      setAdminCreateForm({
+        email: "",
+        name: "",
+        password: "",
+        admin_tier: "moderator",
+      });
+      setAdminsFlash("Administrador creado. Guarda la contraseña temporal y pídele cambiarla después.");
+      await loadAdmins();
+    } catch (err) {
+      setAdminsError(err?.message || "No se pudo crear el administrador.");
+    } finally {
+      setIsCreatingAdmin(false);
+    }
+  }
+
+  async function handleSaveAdmin(adminId) {
+    const draft = adminDrafts[adminId];
+    if (!draft) return;
+
+    setAdminUserBusyId(adminId);
+    setAdminsError("");
+    setAdminsFlash("");
+
+    try {
+      await adminApiFetch(`/admin/users/admins/${adminId}`, {
+        method: "PATCH",
+        body: JSON.stringify(draft),
+      });
+      setAdminsFlash("Administrador actualizado.");
+      await loadAdmins();
+    } catch (err) {
+      setAdminsError(err?.message || "No se pudo actualizar el administrador.");
+    } finally {
+      setAdminUserBusyId(null);
+    }
+  }
+
+  async function handleResetAdminPassword(adminId) {
+    const confirmed = window.confirm("Vas a resetear la contraseña de este administrador. ¿Continuar?");
+    if (!confirmed) return;
+
+    const password = window.prompt("Escribe la nueva contraseña temporal:");
+    if (password === null) return;
+
+    setAdminUserBusyId(adminId);
+    setAdminsError("");
+    setAdminsFlash("");
+
+    try {
+      await adminApiFetch(`/admin/users/admins/${adminId}/password`, {
+        method: "PATCH",
+        body: JSON.stringify({ password }),
+      });
+      setAdminsFlash("Contraseña temporal actualizada. Compártela de forma segura y pide cambiarla después.");
+    } catch (err) {
+      setAdminsError(err?.message || "No se pudo resetear la contraseña.");
+    } finally {
+      setAdminUserBusyId(null);
+    }
   }
 
   function updateRequestFilter(name, value) {
@@ -883,6 +1034,13 @@ function AdminDashboardPage() {
 
   useEffect(() => {
     if (isChecking) return;
+    if (activeSection !== "admins") return;
+    loadAdmins();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isChecking, activeSection]);
+
+  useEffect(() => {
+    if (isChecking) return;
     if (activeSection !== "requests") return;
     loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -903,13 +1061,17 @@ function AdminDashboardPage() {
   function handleRefresh() {
     if (activeSection === "providers") return loadProviders();
     if (activeSection === "users") return loadUsers();
+    if (activeSection === "admins") return loadAdmins();
     if (activeSection === "requests") return loadRequests();
     return loadInvitations();
   }
 
   const moderatedTotal = (requestStats.approved || 0) + (requestStats.declined || 0);
+  const visibleSectionItems = SECTION_ITEMS.filter(
+    (item) => !item.superOnly || adminUser?.admin_tier === "super"
+  );
   const activeSectionMeta =
-    SECTION_ITEMS.find((item) => item.key === activeSection) || SECTION_ITEMS[0];
+    visibleSectionItems.find((item) => item.key === activeSection) || visibleSectionItems[0];
 
   const overviewCards =
     activeSection === "providers"
@@ -947,6 +1109,25 @@ function AdminDashboardPage() {
           {
             label: "Bloqueados",
             value: users.filter((u) => u.account_status === "blocked").length,
+            tone: "bad",
+          },
+        ]
+      : activeSection === "admins"
+      ? [
+          { label: "Admins", value: adminUsers.length, tone: "default" },
+          {
+            label: "Super",
+            value: adminUsers.filter((u) => u.admin_tier === "super").length,
+            tone: "warn",
+          },
+          {
+            label: "Activos",
+            value: adminUsers.filter((u) => u.account_status === "active").length,
+            tone: "ok",
+          },
+          {
+            label: "Bloqueados",
+            value: adminUsers.filter((u) => u.account_status === "blocked").length,
             tone: "bad",
           },
         ]
@@ -1030,7 +1211,7 @@ function AdminDashboardPage() {
               </div>
 
               <nav className="admin-sidebar__nav">
-                {SECTION_ITEMS.map((item) => (
+                {visibleSectionItems.map((item) => (
                   <button
                     key={item.key}
                     className={
@@ -1173,6 +1354,77 @@ function AdminDashboardPage() {
 
                   {usersError && <div className="admin-alert admin-alert--error">{usersError}</div>}
                   {usersFlash && <div className="admin-alert admin-alert--ok">{usersFlash}</div>}
+                </>
+              ) : activeSection === "admins" ? (
+                <>
+                  <div className="admin-stack">
+                    <form className="admin-card admin-card--subform" onSubmit={handleCreateAdmin}>
+                      <div className="admin-subform__header">
+                        <h2 className="admin-subform__title">Crear administrador</h2>
+                        <p className="admin-subform__text">
+                          Genera un acceso interno con contraseña temporal. No se guardará ni mostrará el hash.
+                        </p>
+                      </div>
+
+                      <div className="admin-subform__grid">
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Email</label>
+                          <input
+                            className="admin-filters__input"
+                            type="email"
+                            value={adminCreateForm.email}
+                            onChange={(e) => updateAdminCreateForm("email", e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Nombre</label>
+                          <input
+                            className="admin-filters__input"
+                            value={adminCreateForm.name}
+                            onChange={(e) => updateAdminCreateForm("name", e.target.value)}
+                          />
+                        </div>
+
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Contraseña temporal</label>
+                          <input
+                            className="admin-filters__input"
+                            type="password"
+                            minLength={8}
+                            value={adminCreateForm.password}
+                            onChange={(e) => updateAdminCreateForm("password", e.target.value)}
+                            required
+                          />
+                        </div>
+
+                        <div className="admin-filters__group">
+                          <label className="admin-filters__label">Tipo de acceso</label>
+                          <select
+                            className="admin-filters__select"
+                            value={adminCreateForm.admin_tier}
+                            onChange={(e) => updateAdminCreateForm("admin_tier", e.target.value)}
+                          >
+                            {ADMIN_ACCESS_TYPES.map((tier) => (
+                              <option key={tier.value} value={tier.value}>
+                                {tier.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="admin-subform__actions">
+                        <button className="btn btn--primary" type="submit" disabled={isCreatingAdmin}>
+                          {isCreatingAdmin ? "Creando..." : "Crear admin"}
+                        </button>
+                      </div>
+                    </form>
+
+                    {adminsError && <div className="admin-alert admin-alert--error">{adminsError}</div>}
+                    {adminsFlash && <div className="admin-alert admin-alert--ok">{adminsFlash}</div>}
+                  </div>
                 </>
               ) : activeSection === "requests" ? (
                 <>
@@ -1645,6 +1897,138 @@ function AdminDashboardPage() {
 
                 <div className="admin-footer-note">
                   Nota: bloquear un usuario evita su acceso autenticado mientras su <strong>account_status</strong> sea <strong>blocked</strong>.
+                </div>
+              </section>
+            ) : activeSection === "admins" ? (
+              <section className="admin-card admin-card--table">
+                <div className="admin-table__header">
+                  <h2 className="admin-table__title">Usuarios admin</h2>
+                  <div className="admin-table__meta">
+                    Mostrando: <strong>{adminUsers.length}</strong>
+                  </div>
+                </div>
+
+                <div className="admin-table__wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Administrador</th>
+                        <th>Tipo de acceso</th>
+                        <th>Estado</th>
+                        <th>Creación</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {adminUsers.map((admin) => {
+                        const draft = adminDrafts[admin.id] || {};
+                        const isBusy = adminUserBusyId === admin.id;
+                        const isSelf = admin.id === adminUser?.id;
+
+                        return (
+                          <tr key={admin.id}>
+                            <td>
+                              <div className="admin-inline-stack">
+                                <input
+                                  className="admin-filters__input"
+                                  type="email"
+                                  value={draft.email || ""}
+                                  disabled={isBusy}
+                                  onChange={(e) => updateAdminDraft(admin.id, "email", e.target.value)}
+                                />
+                                <input
+                                  className="admin-filters__input"
+                                  value={draft.name || ""}
+                                  disabled={isBusy}
+                                  onChange={(e) => updateAdminDraft(admin.id, "name", e.target.value)}
+                                  placeholder="Nombre"
+                                />
+                                <span className="admin-inline-help">ID: {admin.id}</span>
+                              </div>
+                            </td>
+
+                            <td>
+                              <div className="admin-inline-stack">
+                                <select
+                                  className="admin-filters__select"
+                                  value={draft.admin_tier || "support"}
+                                  disabled={isBusy}
+                                  onChange={(e) => updateAdminDraft(admin.id, "admin_tier", e.target.value)}
+                                >
+                                  {ADMIN_ACCESS_TYPES.map((tier) => (
+                                    <option key={tier.value} value={tier.value}>
+                                      {tier.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                <span className={badgeClass("admin-tier", admin.admin_tier)}>
+                                  {admin.admin_tier}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td>
+                              <div className="admin-inline-stack">
+                                <select
+                                  className="admin-filters__select"
+                                  value={draft.account_status || "active"}
+                                  disabled={isBusy}
+                                  onChange={(e) => updateAdminDraft(admin.id, "account_status", e.target.value)}
+                                >
+                                  <option value="active">Activo</option>
+                                  <option value="blocked">Bloqueado</option>
+                                </select>
+                                <span className={badgeClass("user-status", admin.account_status)}>
+                                  {admin.account_status}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="admin-nowrap">{formatDateTime(admin.created_at)}</td>
+
+                            <td className="admin-table__actions-cell">
+                              <div className="admin-actions">
+                                <button
+                                  className="btn btn--primary"
+                                  disabled={isBusy}
+                                  onClick={() => handleSaveAdmin(admin.id)}
+                                >
+                                  {isBusy ? "..." : "Guardar"}
+                                </button>
+
+                                <button
+                                  className="btn btn--ghost"
+                                  disabled={isBusy}
+                                  onClick={() => handleResetAdminPassword(admin.id)}
+                                >
+                                  Reset password
+                                </button>
+                              </div>
+
+                              {isSelf ? (
+                                <div className="admin-inline-help admin-inline-help--spaced">
+                                  Tu propia cuenta admin
+                                </div>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {!adminUsers.length && (
+                        <tr>
+                          <td colSpan={5} className="admin-table__empty">
+                            {adminUsersLoading ? "Cargando..." : "No hay administradores registrados."}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="admin-footer-note">
+                  Nota: solo un administrador con acceso total puede crear, bloquear, cambiar permisos o resetear contraseñas de admins. El sistema no permite quedarse sin un super activo.
                 </div>
               </section>
             ) : activeSection === "requests" ? (
